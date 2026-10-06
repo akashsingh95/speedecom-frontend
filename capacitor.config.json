@@ -1,0 +1,6 @@
+{
+  "appId": "com.speedecom.app",
+  "appName": "SpeedEcom",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

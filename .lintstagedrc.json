@@ -1,0 +1,3 @@
+{
+  "src/**/*.{js,jsx}": "node scripts/lint-files.cjs"
+}
