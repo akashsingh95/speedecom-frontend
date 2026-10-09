@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Target, Users, Brain, ShoppingCart, AlertTriangle, Heart, Lightbulb } from 'lucide-react';

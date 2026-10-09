@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, X, Calendar, Check, Search, Store } from 'lucide-react';
 import { toast } from 'sonner';
@@ -257,7 +259,7 @@ const MarketplaceAccountFilter = ({
 
         if (!onChange) return;
         emitFilters();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [selectedMarketplaceKeys, accountSelections]);
 
     // Safety net: if either date gets cleared, reset both to the default range

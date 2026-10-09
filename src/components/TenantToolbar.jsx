@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef } from 'react';
 import PillSelect from './PillSelect';
 import api from '../api';
@@ -68,7 +70,7 @@ export default function TenantToolbar({
         if (currentFilter !== undefined && currentFilter !== filter) {
             setFilter(currentFilter);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [currentFilter]);
 
     // Derived active chips

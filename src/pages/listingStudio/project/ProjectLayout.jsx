@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, Navigate, NavLink, Link, useParams, useLocation } from 'react-router-dom';
 import {
@@ -326,7 +328,7 @@ export default function ProjectLayout() {
       .catch(() => undefined)
       .finally(() => setJobChecked(true));
     return stopPolling;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [id]);
 
   // Same clock ProcessingPage's live-progress view ticks (keyed by project id, not by which page

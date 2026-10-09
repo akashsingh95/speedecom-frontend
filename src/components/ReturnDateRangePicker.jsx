@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Popover } from '@headlessui/react';
 import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -56,7 +58,7 @@ const Calendar = ({ startDate, endDate, onChange, maxDays }) => {
 
     useEffect(() => {
         if (start) { setViewYear(start.getFullYear()); setViewMonth(start.getMonth()); }
-    }, [startDate]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [startDate]);  
 
     useEffect(() => {
         const handler = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setShowMonthPicker(false); };
@@ -258,7 +260,7 @@ const ReturnDateRangePicker = ({ startDate, endDate, onChange, maxDays = 92, dat
                 if (onChange) onChange(v.min, v.max);
             }
         }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);  
 
     const handlePresetClick = (preset) => {
         setActivePreset(preset.label);

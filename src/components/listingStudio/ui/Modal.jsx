@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
@@ -48,7 +50,7 @@ export function Modal({ onClose, children, className = '', size = 'md' }) {
     // gets a new function identity on every parent re-render. Depending on `onClose` here would
     // re-run this effect — and its `panelRef.current?.focus()` — on every keystroke of any input
     // inside the modal, stealing focus back to the panel after each character typed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return (

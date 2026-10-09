@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Users, MousePointer, ShoppingBag, DollarSign, TrendingUp, TrendingDown,
@@ -144,7 +146,7 @@ const AdsTab = ({ viewMode = 'grid', filterData: sharedFilterData, hasMarketplac
                 fetchAdsAnalytics();
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [view, filterData.marketplaceIds, filterData.startDate, filterData.endDate]);
 
     // List View: only fetch when list date range changes
@@ -156,7 +158,7 @@ const AdsTab = ({ viewMode = 'grid', filterData: sharedFilterData, hasMarketplac
                 fetchAccountMetrics();
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [view, listStartDate, listEndDate]);
 
     const MetricCard = ({ title, value, icon: Icon, color, prefix = '', suffix = '', formatOptions = {} }) => (

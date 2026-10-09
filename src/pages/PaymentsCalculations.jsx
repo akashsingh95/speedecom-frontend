@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../api';
 import { ArrowLeft, Loader2, FileSpreadsheet, ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, Columns, Filter, GripVertical, Search, X } from 'lucide-react';
@@ -271,7 +273,7 @@ const PaymentsCalculations = () => {
         }
     }, [filterData.startDate, filterData.endDate, nullDateFilter, marketplaceFilter, returnStatusFilter, warehouseFilter, filters.brandFilter, dataTypeFilter, adsMode, shopsyFilter, meeshoOrderSourceFilter, compensationReasonFilter, recoveryReasonFilter, filters.sizeFilter, isFlipkart, isMeesho, appliedSearchItems, profitabilityFilter]);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     useEffect(() => {
         setCurrentPage(1);
     }, [debouncedSearchTerm]);
@@ -293,7 +295,7 @@ const PaymentsCalculations = () => {
                 handleOrderClick(sku, orderId, orderKey);
             }
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [calculations]);
 
     // When return status filter changes, clear all expanded/cached drill-down data
@@ -699,7 +701,7 @@ const PaymentsCalculations = () => {
         } else {
             setColumnOrder(allColumns);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [allColumnsKey, isPlatformLoaded, platformType]);
 
     // COLUMN_LABELS, PCT_COLS, AMAZON_NUMERIC_COLS, formatCellValue, getCellStyleClasses, enrichRowWithContributions

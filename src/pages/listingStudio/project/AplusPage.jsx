@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -211,7 +213,7 @@ useEffect(() => {
           .finally(() => setOverlayBusy(c.id, false));
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [project.id]);
 
   return (

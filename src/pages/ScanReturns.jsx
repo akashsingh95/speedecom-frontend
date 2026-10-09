@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import successSoundFile from '../assets/sounds/success.mp3';
 import errorSoundFile from '../assets/sounds/error.mp3';
@@ -74,7 +76,7 @@ const TodayPagination = ({ page, totalPages, total, onPageChange }) => {
         if (p < 1 || p > totalPages) return;
         const timer = setTimeout(() => { onPageChangeRef.current(p); }, 600);
         return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [goTo, totalPages]);
 
     if (totalPages <= 1) return null;
@@ -230,7 +232,7 @@ const ScanReturns = () => {
         errorAudioRef.current   = new Audio(errorSoundFile);
         if (inputRef.current) inputRef.current.focus();
         return () => { stopCamera(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, []);
 
     useEffect(() => {
@@ -715,7 +717,7 @@ const ScanReturns = () => {
         }
         if (activeTab === 'unverified') fetchUnverified(1, unverifiedSearchRef.current);
         if (activeTab === 'scan') requestAnimationFrame(() => { if (inputRef.current) inputRef.current.focus(); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [activeTab, fetchAccountSummary, fetchTodayScan, fetchUnverified]);
 
     // ── Camera ───────────────────────────────────────────────────────────────
@@ -904,7 +906,7 @@ const ScanReturns = () => {
     useEffect(() => { cameraActiveRef.current = cameraActive; }, [cameraActive]);
     useEffect(() => {
         if (activeTab !== 'scan' && cameraActiveRef.current) stopCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [activeTab]);
 
     // ── Derived ──────────────────────────────────────────────────────────────

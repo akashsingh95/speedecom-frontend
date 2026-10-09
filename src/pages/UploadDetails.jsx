@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
@@ -53,7 +55,7 @@ const UploadDetails = () => {
         if (!type || selectedSheet) return;
         if (type === 'payments')        setSelectedSheet('Orders');
         if (type === 'meesho_payments') setSelectedSheet('Order Payments');
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- run only when type becomes known, not on sheet changes
+         
     }, [data?.upload?.uploadType]);
 
     const fetchDetails = async () => {

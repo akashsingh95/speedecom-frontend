@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useLayoutEffect, useRef, useState } from 'react';
 
 /** Long free-text (product descriptions, AI-generated summaries) clamped to `lines` with a
@@ -12,7 +14,7 @@ export function ExpandableText({ text, lines = 5, className = '' }) {
     if (ref.current) setIsTruncated(ref.current.scrollHeight > ref.current.clientHeight + 1);
     // Measured while still collapsed (the clamp is what creates the overflow to detect);
     // `expanded` is deliberately excluded so toggling back doesn't erase that reading.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [text, lines]);
 
   if (!text) return null;

@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
 import { Package, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, Loader2, AlertCircle, Store, ShoppingBag } from 'lucide-react';
@@ -80,7 +82,7 @@ const OrdersTab = ({ viewMode = 'grid' }) => {
         if (view === 'grid' && hasMarketplacesSelected) {
             fetchMetrics();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [view, filterData.marketplaceIds, filterData.startDate, filterData.endDate]);
 
     // List View: ONLY refetch when dates change (ignore marketplace filter)
@@ -88,7 +90,7 @@ const OrdersTab = ({ viewMode = 'grid' }) => {
         if (view === 'list') {
             fetchAccountMetrics();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [view, filterData.startDate, filterData.endDate]);
 
     return (

@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api';
@@ -475,7 +477,7 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
         fetchSizes();
 
         // Load visible columns (scoped by platform) is now handled by the platformType useEffect below
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
 
     // Load column visibility from localStorage specific to marketplace type (run when platformType is resolved)
@@ -491,7 +493,7 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
                 console.error("Failed to parse visibleColumns", e);
             }
         }
-    }, [isPlatformLoaded, platformType]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isPlatformLoaded, platformType]);  
 
     useEffect(() => { fetchAvailableMonths(); }, [fetchAvailableMonths]);
     useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
@@ -546,7 +548,7 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
             setOrderSearchLoading(false);
         }, 400);
         return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [searchTerm]);
 
     // Reset page when debounced search changes
@@ -555,10 +557,10 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
     // Auto-clear N/A filter when switching away from Amazon
     useEffect(() => {
         if (!isAmazon && nullDateFilter) setNullDateFilter(false);
-    }, [isAmazon]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isAmazon]);  
 
     // Clear drill-down caches when return status filter changes
-    useEffect(() => { onReset?.(); }, [returnStatusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { onReset?.(); }, [returnStatusFilter]);  
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleApplyFilter = () => {
@@ -574,7 +576,7 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
         setTempEndDate(end);
         setDateError('');
         setFilterData(prev => ({ ...prev, startDate: start, endDate: end }));
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);  
 
     const handleNullDateSelect = useCallback((active) => {
         setNullDateFilter(active);
@@ -584,7 +586,7 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
             setFilterData(prev => ({ ...prev, startDate: null, endDate: null }));
         }
         setCurrentPage(1);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);  
 
     const handleClearFilter = () => {
         const defaults = getDefaultDates();

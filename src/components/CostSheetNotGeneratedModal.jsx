@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { AlertTriangle, RefreshCw, Loader2, X, CheckCircle, Clock } from 'lucide-react';
 import api from '../api';
