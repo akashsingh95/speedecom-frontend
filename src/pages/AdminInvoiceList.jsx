@@ -14,6 +14,7 @@ import GstAutoFill from '../components/GstAutoFill';
 import DateRangePicker from '../components/DateRangePicker';
 import { parseGstin, STATE_CODES } from '../utils/gstinUtils';
 import AdminGiftModal from '../components/AdminGiftModal';
+import RefundedPaymentsTab from '../components/RefundedPaymentsTab';
 import {
     Search, Plus, Trash2, Pencil, FileText, Loader2, X, CheckCircle,
     Building2, User, Gift, Award,
@@ -430,7 +431,7 @@ const AdminInvoiceList = () => {
     }, [creditSearchTerm]);
 
     useEffect(() => {
-        if (activeTab !== 'invoices') {
+        if (activeTab === 'freeTrialCredits' || activeTab === 'adminGift') {
             fetchCreditHistory(1, debouncedCreditSearch, creditTypeFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter, fyFilter, creditSortBy, creditSortOrder);
         }
     }, [activeTab, fetchCreditHistory, debouncedCreditSearch, creditTypeFilter, creditCategoryFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter, fyFilter, creditSortBy, creditSortOrder]);
@@ -563,7 +564,7 @@ const AdminInvoiceList = () => {
             const url = q ? `/admin/invoices/buyers?q=${encodeURIComponent(q)}` : '/admin/invoices/buyers';
             const { data } = await api.get(url);
             setEditCreditBuyers(data || []);
-        } catch {} finally { setEditCreditBuyerSearching(false); }
+        } catch { setEditCreditBuyers([]); } finally { setEditCreditBuyerSearching(false); }
     }, []);
 
     const handleEditCreditBuyerInput = (value) => {
@@ -1385,7 +1386,7 @@ const AdminInvoiceList = () => {
                                 </div>
                                 <div>
                                     <h1 className="text-xl font-bold tracking-tight">
-                                        {activeTab === 'adminGift' ? 'Admin Gift' : activeTab === 'freeTrialCredits' ? 'Free Trial Credits' : 'Invoices'}
+                                        {activeTab === 'adminGift' ? 'Admin Gift' : activeTab === 'freeTrialCredits' ? 'Free Trial Credits' : activeTab === 'refundedPayments' ? 'Refunded Payments' : 'Invoices'}
                                     </h1>
                                     <p className={`mt-1 text-sm ${
                                         activeTab === 'adminGift'
@@ -1398,7 +1399,9 @@ const AdminInvoiceList = () => {
                                             ? 'View admin gift credits given to buyers'
                                             : activeTab === 'freeTrialCredits'
                                                 ? 'Give and track free trial credits for buyers'
-                                                : 'Create and manage GST invoices'}
+                                                : activeTab === 'refundedPayments'
+                                                    ? 'Payments refunded by Razorpay (not part of the invoice series)'
+                                                    : 'Create and manage GST invoices'}
                                     </p>
                                 </div>
                             </div>
@@ -1449,10 +1452,18 @@ const AdminInvoiceList = () => {
                         >
                             <Award size={15} className="inline mr-1.5" />Admin Gift
                         </button>
+                        <button
+                            onClick={() => setActiveTab('refundedPayments')}
+                            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'refundedPayments' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <RotateCcw size={15} className="inline mr-1.5" />Refunded Payments
+                        </button>
                     </div>
 
                     {/* ── Invoices Tab ── */}
-                    {activeTab === 'invoices' ? (
+                    {activeTab === 'refundedPayments' ? (
+                        <RefundedPaymentsTab canExport={canExport && !isSBM} />
+                    ) : activeTab === 'invoices' ? (
                         <>
                             <div className="space-y-3">
                                 <h3 className="text-lg font-heading font-bold text-slate-800 flex items-center gap-2">
@@ -3920,4 +3931,4 @@ const BuyerField = ({ label, value, onChange, disabled, prefix }) => (
     </div>
 );
 
-export default AdminInvoiceList;
+export default AdminInvoiceList;
