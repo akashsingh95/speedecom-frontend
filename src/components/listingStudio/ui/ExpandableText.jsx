@@ -12,7 +12,7 @@ export function ExpandableText({ text, lines = 5, className = '' }) {
     if (ref.current) setIsTruncated(ref.current.scrollHeight > ref.current.clientHeight + 1);
     // Measured while still collapsed (the clamp is what creates the overflow to detect);
     // `expanded` is deliberately excluded so toggling back doesn't erase that reading.
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, lines]);
 
   if (!text) return null;

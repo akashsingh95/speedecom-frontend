@@ -14,7 +14,7 @@ import {
 
 /** Ported from speed-listing's pages/project/ImagesPage.tsx. */
 export default function ImagesPage() {
-  const { project, refresh } = useProjectCtx();
+  const { project, refresh, creditRates } = useProjectCtx();
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
   const [lightboxSrc, setLightboxSrc] = useState(null);
@@ -155,6 +155,8 @@ export default function ImagesPage() {
           projectId={project.id}
           image={activeImage}
           libraryEntries={library}
+          imageCost={creditRates?.imageCost ?? null}
+          freeImagesRemaining={creditRates?.freeImagesRemaining ?? 0}
           onClose={() => setActiveImage(null)}
           onRegenerated={async () => {
             setActiveImage(null);

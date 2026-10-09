@@ -53,12 +53,12 @@ export function formatRelativeTime(iso) {
 }
 
 /** The one campaign-status word shown on every campaign card (Home's recent list and the
- *  Campaigns page), furthest stage wins. Reads the `has*` booleans the list endpoint projects
- *  (server/listingStudio/store.js listProjects) — list items never carry the full
- *  research/listing/aplus payloads, so checking those fields here would always say "New". */
+ *  Campaigns page) — only ever "A+ content ready", never an intermediate stage. Returns null
+ *  (render nothing) until real A+ content exists, on purpose: a "Listing ready"/"Researched"
+ *  fallback previously made unfinished campaigns look done. Reads `hasAplus`, the `has*`
+ *  boolean the list endpoint projects (server/listingStudio/store.js listProjects) — list
+ *  items never carry the full research/listing/aplus payloads. */
 export function campaignStatus(p) {
   if (p.hasAplus) return { label: 'A+ content ready', className: 'text-emerald-600' };
-  if (p.hasListing) return { label: 'Listing ready', className: 'text-brand-600' };
-  if (p.hasResearch) return { label: 'Researched', className: 'text-amber-600' };
-  return { label: 'New', className: 'text-slate-400' };
+  return null;
 }

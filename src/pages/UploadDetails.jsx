@@ -53,7 +53,7 @@ const UploadDetails = () => {
         if (!type || selectedSheet) return;
         if (type === 'payments')        setSelectedSheet('Orders');
         if (type === 'meesho_payments') setSelectedSheet('Order Payments');
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- run only when type becomes known, not on sheet changes
     }, [data?.upload?.uploadType]);
 
     const fetchDetails = async () => {
@@ -136,7 +136,7 @@ const UploadDetails = () => {
                         </p>
                     </div>
                     {data.upload.fileName && data.upload.status === 'completed' && (() => {
-                        const isOld = new Date() - new Date(data.upload.createdAt) > 365 * 24 * 60 * 60 * 1000;
+                        const isOld = new Date() - new Date(data.upload.createdAt) > 90 * 24 * 60 * 60 * 1000;
                         return (
                             <button
                                 disabled={isOld}
@@ -150,7 +150,7 @@ const UploadDetails = () => {
                                 className={`shrink-0 flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-lg text-sm font-medium shadow-sm ${
                                     isOld ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 transition-colors'
                                 }`}
-                                title={isOld ? 'Download expired (older than 365 days)' : 'Download Original File'}
+                                title={isOld ? 'Download expired (older than 90 days)' : 'Download Original File'}
                             >
                                 <Download size={16} />
                                 Download

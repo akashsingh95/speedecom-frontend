@@ -68,7 +68,7 @@ export default function TenantToolbar({
         if (currentFilter !== undefined && currentFilter !== filter) {
             setFilter(currentFilter);
         }
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentFilter]);
 
     // Derived active chips

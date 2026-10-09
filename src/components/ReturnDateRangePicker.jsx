@@ -56,7 +56,7 @@ const Calendar = ({ startDate, endDate, onChange, maxDays }) => {
 
     useEffect(() => {
         if (start) { setViewYear(start.getFullYear()); setViewMonth(start.getMonth()); }
-    }, [startDate]);  
+    }, [startDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         const handler = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setShowMonthPicker(false); };
@@ -258,7 +258,7 @@ const ReturnDateRangePicker = ({ startDate, endDate, onChange, maxDays = 92, dat
                 if (onChange) onChange(v.min, v.max);
             }
         }
-    }, []);  
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handlePresetClick = (preset) => {
         setActivePreset(preset.label);

@@ -2113,14 +2113,23 @@ const CostSheet = () => {
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[99999] p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 my-auto border border-slate-100">
                         {/* Header */}
-                        <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex items-start gap-3 sm:gap-4">
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                <AlertTriangle className="text-amber-600" size={22} />
+                        <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 sm:gap-4">
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                    <AlertTriangle className="text-amber-600" size={22} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base sm:text-lg font-bold text-amber-900">Missing Product Costs</h3>
+                                    <p className="text-xs sm:text-sm text-amber-700 mt-1">Action required before calculating</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-base sm:text-lg font-bold text-amber-900">Missing Product Costs</h3>
-                                <p className="text-xs sm:text-sm text-amber-700 mt-1">Action required before calculating</p>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setMissingModal({ open: false, count: 0, skus: [] })}
+                                className="p-2 -mr-2 -mt-2 text-amber-600 hover:text-amber-900 hover:bg-amber-100/50 rounded-lg transition-colors shrink-0"
+                            >
+                                <X size={20} />
+                            </button>
                         </div>
 
                         {/* Content */}

@@ -1,15 +1,23 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { Loader2, X, MinusCircle } from 'lucide-react';
+import { Loader2, X, MinusCircle, Layers, Sparkles, Check } from 'lucide-react';
 import api from '../api';
 import { toast } from 'sonner';
 
+const isValidAmount = (value) => /^\d+(\.\d{1,2})?$/.test(value) && Number(value) > 0;
+const isValidCount = (value) => /^\d+$/.test(value) && Number(value) > 0;
+
 const DeductCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
+    const [product, setProduct] = useState('reconciliation'); // 'reconciliation' | 'listing-studio'
     const [amount, setAmount] = useState('');
+    const [freeImages, setFreeImages] = useState('');
+    const [freeVideos, setFreeVideos] = useState('');
     const [note, setNote] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const isValidAmount = (value) => /^\d+(\.\d{1,2})?$/.test(value) && Number(value) > 0;
+    const resetFields = () => { setProduct('reconciliation'); setAmount(''); setFreeImages(''); setFreeVideos(''); setNote(''); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -20,21 +28,44 @@ const DeductCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
             return;
         }
 
-        if (!isValidAmount(amount)) {
-            toast.error('Please enter a valid amount (up to 2 decimal places)');
-            return;
+        if (product === 'reconciliation') {
+            if (!isValidAmount(amount)) {
+                toast.error('Please enter a valid amount (up to 2 decimal places)');
+                return;
+            }
+        } else {
+            const hasCredits = amount !== '';
+            const hasImages = freeImages !== '';
+            const hasVideos = freeVideos !== '';
+            if (!hasCredits && !hasImages && !hasVideos) {
+                toast.error('Deduct at least one of credits, free images, or free videos');
+                return;
+            }
+            if ((hasCredits && !isValidAmount(amount)) || (hasImages && !isValidCount(freeImages)) || (hasVideos && !isValidCount(freeVideos))) {
+                toast.error('Amounts must be positive numbers (whole numbers for free images/videos)');
+                return;
+            }
         }
 
         setLoading(true);
         try {
-            await api.post('/superadmin/credits/deduct', {
-                tenantId: targetTenantId,
-                amount: Number(amount),
-                note
-            });
+            if (product === 'reconciliation') {
+                await api.post('/superadmin/credits/deduct', {
+                    tenantId: targetTenantId,
+                    amount: Number(amount),
+                    note
+                });
+            } else {
+                await api.post('/listing-studio/wallet/admin/deduct', {
+                    tenantId: targetTenantId,
+                    ...(amount !== '' && { credits: Number(amount) }),
+                    ...(freeImages !== '' && { freeImages: Number(freeImages) }),
+                    ...(freeVideos !== '' && { freeVideos: Number(freeVideos) }),
+                    note,
+                });
+            }
             toast.success('Credits deducted successfully');
-            setAmount('');
-            setNote('');
+            resetFields();
             onSuccess();
             onClose();
         } catch (error) {
@@ -44,6 +75,10 @@ const DeductCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
             setLoading(false);
         }
     };
+
+    const canSubmit = product === 'reconciliation'
+        ? !!amount
+        : !!(amount || freeImages || freeVideos);
 
     return (
         <Transition appear show={isOpen} as={Fragment}>
@@ -90,20 +125,80 @@ const DeductCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
                                     </div>
 
                                     <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                                            Deduct From <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setProduct('reconciliation')}
+                                                className={`relative text-left p-3 rounded-xl border-2 transition-all ${product === 'reconciliation' ? 'border-red-500 bg-red-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                            >
+                                                {product === 'reconciliation' && <Check size={16} className="absolute top-2 right-2 text-red-600" />}
+                                                <Layers size={18} className="text-slate-500 mb-1" />
+                                                <p className="text-sm font-semibold text-slate-800">Reconciliation</p>
+                                                <p className="text-xs text-slate-500 mt-0.5">Deduct from account reconciliation balance</p>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setProduct('listing-studio')}
+                                                className={`relative text-left p-3 rounded-xl border-2 transition-all ${product === 'listing-studio' ? 'border-red-500 bg-red-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                            >
+                                                {product === 'listing-studio' && <Check size={16} className="absolute top-2 right-2 text-red-600" />}
+                                                <Sparkles size={18} className="text-slate-500 mb-1" />
+                                                <p className="text-sm font-semibold text-slate-800">Listing Studio</p>
+                                                <p className="text-xs text-slate-500 mt-0.5">Deduct from Listing Studio credits/usage</p>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-2">Choose which module this deduction is taken from.</p>
+                                    </div>
+
+                                    <div>
                                         <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            Amount <span className="text-red-500">*</span>
+                                            {product === 'reconciliation' ? <>Amount <span className="text-red-500">*</span></> : <>Credits (optional)</>}
                                         </label>
                                         <input
                                             type="number"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="Enter credit amount"
+                                            placeholder={product === 'reconciliation' ? 'Enter credit amount' : 'Enter credits'}
                                             className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                                             min="0.01"
                                             step="0.01"
                                             inputMode="decimal"
                                         />
                                     </div>
+
+                                    {product === 'listing-studio' && (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Free Images (optional)</label>
+                                                <input
+                                                    type="number"
+                                                    value={freeImages}
+                                                    onChange={(e) => setFreeImages(e.target.value)}
+                                                    placeholder="0"
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                                                    min="1"
+                                                    step="1"
+                                                    inputMode="numeric"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Free Videos (optional)</label>
+                                                <input
+                                                    type="number"
+                                                    value={freeVideos}
+                                                    onChange={(e) => setFreeVideos(e.target.value)}
+                                                    placeholder="0"
+                                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                                                    min="1"
+                                                    step="1"
+                                                    inputMode="numeric"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -128,7 +223,7 @@ const DeductCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
                                         </button>
                                         <button
                                             type="submit"
-                                            disabled={loading || !amount || !tenant?.tenantId?._id}
+                                            disabled={loading || !canSubmit || !tenant?.tenantId?._id}
                                             className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                         >
                                             {loading ? <Loader2 className="animate-spin" size={18} /> : 'Deduct Credits'}

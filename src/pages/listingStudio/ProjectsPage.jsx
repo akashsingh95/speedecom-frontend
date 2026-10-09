@@ -369,7 +369,9 @@ export default function ProjectsPage() {
                   )}
                   <span>{formatRelativeTime(p.createdAt)}</span>
                 </div>
-                <div className={`mt-2 text-sm font-medium ${campaignStatus(p).className}`}>{campaignStatus(p).label}</div>
+                {campaignStatus(p) && (
+                  <div className={`mt-2 text-sm font-medium ${campaignStatus(p).className}`}>{campaignStatus(p).label}</div>
+                )}
               </div>
               {!isCrossTenant && (
                 <div

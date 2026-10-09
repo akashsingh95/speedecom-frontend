@@ -144,7 +144,7 @@ const AdsTab = ({ viewMode = 'grid', filterData: sharedFilterData, hasMarketplac
                 fetchAdsAnalytics();
             }
         }
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [view, filterData.marketplaceIds, filterData.startDate, filterData.endDate]);
 
     // List View: only fetch when list date range changes
@@ -156,7 +156,7 @@ const AdsTab = ({ viewMode = 'grid', filterData: sharedFilterData, hasMarketplac
                 fetchAccountMetrics();
             }
         }
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [view, listStartDate, listEndDate]);
 
     const MetricCard = ({ title, value, icon: Icon, color, prefix = '', suffix = '', formatOptions = {} }) => (
