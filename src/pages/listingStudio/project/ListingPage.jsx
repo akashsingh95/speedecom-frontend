@@ -1,8 +1,10 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Image as ImageIcon, X, Pencil, Eye } from 'lucide-react';
 import { toast } from 'sonner';
-import { listingStudioApi, byteLen } from '../../../components/listingStudio/api';
+import { listingStudioApi, byteLen, uploadImagesViaSignedUrl } from '../../../components/listingStudio/api';
 import { validateUploadFiles } from '../../../components/listingStudio/helpers';
 import { useProjectCtx } from '../../../components/listingStudio/context';
 import { Toast } from '../../../components/listingStudio/ui/Toast';
@@ -35,7 +37,7 @@ import {
  *  `startInPreview` is the dedicated /p/:id/preview route: the "Amazon Preview" button opens it in
  *  a new browser tab, and "back" there returns to this page's editor route. */
 export default function ListingPage({ startInPreview = false }) {
-  const { project, refresh } = useProjectCtx();
+  const { project, refresh, creditRates } = useProjectCtx();
   const navigate = useNavigate();
   const fileRef = useRef(null);
 
@@ -83,10 +85,9 @@ export default function ListingPage({ startInPreview = false }) {
       toast.error(issue);
       return;
     }
-    const form = new FormData();
-    for (const f of Array.from(files)) form.append('images', f);
     try {
-      await listingStudioApi.uploadImages(project.id, form);
+      const keys = await uploadImagesViaSignedUrl(files);
+      await listingStudioApi.uploadImages(project.id, { keys });
       await refresh();
     } catch {
       // The shared axios instance's response interceptor already shows a toast for this.
@@ -284,6 +285,8 @@ export default function ListingPage({ startInPreview = false }) {
           projectId={project.id}
           image={activeImage}
           libraryEntries={libraryEntries}
+          imageCost={creditRates?.imageCost ?? null}
+          freeImagesRemaining={creditRates?.freeImagesRemaining ?? 0}
           onClose={() => setActiveImage(null)}
           onRegenerated={async () => {
             setActiveImage(null);

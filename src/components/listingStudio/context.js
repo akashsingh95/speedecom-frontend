@@ -9,6 +9,10 @@ import { useOutletContext } from 'react-router-dom';
  *
  * @typedef {object} ProjectCtx
  * @property {object} project
+ * @property {object|null} creditRates - the tenant's live next-charge rates
+ *   ({ imageCost: number|null, campaignCost: number|null, freeImagesRemaining, freeVideosRemaining }),
+ *   null until the first fetch resolves; a null cost field means no credit lot is currently
+ *   eligible, not "free" — see server's creditLedgerService.getNextChargeRates.
  * @property {object|null} job
  * @property {boolean} jobRunning
  * @property {() => Promise<void>} refresh

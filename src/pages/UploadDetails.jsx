@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
@@ -136,7 +138,7 @@ const UploadDetails = () => {
                         </p>
                     </div>
                     {data.upload.fileName && data.upload.status === 'completed' && (() => {
-                        const isOld = new Date() - new Date(data.upload.createdAt) > 365 * 24 * 60 * 60 * 1000;
+                        const isOld = new Date() - new Date(data.upload.createdAt) > 90 * 24 * 60 * 60 * 1000;
                         return (
                             <button
                                 disabled={isOld}
@@ -150,7 +152,7 @@ const UploadDetails = () => {
                                 className={`shrink-0 flex items-center gap-2 px-4 py-2 bg-white text-slate-700 border border-slate-200 rounded-lg text-sm font-medium shadow-sm ${
                                     isOld ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 transition-colors'
                                 }`}
-                                title={isOld ? 'Download expired (older than 365 days)' : 'Download Original File'}
+                                title={isOld ? 'Download expired (older than 90 days)' : 'Download Original File'}
                             >
                                 <Download size={16} />
                                 Download

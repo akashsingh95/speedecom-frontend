@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
+import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, Search, X } from 'lucide-react';
 import api from '../../api';
 
@@ -32,6 +34,7 @@ const CalculationsSearchModal = ({
     endDate,
     nullDateFilter,
     isFlipkart = false,
+    initialSelectedItems = [],
 }) => {
     const [searchOptions, setSearchOptions] = useState([]);
     const [localSearchQuery, setLocalSearchQuery] = useState('');
@@ -39,6 +42,8 @@ const CalculationsSearchModal = ({
     const [selectedSearchItems, setSelectedSearchItems] = useState([]);
     const [isSearchOptionsLoading, setIsSearchOptionsLoading] = useState(false);
     const [isTruncated, setIsTruncated] = useState(false);
+    
+    const prevIsOpenRef = useRef(false);
 
     // Debounce the typed query so a refetch happens once the user pauses, not on
     // Debounce the typed query so a refetch happens once the user pauses, not on
@@ -55,8 +60,7 @@ const CalculationsSearchModal = ({
         // Order IDs and Order Item IDs are far too numerous to list — that mode is a plain text box.
         if (['order_id', 'order_item_id'].includes(searchType)) {
             setSearchOptions([]);
-            setSelectedSearchItems([]);
-            setLocalSearchQuery('');
+            // Do not reset selected items here, it's handled in the other useEffect
             setIsTruncated(false);
             return;
         }
@@ -104,9 +108,23 @@ const CalculationsSearchModal = ({
     // Clearing selections belongs to switching type/scope, not to typing — a
     // refetch triggered by `q` must not wipe what the user has already ticked.
     useEffect(() => {
-        setSelectedSearchItems([]);
-        setLocalSearchQuery('');
-        setDebouncedQuery('');
+        const justOpened = !prevIsOpenRef.current && isOpen;
+        prevIsOpenRef.current = isOpen;
+
+        if (justOpened) {
+            if (['order_id', 'order_item_id'].includes(searchType)) {
+                setLocalSearchQuery(initialSelectedItems.length > 0 ? initialSelectedItems[0] : '');
+                setSelectedSearchItems([]);
+            } else {
+                setLocalSearchQuery('');
+                setSelectedSearchItems(initialSelectedItems || []);
+            }
+            setDebouncedQuery('');
+        } else if (isOpen) {
+            setSelectedSearchItems([]);
+            setLocalSearchQuery('');
+            setDebouncedQuery('');
+        }
     }, [searchType, isOpen, marketplaceFilter, startDate, endDate, nullDateFilter]);
 
     if (!isOpen) return null;

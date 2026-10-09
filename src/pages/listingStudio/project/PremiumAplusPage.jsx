@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkles, Layers, Download, CheckCircle2, Clock, RefreshCw, X, Monitor, Smartphone } from 'lucide-react';
@@ -61,15 +63,15 @@ function ViewToggle({ value, onChange }) {
 }
 
 /**
- * Premium A+ Content: for each selected marketing-angle combination, one 650x1620 "desktop"
+ * Premium A+ Content: for each selected marketing-angle combination, one 650x1027 "desktop"
  * composite plus a 608x1824 "mobile" companion, both generated from one shared concept, each
- * sliced into 6 bands for upload into Amazon's Premium A+ builder (pipeline/premiumAplus.js).
+ * sliced into 4 bands for upload into Amazon's Premium A+ builder (pipeline/premiumAplus.js).
  * This page is a pure viewing/downloading gallery — picking angles and triggering generation
  * both happen on the Strategy page (the same AnglePicker Standard A+ already uses, sharing one
  * checked selection between both features); this page only links there.
  */
 export default function PremiumAplusPage() {
-  const { project } = useProjectCtx();
+  const { project, creditRates } = useProjectCtx();
   const [designs, setDesigns] = useState(null);
   const [error, setError] = useState('');
   // Opens the shared AnglePicker in a modal right on this page — an angle may be picked for any
@@ -226,7 +228,7 @@ export default function PremiumAplusPage() {
     const generating = d[`${side}Generating`];
     const err = d[`${side}Error`];
     const busy = regeneratingKey === `${d.id}:${side}`;
-    const sideLabel = side === 'desktop' ? 'Desktop (1536×3888)' : 'Mobile (608×1824)';
+    const sideLabel = side === 'desktop' ? 'Desktop (1536×2464)' : 'Mobile (608×1824)';
     return (
       <div className="px-3 sm:px-12 lg:px-24">
         <div className="flex items-center justify-between mb-1">
@@ -405,7 +407,7 @@ export default function PremiumAplusPage() {
                   </div>
                   <div>
                     {viewSide === 'desktop'
-                      ? renderSideTile(d, 'desktop', d.compositePath, d.slicePaths, 'aspect-[650/1620]')
+                      ? renderSideTile(d, 'desktop', d.compositePath, d.slicePaths, 'aspect-[650/1027]')
                       : renderSideTile(d, 'mobile', d.mobileCompositePath, d.mobileSlicePaths, 'aspect-[1/3]')}
                   </div>
                 </div>
@@ -431,6 +433,14 @@ export default function PremiumAplusPage() {
                 label: (n) => `Generate 1 Premium A+ design covering ${n} angle${n === 1 ? '' : 's'}`,
                 onGenerate: generatePremiumDesign,
                 busy: isGeneratingAny,
+                // Premium A+ charges 2 separate images (desktop + mobile) — free-image allowance
+                // is spent per image, so this can be fully free, fully paid, or split across both.
+                costNote: {
+                  type: 'pill',
+                  imageCost: creditRates?.imageCost ?? null,
+                  freeRemaining: creditRates?.freeImagesRemaining ?? 0,
+                  count: 2,
+                },
               },
             ]}
           />

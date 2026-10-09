@@ -1,11 +1,13 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  AlertTriangle, ChevronDown, Link2, PenLine, Sparkles, Package,
+  AlertTriangle, ChevronDown, Link2, PenLine, Sparkles, Package, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../api';
-import { listingStudioApi } from '../../components/listingStudio/api';
+import { listingStudioApi, uploadImagesViaSignedUrl } from '../../components/listingStudio/api';
 import { BrandkitSelect } from '../../components/listingStudio/BrandkitSelect';
 import { AutoGenerateOptions } from '../../components/listingStudio/AutoGenerateOptions';
 import { MAX_UPLOAD_FILES } from '../../components/listingStudio/constants';
@@ -13,7 +15,7 @@ import { validateUploadFiles } from '../../components/listingStudio/helpers';
 import { FormField } from '../../components/listingStudio/ui/FormField';
 import { Button } from '../../components/listingStudio/ui/Button';
 import {
-  ERROR_TEXT, ISSUE_WARN, GRID2, THUMBS, THUMB, FIELD_INPUT,
+  ERROR_TEXT, ISSUE_WARN, GRID2, THUMBS, THUMB, THUMB_WRAP, THUMB_REMOVE, FIELD_INPUT,
 } from '../../components/listingStudio/ui/classNames';
 
 // This page's CTA is a full-width, larger-than-usual button (its own hero-card layout, see the
@@ -89,13 +91,20 @@ export default function NewCampaignPage() {
   // down in the manual form; there's no auto-sync between the two, by design.
   const [brandKitId, setBrandKitId] = useState('');
   // Also shared across both tabs: what to auto-generate once the marketing angles are ready.
-  const [autoGen, setAutoGen] = useState({ aplus: false, premiumAplus: false });
+  // Mutually exclusive — exactly one must be selected, so it defaults to aplus.
+  const [autoGen, setAutoGen] = useState({ aplus: true, premiumAplus: false });
   const [aiFilledFields, setAiFilledFields] = useState(new Set());
   const [filling, setFilling] = useState(false);
+  const [fillImageDragOver, setFillImageDragOver] = useState(false);
   const fillInputRef = useRef(null);
   const imagesInputRef = useRef(null);
 
   const selectedImagesRef = useRef([]);
+  // File identity (`name:size:lastModified`, same key mergeIntoImagesInput already dedupes by)
+  // -> storage key. "Fill from image" and the actual campaign submission below often cover the
+  // same File objects (pick once, preview with AI, then submit) — this avoids uploading the
+  // same photo to the bucket twice.
+  const uploadedKeysRef = useRef(new Map());
   const navigate = useNavigate();
   // `busy`/`filling` state drive the disabled buttons below, but a state update isn't visible
   // in the DOM until the next render commits — a fast double-click (or two independent
@@ -161,15 +170,40 @@ const mergeIntoImagesInput = (newFiles) => {
     clearInvalid('images');
   };
 
+  const fileIdentity = (f) => `${f.name}:${f.size}:${f.lastModified}`;
+
+  /** Uploads only files not already uploaded by this page (by identity, see uploadedKeysRef)
+   *  and returns every given file's storage key in order. */
+  const uploadFilesCached = async (uploadedKeysMap, files) => {
+    const uncached = files.filter((f) => !uploadedKeysMap.has(fileIdentity(f)));
+    if (uncached.length > 0) {
+      const keys = await uploadImagesViaSignedUrl(uncached);
+      uncached.forEach((f, i) => uploadedKeysMap.set(fileIdentity(f), keys[i]));
+    }
+    return files.map((f) => uploadedKeysMap.get(fileIdentity(f)));
+  };
+
+  /** Drops one picked file (by its position in the preview strip) and keeps the hidden
+   *  `images` input's native .files in sync the same way mergeIntoImagesInput does. */
+  const removeFromImagesInput = (index) => {
+    const input = imagesInputRef.current;
+    if (!input) return;
+    const remaining = selectedImagesRef.current.filter((_, i) => i !== index);
+    const dt = new DataTransfer();
+    remaining.forEach((f) => dt.items.add(f));
+    input.files = dt.files;
+    selectedImagesRef.current = remaining;
+    setPreviews(remaining.map((f) => URL.createObjectURL(f)));
+  };
+
   /** Sends the given photo(s) off for vision analysis and fills the form fields with whatever comes back. */
   const analyzeImages = async (files, { mergeIntoProductImages }) => {
     if (files.length === 0 || fillingRef.current) return;
     fillingRef.current = true;
     setFilling(true);
     try {
-      const fd = new FormData();
-      files.slice(0, 4).forEach((f) => fd.append('images', f));
-      const fields = await listingStudioApi.fillCampaignFromImage(fd);
+      const keys = await uploadFilesCached(uploadedKeysRef.current, files.slice(0, 4));
+      const fields = await listingStudioApi.fillCampaignFromImage({ keys });
       setManualForm((f) => ({
         ...f,
         name: fields.name || f.name,
@@ -220,9 +254,18 @@ const mergeIntoImagesInput = (newFiles) => {
     analyzeImages(files, { mergeIntoProductImages: true });
   };
 
+  /** Lets the "Upload a product photo" box double as a dropzone, same outcome as picking files
+   *  via onFillImagePicked — non-image drops (e.g. dragging text/links) are ignored. */
+  const onFillImageDropped = (e) => {
+    e.preventDefault();
+    setFillImageDragOver(false);
+    const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => f.type.startsWith('image/'));
+    analyzeImages(files, { mergeIntoProductImages: true });
+  };
+
   useEffect(() => {
     api
-      .get('/listing-studio/health')
+      .get('/listing-studio/health', { skipErrorToast: true })
       .then((res) => setDemoMode(res.data?.amazonProvider === 'mock'))
       .catch(() => undefined);
   }, []);
@@ -273,10 +316,16 @@ const mergeIntoImagesInput = (newFiles) => {
     busyRef.current = true;
     setBusy(true);
     try {
-      const fd = new FormData(e.currentTarget);
-      fd.set('autoAplus', String(autoGen.aplus));
-      fd.set('autoPremiumAplus', String(autoGen.premiumAplus));
-      const project = await listingStudioApi.createProject(fd);
+      const files = Array.from(imagesInputRef.current?.files ?? []);
+      const keys = await uploadFilesCached(uploadedKeysRef.current, files);
+      const project = await listingStudioApi.createProject({
+        ...manualForm,
+        marketplace,
+        brandKitId: brandKitId || undefined,
+        autoAplus: Boolean(autoGen.aplus),
+        autoPremiumAplus: Boolean(autoGen.premiumAplus),
+        keys,
+      });
       // Research auto-starts server-side here too now (see projectsService.createProject) and
       // self-chains into strategy + A+ concepts — land on the live progress page instead of
       // the plain research tab, same as the ASIN-import path below.
@@ -409,7 +458,8 @@ const mergeIntoImagesInput = (newFiles) => {
               Target marketplace
               <select
                 name="marketplace"
-                defaultValue="www.amazon.in"
+                value={marketplace}
+                onChange={(e) => setMarketplace(e.target.value)}
                 className={`${FIELD_INPUT} block w-full mt-1`}
               >
                 {MARKETPLACES.map((m) => (
@@ -426,13 +476,23 @@ const mergeIntoImagesInput = (newFiles) => {
             </label>
             <AutoGenerateOptions value={autoGen} onChange={setAutoGen} />
 
-            <div className="flex items-center gap-3 mb-4 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50/60 px-4 py-3.5">
+            <div
+              className={`flex items-center gap-3 mb-4 rounded-xl border-2 border-dashed px-4 py-3.5 transition-colors ${
+                fillImageDragOver ? 'border-brand-500 bg-brand-100/70' : 'border-brand-300 bg-brand-50/60'
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setFillImageDragOver(true);
+              }}
+              onDragLeave={() => setFillImageDragOver(false)}
+              onDrop={onFillImageDropped}
+            >
               <span className="w-10 h-10 rounded-lg bg-white border border-brand-200 text-brand-600 grid place-items-center flex-shrink-0 shadow-sm">
                 <Sparkles size={18} />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900">Upload a product photo</p>
-                <p className="text-xs text-slate-500">Let AI read it and fill in the fields below for you.</p>
+                <p className="text-xs text-slate-500">Let AI read it and fill in the fields below for you, or drag one in.</p>
               </div>
               <Button
                 type="button"
@@ -539,8 +599,19 @@ const mergeIntoImagesInput = (newFiles) => {
               )}
             </label>
             <div className={THUMBS}>
-              {previews.map((src) => (
-                <img key={src} src={src} alt="" className={THUMB} />
+              {previews.map((src, i) => (
+                <div key={src} className={THUMB_WRAP}>
+                  <img src={src} alt="" className={THUMB} />
+                  <button
+                    type="button"
+                    title="Remove image"
+                    aria-label="Remove image"
+                    onClick={() => removeFromImagesInput(i)}
+                    className={THUMB_REMOVE}
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
               ))}
             </div>
 

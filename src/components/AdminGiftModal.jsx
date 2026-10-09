@@ -1,13 +1,24 @@
-import React, { useState, useCallback, useRef } from 'react';
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog, Transition } from '@headlessui/react';
-import { Gift, Loader2, X } from 'lucide-react';
+import { Gift, Loader2, X, Layers, Sparkles, Check } from 'lucide-react';
 import api from '../api';
 import { toast } from 'sonner';
 
+const isValidAmount = (value) => /^\d+(\.\d{1,2})?$/.test(value) && Number(value) > 0;
+const isValidCount = (value) => /^\d+$/.test(value) && Number(value) > 0;
+
 const AdminGiftModal = ({ isOpen, onClose, onSuccess }) => {
+    const [product, setProduct] = useState('reconciliation'); // 'reconciliation' | 'listing-studio'
     const [amount, setAmount] = useState('');
+    const [freeImages, setFreeImages] = useState('');
+    const [freeVideos, setFreeVideos] = useState('');
     const [note, setNote] = useState('');
+    const [plans, setPlans] = useState([]);
+    const [planTitle, setPlanTitle] = useState('');
+    const [planTouched, setPlanTouched] = useState(false);
     const [loading, setLoading] = useState(false);
     const [searching, setSearching] = useState(false);
     const [tenantQuery, setTenantQuery] = useState('');
@@ -18,7 +29,40 @@ const AdminGiftModal = ({ isOpen, onClose, onSuccess }) => {
     const [allTenants, setAllTenants] = useState([]);
     const inputRef = useRef(null);
 
-    const isValidAmount = (value) => /^\d+(\.\d{1,2})?$/.test(value) && Number(value) > 0;
+    useEffect(() => {
+        if (!isOpen || product !== 'listing-studio') return;
+        const loadPlans = async () => {
+            try {
+                const { data } = await api.get('/listing-studio/wallet/admin/plans/config');
+                const active = (data.config?.plans || []).filter((p) => p.isActive).sort((a, b) => a.price - b.price);
+                setPlans(active);
+            } catch (error) {
+                toast.error(error.response?.data?.message || 'Failed to load Listing Studio plans');
+            }
+        };
+        loadPlans();
+    }, [isOpen, product]);
+
+    // The CATEGORY (which plan the gift is tagged/filtered under) is always decided by price — an
+    // exact plan price matches that plan; otherwise the highest active plan priced at or below the
+    // amount; otherwise the cheapest plan. Mirrors the server's resolveListingStudioFreeTrialPlan and
+    // is never overridable — this is what the amount field's preview text shows.
+    const categoryPlan = (() => {
+        if (!isValidAmount(amount) || plans.length === 0) return null;
+        const amt = Number(amount);
+        const exact = plans.find((p) => p.price === amt);
+        if (exact) return { plan: exact, exact: true };
+        const base = [...plans].reverse().find((p) => p.price <= amt);
+        return { plan: base || plans[0], exact: false };
+    })();
+
+    // The "Charge credits at rates of" dropdown only ever picks which plan's usage RATES apply —
+    // independent of category. It defaults to (and keeps following) the category plan's own rates
+    // until the admin manually picks a different one, which then sticks.
+    useEffect(() => {
+        if (planTouched || !categoryPlan) return;
+        setPlanTitle(categoryPlan.plan.title);
+    }, [categoryPlan, planTouched]);
 
     const searchTenants = useCallback(async (q) => {
         setSearching(true);
@@ -84,22 +128,54 @@ const AdminGiftModal = ({ isOpen, onClose, onSuccess }) => {
             return;
         }
 
-        if (!isValidAmount(amount)) {
-            toast.error('Please enter a valid amount (up to 2 decimal places)');
-            return;
+        if (product === 'reconciliation') {
+            if (!isValidAmount(amount)) {
+                toast.error('Please enter a valid amount (up to 2 decimal places)');
+                return;
+            }
+        } else {
+            const hasAmount = amount !== '';
+            const hasImages = freeImages !== '';
+            const hasVideos = freeVideos !== '';
+            if (!hasAmount && !hasImages && !hasVideos) {
+                toast.error('Give at least one of amount, free images, or free videos');
+                return;
+            }
+            if ((hasAmount && !isValidAmount(amount)) || (hasImages && !isValidCount(freeImages)) || (hasVideos && !isValidCount(freeVideos))) {
+                toast.error('Amounts must be positive numbers (whole numbers for free images/videos)');
+                return;
+            }
         }
 
         setLoading(true);
         try {
-            await api.post('/superadmin/credits/gift', {
-                tenantId: selectedTenant._id,
-                amount: Number(amount),
-                note
-            });
+            if (product === 'reconciliation') {
+                await api.post('/superadmin/credits/gift', {
+                    tenantId: selectedTenant._id,
+                    amount: Number(amount),
+                    note
+                });
+            } else {
+                // Rupees always decide the credit quantity and CATEGORY (resolved server-side purely
+                // from the amount, exactly like a real plan purchase — never overridable). planTitle
+                // only picks which plan's usage rates apply, independent of category — it's ignored
+                // when there's no amount. Free images/videos are a separate, independent grant.
+                await api.post('/listing-studio/wallet/admin/gift', {
+                    tenantId: selectedTenant._id,
+                    ...(amount !== '' && { amount: Number(amount), ...(planTitle && { planTitle }) }),
+                    ...(freeImages !== '' && { freeImages: Number(freeImages) }),
+                    ...(freeVideos !== '' && { freeVideos: Number(freeVideos) }),
+                    note,
+                });
+            }
             toast.success('Admin gift added successfully');
 
             setAmount('');
+            setFreeImages('');
+            setFreeVideos('');
             setNote('');
+            setPlanTitle('');
+            setPlanTouched(false);
             setSelectedTenant(null);
             setTenantQuery('');
             onSuccess();
@@ -113,8 +189,13 @@ const AdminGiftModal = ({ isOpen, onClose, onSuccess }) => {
     };
 
     const handleClose = () => {
+        setProduct('reconciliation');
         setAmount('');
+        setFreeImages('');
+        setFreeVideos('');
         setNote('');
+        setPlanTitle('');
+        setPlanTouched(false);
         setSelectedTenant(null);
         setTenantQuery('');
         setTenants([]);
@@ -123,6 +204,10 @@ const AdminGiftModal = ({ isOpen, onClose, onSuccess }) => {
     };
 
     const getInitial = (name) => name?.charAt(0)?.toUpperCase() || '';
+
+    const canSubmit = product === 'reconciliation'
+        ? !!amount
+        : !!(amount || freeImages || freeVideos);
 
     return (
         <Transition appear show={isOpen} as={React.Fragment}>
@@ -180,22 +265,105 @@ const AdminGiftModal = ({ isOpen, onClose, onSuccess }) => {
                                         />
                                     </div>
 
+                                    {/* Apply Credits To */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-purple-700 mb-2">
+                                            Apply Credits To <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setProduct('reconciliation')}
+                                                className={`relative text-left p-3 rounded-xl border-2 transition-all ${product === 'reconciliation' ? 'border-purple-500 bg-purple-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                            >
+                                                {product === 'reconciliation' && <Check size={16} className="absolute top-2 right-2 text-purple-600" />}
+                                                <Layers size={18} className="text-slate-500 mb-1" />
+                                                <p className="text-sm font-semibold text-slate-800">Reconciliation</p>
+                                                <p className="text-xs text-slate-500 mt-0.5">Credit applied toward account reconciliation balance</p>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setProduct('listing-studio')}
+                                                className={`relative text-left p-3 rounded-xl border-2 transition-all ${product === 'listing-studio' ? 'border-purple-500 bg-purple-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                            >
+                                                {product === 'listing-studio' && <Check size={16} className="absolute top-2 right-2 text-purple-600" />}
+                                                <Sparkles size={18} className="text-slate-500 mb-1" />
+                                                <p className="text-sm font-semibold text-slate-800">Listing Studio</p>
+                                                <p className="text-xs text-slate-500 mt-0.5">Credit applied toward Listing Studio usage/tools</p>
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-2">Choose which module this gifted balance is credited to.</p>
+                                    </div>
+
                                     {/* Amount */}
                                     <div>
                                         <label className="block text-sm font-bold text-purple-700 mb-2">
-                                            Amount (₹) <span className="text-red-500">*</span>
+                                            {product === 'reconciliation' ? <>Amount (₹) <span className="text-red-500">*</span></> : <>Amount (₹, optional)</>}
                                         </label>
                                         <input
                                             type="number"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="Enter credit amount"
+                                            placeholder="Enter amount"
                                             className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-0 focus:border-blue-500 text-sm font-medium"
                                             min="0.01"
                                             step="0.01"
                                             inputMode="decimal"
                                         />
                                     </div>
+
+                                    {product === 'listing-studio' && isValidAmount(amount) && (
+                                        <div>
+                                            <label className="block text-sm font-bold text-purple-700 mb-2">
+                                                Charge credits at rates of <span className="text-red-500">*</span>
+                                            </label>
+                                            <select
+                                                value={planTitle}
+                                                onChange={(e) => { setPlanTitle(e.target.value); setPlanTouched(true); }}
+                                                className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-0 focus:border-blue-500 text-sm font-medium"
+                                            >
+                                                {plans.map((p) => (
+                                                    <option key={p.title} value={p.title}>
+                                                        {p.title} (campaign {p.campaignCost}, image {p.imageCost}, video {p.videoCost})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-xs text-slate-400 mt-1">
+                                                Rates only — changing this does not change which plan the credits are categorized as above; it only changes what campaigns/images/videos cost against this gift.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {product === 'listing-studio' && (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-bold text-purple-700 mb-2">Free Images (optional)</label>
+                                                <input
+                                                    type="number"
+                                                    value={freeImages}
+                                                    onChange={(e) => setFreeImages(e.target.value)}
+                                                    placeholder="0"
+                                                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-0 focus:border-blue-500 text-sm font-medium"
+                                                    min="1"
+                                                    step="1"
+                                                    inputMode="numeric"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-purple-700 mb-2">Free Videos (optional)</label>
+                                                <input
+                                                    type="number"
+                                                    value={freeVideos}
+                                                    onChange={(e) => setFreeVideos(e.target.value)}
+                                                    placeholder="0"
+                                                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-0 focus:border-blue-500 text-sm font-medium"
+                                                    min="1"
+                                                    step="1"
+                                                    inputMode="numeric"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Note */}
                                     <div>
@@ -222,7 +390,7 @@ const AdminGiftModal = ({ isOpen, onClose, onSuccess }) => {
                                         </button>
                                         <button
                                             type="submit"
-                                            disabled={loading || !amount || !selectedTenant?._id}
+                                            disabled={loading || !canSubmit || !selectedTenant?._id}
                                             className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                                         >
                                             {loading ? (

@@ -1,13 +1,16 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Sparkles, Puzzle, Pencil, Clock } from 'lucide-react';
-import { listingStudioApi } from '../../../components/listingStudio/api';
+import { Sparkles, Puzzle, Pencil, Clock, Download, Loader2 } from 'lucide-react';
+import { listingStudioApi, uploadImagesViaSignedUrl } from '../../../components/listingStudio/api';
 import { creditNotificationMessage } from '../../../components/listingStudio/creditNotifications';
 import { formatClock, useSlotGenerationClock, clearSlotGenerationClock } from '../../../components/listingStudio/pipelineClock';
 import { useProjectCtx } from '../../../components/listingStudio/context';
 import { ImageLightbox } from '../../../components/listingStudio/ui/ImageLightbox';
 import { GeneratedImageModal } from '../../../components/listingStudio/ui/GeneratedImageModal';
+import { CreditCostPill } from '../../../components/listingStudio/ui/CreditCostPill';
 import { EmptyStateCard } from '../../../components/listingStudio/ui/EmptyStateCard';
 import { Modal } from '../../../components/listingStudio/ui/Modal';
 import { AnglePicker } from '../../../components/listingStudio/AnglePicker';
@@ -17,12 +20,12 @@ import {
   GEN_CARD, GEN_CARD_FOOTER, GEN_CARD_TYPE_BADGE,
 } from '../../../components/listingStudio/ui/classNames';
 
-// The banner is 1472x608 (a wide 2.4:1 strip) — GEN_CARD_IMG's square aspect-ratio (built for
-// the Images tab's product photos) would crop most of it away, so this card uses its own
-// aspect-ratio image instead of that shared class, everything else (GEN_CARD/GEN_CARD_FOOTER)
-// reused as-is.
+// The banner is 970x600 (Amazon's real "Standard Image Header" module — see
+// aplus/catalog.js's own comment) — GEN_CARD_IMG's square aspect-ratio (built for the Images
+// tab's product photos) would crop most of it away, so this card uses its own aspect-ratio
+// image instead of that shared class, everything else (GEN_CARD/GEN_CARD_FOOTER) reused as-is.
 const OVERLAY_IMG = 'w-full object-cover block';
-const OVERLAY_ASPECT = { aspectRatio: '1472 / 608' };
+const OVERLAY_ASPECT = { aspectRatio: '970 / 600' };
 // Same look as the shared GEN_CARD_EDIT, but pinned to the top-right instead of top-left —
 // unlike ImagesPage/ListingPage, this card has no "Remove" button contesting that corner.
 const OVERLAY_EDIT_BTN =
@@ -40,7 +43,7 @@ const RATIONALE_CLAMP_THRESHOLD = 140;
 
 /** Ported from speed-listing's pages/project/AplusPage.tsx. */
 export default function AplusPage() {
-  const { project, jobRunning, refresh, watchJob } = useProjectCtx();
+  const { project, jobRunning, refresh, watchJob, creditRates } = useProjectCtx();
   const [compare, setCompare] = useState(false);
   // Opens the shared AnglePicker in a modal right on this page — an angle may be picked any
   // number of times (no "already used" lock, removed by design), so this is always available,
@@ -90,16 +93,28 @@ export default function AplusPage() {
       return next;
     });
   const concepts = project.aplus?.concepts ?? [];
+  const [downloading, setDownloading] = useState(false);
+  const downloadAll = () => {
+    setDownloading(true);
+    listingStudioApi
+      .downloadAplusImagesZip(project.id)
+      .catch((err) => {
+        console.error('A+ content export failed:', err);
+        toast.error('Export failed — please try again.');
+      })
+      .finally(() => setDownloading(false));
+  };
 
   const moduleLabel = (type) => type.replace('STANDARD_', '').replaceAll('_', ' ').toLowerCase();
 
   // The Module Editor is gone — the only per-image action left on this page is generating the
-  // STANDARD_IMAGE_TEXT_OVERLAY module's single 1472×608 "main" slot, right here on the card.
+  // STANDARD_IMAGE_TEXT_OVERLAY module's single 970×600 "main" slot, right here on the card.
   const overlayModuleIndex = (concept) => concept.modules.findIndex((m) => m.type === 'STANDARD_IMAGE_TEXT_OVERLAY');
   const overlaySlot = (concept) => {
     const idx = overlayModuleIndex(concept);
     return idx === -1 ? null : concept.modules[idx].images.find((s) => s.key === 'main') ?? null;
   };
+  const hasAnyBanner = concepts.some((c) => overlaySlot(c)?.path);
   // The generate/regenerate endpoint now just queues the model call and returns immediately
   // (server/listingStudio/pipeline/moduleImage.js — no more holding one HTTP request open for
   // the whole generation, see ADR-0009). Deliberately NOT the shared pollUntil (which re-fetches
@@ -178,11 +193,12 @@ export default function AplusPage() {
         ),
       }));
       await listingStudioApi.patchConcept(project.id, concept.id, { name: concept.name, modules: modulesPatch });
-      const form = new FormData();
-      form.append('quality', 'low');
-      form.append('editSlotImage', 'true');
-      if (referenceFile) form.append('referencePhoto', referenceFile);
-      await listingStudioApi.generateModuleImageWithReferencePhoto(project.id, concept.id, moduleIdx, slot.key, form);
+      const [referencePhotoKey] = referenceFile ? await uploadImagesViaSignedUrl([referenceFile], { transient: true }) : [];
+      await listingStudioApi.generateModuleImageWithReferencePhoto(project.id, concept.id, moduleIdx, slot.key, {
+        quality: 'low',
+        editSlotImage: 'true',
+        referencePhotoKey,
+      });
       return await waitForOverlayResult(concept.id, moduleIdx, slot.key);
     } finally {
       setOverlayBusy(concept.id, false);
@@ -210,6 +226,14 @@ useEffect(() => {
           <h1 className={PAGE_TITLE}>A+ Content</h1>
         </div>
         <div className="flex gap-2 items-center">
+          {hasAnyBanner && (
+            <button type="button" className={BTN} disabled={downloading} onClick={downloadAll}>
+              <span className={ICON_LABEL}>
+                {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                {downloading ? 'Preparing…' : 'Export & download all (.zip)'}
+              </span>
+            </button>
+          )}
           {concepts.length > 1 && (
             <button type="button" className={BTN} onClick={() => setCompare(!compare)}>
               {compare ? 'Card view' : 'Compare side-by-side'}
@@ -278,7 +302,16 @@ useEffect(() => {
                       than the rest. Expanding via "Show more" is an explicit per-card action, so
                       it's fine for that one card to grow past this once expanded. */}
                   <div>
-                    <h2 className={`${CARD_TITLE} ${expanded ? '' : 'h-[3.5rem] line-clamp-2'}`}>{c.name}</h2>
+                    <div className="flex items-start justify-between gap-2">
+                      <h2 className={`${CARD_TITLE} flex-1 min-w-0 ${expanded ? '' : 'h-[3.5rem] line-clamp-2'}`}>{c.name}</h2>
+                      {slot && !busy && (
+                        <CreditCostPill
+                          imageCost={creditRates?.imageCost ?? null}
+                          freeRemaining={creditRates?.freeImagesRemaining ?? 0}
+                          className="flex-shrink-0"
+                        />
+                      )}
+                    </div>
                     <p className={`${MUTED} text-sm mb-1 ${expanded ? '' : 'h-[3.75rem] line-clamp-3'}`}>{c.rationale}</p>
                     {/* Always rendered (just invisible when there's nothing to expand) so every
                         card reserves the same line for it — otherwise a truncatable card's extra
@@ -315,7 +348,7 @@ useEffect(() => {
                 </div>
                 {/* Its own card, separate from the concept card above — same gallery-card shell
                     (GEN_CARD/GEN_CARD_FOOTER) the Images/Listing tabs use, just at the banner's
-                    actual 1472x608 aspect ratio instead of their square crop. Clicking the image
+                    actual 970x600 aspect ratio instead of their square crop. Clicking the image
                     opens the shared ImageLightbox, same as those galleries. */}
                 {slot?.path && (
                   <div className={GEN_CARD}>
@@ -401,9 +434,14 @@ useEffect(() => {
                   return (
                     <td key={c.id} className={TD}>
                       {slot ? (
-                        <button type="button" className={BTN} disabled={busy} onClick={() => generateOverlay(c)}>
-                          {busy ? `Generating… ${formatClock(overlaySecondsLeft)}` : 'Generate'}
-                        </button>
+                        <div className="flex flex-col items-start gap-1.5">
+                          {!busy && (
+                            <CreditCostPill imageCost={creditRates?.imageCost ?? null} freeRemaining={creditRates?.freeImagesRemaining ?? 0} />
+                          )}
+                          <button type="button" className={BTN} disabled={busy} onClick={() => generateOverlay(c)}>
+                            {busy ? `Generating… ${formatClock(overlaySecondsLeft)}` : 'Generate'}
+                          </button>
+                        </div>
                       ) : (
                         <p className={`${MUTED} text-xs`}>No overlay module — regenerate concepts.</p>
                       )}
@@ -444,6 +482,8 @@ useEffect(() => {
             projectId={project.id}
             image={{ id: `${c.id}:${slot.key}`, prompt: slot.brief ?? '', path: slot.path, type: 'A+ overlay', referenceImageIds: slot.referenceImageIds }}
             libraryEntries={project.imageLibrary?.entries ?? []}
+            imageCost={creditRates?.imageCost ?? null}
+            freeImagesRemaining={creditRates?.freeImagesRemaining ?? 0}
             onClose={() => setEditingId(null)}
             onRegenerate={(prompt, referenceImageIds, referenceFile) => regenerateOverlay(c, prompt, referenceImageIds, referenceFile)}
             onRegenerated={async () => setEditingId(null)}
@@ -463,6 +503,12 @@ useEffect(() => {
                 label: (n) => `Generate A+ content for ${n} angle${n === 1 ? '' : 's'}`,
                 onGenerate: generateConcepts,
                 busy: jobRunning,
+                costNote: {
+                  type: 'deferred',
+                  imageCost: creditRates?.imageCost ?? null,
+                  freeRemaining: creditRates?.freeImagesRemaining ?? 0,
+                  text: 'Free to start — charged later, per banner, when you click Generate on each one.',
+                },
               },
             ]}
           />

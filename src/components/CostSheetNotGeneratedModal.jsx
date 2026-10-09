@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { AlertTriangle, RefreshCw, Loader2, X, CheckCircle, Clock } from 'lucide-react';
 import api from '../api';
@@ -50,24 +52,32 @@ const CostSheetNotGeneratedModal = ({
     return (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-6 border-b flex items-start gap-4 bg-amber-50 border-amber-100">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-100">
-                        {isStale
-                            ? <RefreshCw className="text-amber-600" size={20} />
-                            : <AlertTriangle className="text-amber-600" size={22} />
-                        }
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-bold text-amber-900">
-                            {isStale ? 'Action Required: Update Cost Sheet' : 'Cost Sheet Required'}
-                        </h3>
-                        <p className="text-sm mt-0.5 text-amber-700">
+                <div className="p-6 border-b flex items-start justify-between gap-4 bg-amber-50 border-amber-100">
+                    <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-100">
                             {isStale
-                                ? 'New uploads found or costsheet is out of date'
-                                : 'Template must exist first before running calculations'
+                                ? <RefreshCw className="text-amber-600" size={20} />
+                                : <AlertTriangle className="text-amber-600" size={22} />
                             }
-                        </p>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-amber-900">
+                                {isStale ? 'Action Required: Update Cost Sheet' : 'Cost Sheet Required'}
+                            </h3>
+                            <p className="text-sm mt-0.5 text-amber-700">
+                                {isStale
+                                    ? 'New uploads found or costsheet is out of date'
+                                    : 'Template must exist first before running calculations'
+                                }
+                            </p>
+                        </div>
                     </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 text-amber-500 hover:text-amber-700 hover:bg-amber-100/50 rounded-lg transition-colors flex-shrink-0"
+                    >
+                        <X size={20} />
+                    </button>
                 </div>
 
                 <div className="p-6 space-y-4">

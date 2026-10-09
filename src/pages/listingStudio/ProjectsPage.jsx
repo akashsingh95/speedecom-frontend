@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronDown, Check, ExternalLink, History, Inbox, Palette, Pencil, Plus, Search, Trash2 } from 'lucide-react';
@@ -369,7 +371,9 @@ export default function ProjectsPage() {
                   )}
                   <span>{formatRelativeTime(p.createdAt)}</span>
                 </div>
-                <div className={`mt-2 text-sm font-medium ${campaignStatus(p).className}`}>{campaignStatus(p).label}</div>
+                {campaignStatus(p) && (
+                  <div className={`mt-2 text-sm font-medium ${campaignStatus(p).className}`}>{campaignStatus(p).label}</div>
+                )}
               </div>
               {!isCrossTenant && (
                 <div

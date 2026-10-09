@@ -1,9 +1,12 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
 import { FormField } from './ui/FormField';
 import { ColorInput } from './ui/ColorInput';
 import { LogoUploadField } from './ui/LogoUploadField';
 import { brandkitApi } from './brandkitApi';
+import { uploadImagesViaSignedUrl } from './api';
 import { getErrorMessage } from './errors';
 import { BTN, BTN_PRIMARY, ERROR_TEXT, CARD_TITLE, GRID2 } from './ui/classNames';
 
@@ -18,9 +21,10 @@ const DEFAULT_SECONDARY = '#64748B';
  * BrandkitSelect's inline "+ Create new Brandkit" quick-create — the only difference between
  * the two call sites is whether `brandkit` (edit mode) is passed.
  *
- * `save()` builds a FormData (multipart, since logo is an optional file), calls
- * brandkitApi.createBrandkit/updateBrandkit, and calls `onSaved(brandkit)` with the server's
- * response either way — callers own what happens next (push into a list, select it, close).
+ * `save()` uploads a new logo (if any) directly to the bucket via uploadImagesViaSignedUrl,
+ * then calls brandkitApi.createBrandkit/updateBrandkit with the resulting `logoKey`, and calls
+ * `onSaved(brandkit)` with the server's response either way — callers own what happens next
+ * (push into a list, select it, close).
  */
 export function BrandkitFormModal({ brandkit, onClose, onSaved }) {
   const isEdit = !!brandkit;
@@ -43,19 +47,21 @@ export function BrandkitFormModal({ brandkit, onClose, onSaved }) {
     setBusy(true);
     setError('');
     try {
-      const form = new FormData();
-      form.append('name', name.trim());
-      form.append('primaryColor', primaryColor);
-      if (secondaryColor) form.append('secondaryColor', secondaryColor);
-      form.append('font', font.trim());
+      const body = {
+        name: name.trim(),
+        primaryColor,
+        secondaryColor: secondaryColor || undefined,
+        font: font.trim(),
+      };
       if (logo instanceof File) {
-        form.append('logo', logo);
+        const [logoKey] = await uploadImagesViaSignedUrl([logo]);
+        body.logoKey = logoKey;
       } else if (logo === null && isEdit) {
-        // Presence/absence of the `logo` field alone can't express "remove" — this explicit
-        // flag is the backend's contract for clearing an existing logo without replacing it.
-        form.append('removeLogo', 'true');
+        // Presence/absence of `logoKey` alone can't express "remove" — this explicit flag is
+        // the backend's contract for clearing an existing logo without replacing it.
+        body.removeLogo = 'true';
       }
-      const saved = isEdit ? await brandkitApi.updateBrandkit(brandkit.id, form) : await brandkitApi.createBrandkit(form);
+      const saved = isEdit ? await brandkitApi.updateBrandkit(brandkit.id, body) : await brandkitApi.createBrandkit(body);
       onSaved(saved);
     } catch (e) {
       setError(getErrorMessage(e));

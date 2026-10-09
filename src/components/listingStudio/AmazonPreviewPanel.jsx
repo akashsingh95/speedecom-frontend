@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { amazonUrl } from './helpers';
@@ -697,7 +699,7 @@ export function AmazonPreviewPanel({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 'min(970px, 75%)', margin: '0 auto 24px' }}>
                 {banners.map((slot) => (
                   // Rendered at its natural size instead of a forced-aspect-ratio background-cover
-                  // box — Standard A+ overlays (1472x608) and Premium A+ composites (1472x1472,
+                  // box — Standard A+ overlays (970x600) and Premium A+ composites (1472x1472,
                   // see PremiumAplusDesign.js) have different real dimensions, and a guessed box
                   // crops whichever one doesn't match, so the whole banner always shows this way.
                   <img
