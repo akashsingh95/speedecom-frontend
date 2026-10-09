@@ -256,6 +256,7 @@ const Subscription = () => {
                 status: sub.status,
                 isRazorpay: sub.transactionId?.startsWith('pay_'),
                 failureReason: sub.failureReason || null,
+                refundedAmount: sub.metadata?.refundedAmount ?? null,
                 paymentCategory: 'RECONCILIATION',
             };
         });
@@ -721,6 +722,9 @@ const Subscription = () => {
                                                             {isFailedOrCancelled && <AlertCircle size={11} />}
                                                             {statusLabel}
                                                         </span>
+                                                        {row.type === 'auto' && isRefunded && row.refundedAmount != null && (
+                                                            <p className="mt-1 text-[10px] text-blue-600">₹{Number(row.refundedAmount).toFixed(2)} refunded</p>
+                                                        )}
                                                         {row.type === 'auto' && row.status === 'rejected' && row.failureReason && (
                                                             <div className="relative group mt-1 max-w-[140px]">
                                                                 <p className="text-[10px] text-red-500 truncate cursor-help">
