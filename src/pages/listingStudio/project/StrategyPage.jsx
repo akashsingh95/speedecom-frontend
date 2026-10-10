@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Target, Users, Brain, ShoppingCart, AlertTriangle, Heart, Lightbulb } from 'lucide-react';
@@ -38,7 +36,7 @@ import {
 /** Ported from speed-listing's pages/project/StrategyPage.tsx. */
 export default function StrategyPage() {
   const navigate = useNavigate();
-  const { project, job, jobRunning, watchJob, creditRates } = useProjectCtx();
+  const { project, job, jobRunning, watchJob } = useProjectCtx();
   // Older stored projects still have the previous {positioning, toneOfVoice, ...} shape.
   const strategy = project.aplus?.strategy?.angles ? project.aplus.strategy : undefined;
 
@@ -205,26 +203,12 @@ export default function StrategyPage() {
                 label: (n) => `Generate A+ content for ${n} angle${n === 1 ? '' : 's'}`,
                 onGenerate: generateMore,
                 busy: jobRunning && job?.kind === 'aplus',
-                costNote: {
-                  type: 'deferred',
-                  imageCost: creditRates?.imageCost ?? null,
-                  freeRemaining: creditRates?.freeImagesRemaining ?? 0,
-                  text: 'Free to start — charged later, per banner, when you click Generate on each one.',
-                },
               },
               {
                 key: 'premium',
                 label: (n) => `Generate 1 Premium A+ design covering ${n} angle${n === 1 ? '' : 's'}`,
                 onGenerate: generatePremiumAplus,
                 busy: premiumStarting,
-                // Premium A+ charges 2 separate images (desktop + mobile) — free-image allowance
-                // is spent per image, so this can be fully free, fully paid, or split across both.
-                costNote: {
-                  type: 'pill',
-                  imageCost: creditRates?.imageCost ?? null,
-                  freeRemaining: creditRates?.freeImagesRemaining ?? 0,
-                  count: 2,
-                },
               },
             ]}
           />

@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { Images as ImagesIcon, Camera, Download, Loader2, Pencil, Sparkles } from 'lucide-react';
 import { useProjectCtx } from '../../../components/listingStudio/context';
@@ -16,7 +14,7 @@ import {
 
 /** Ported from speed-listing's pages/project/ImagesPage.tsx. */
 export default function ImagesPage() {
-  const { project, refresh, creditRates } = useProjectCtx();
+  const { project, refresh } = useProjectCtx();
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
   const [lightboxSrc, setLightboxSrc] = useState(null);
@@ -157,8 +155,6 @@ export default function ImagesPage() {
           projectId={project.id}
           image={activeImage}
           libraryEntries={library}
-          imageCost={creditRates?.imageCost ?? null}
-          freeImagesRemaining={creditRates?.freeImagesRemaining ?? 0}
           onClose={() => setActiveImage(null)}
           onRegenerated={async () => {
             setActiveImage(null);

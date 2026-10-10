@@ -1,8 +1,5 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
-import { CreditCostPill } from './ui/CreditCostPill';
 import { CARD_TITLE, MUTED, BTN_PRIMARY, GRID_CARDS, ANGLE_CARD, ANGLE_PREVIEW, MODAL_SECTION, MODAL_SECTION_TITLE, BTN } from './ui/classNames';
 
 // Rotating accent per marketing-angle card — angles have no color of their own, so this
@@ -26,17 +23,7 @@ const ANGLE_ACCENTS = [
  */
 export function AnglePicker({
   angles,
-  actions, // [{ key, label: (n) => string, onGenerate: (selectedAngleNames) => Promise, busy?,
-  //  costNote?: { type: 'pill', imageCost: number|null, freeRemaining?: number, count?: number }
-  //           | { type: 'deferred', imageCost: number|null, freeRemaining?: number, text: string }
-  //           | { type: 'info', text: string } }]
-  // costNote is optional — omit it entirely to keep this action's button rendering exactly as
-  // before. 'pill' shows an always-visible CreditCostPill (for an action that charges the instant
-  // it's clicked — `count` is how many images it charges, e.g. 2 for Premium A+'s desktop+mobile,
-  // default 1). 'deferred' is for an action (A+ concept generation) that charges nothing at THIS
-  // click but leads straight to a follow-up click that does — shows the same pill (what that next
-  // click will cost) alongside `text` explaining it's deferred, so the number is still visible up
-  // front instead of only a vague "free to start". 'info' shows just the muted note, no pill.
+  actions, // [{ key, label: (n) => string, onGenerate: (selectedAngleNames) => Promise, busy? }]
   heading,
   description,
 }) {
@@ -81,32 +68,15 @@ export function AnglePicker({
         {(pickedAngleNames.size > 0 || anyBusy) && (
           <div className="flex flex-wrap gap-2 flex-shrink-0">
             {actions.map((action) => (
-              <div key={action.key} className="flex flex-col items-end gap-1">
-                <button
-                  type="button"
-                  className={BTN_PRIMARY}
-                  onClick={() => generate(action)}
-                  disabled={action.busy}
-                >
-                  {action.busy ? 'Generating…' : action.label(pickedAngleNames.size)}
-                </button>
-                {!action.busy && action.costNote?.type === 'pill' && (
-                  <CreditCostPill
-                    imageCost={action.costNote.imageCost}
-                    freeRemaining={action.costNote.freeRemaining ?? 0}
-                    count={action.costNote.count ?? 1}
-                  />
-                )}
-                {!action.busy && action.costNote?.type === 'deferred' && (
-                  <>
-                    <CreditCostPill imageCost={action.costNote.imageCost} freeRemaining={action.costNote.freeRemaining ?? 0} />
-                    <p className={`${MUTED} text-[11px] text-right max-w-[230px] leading-snug`}>{action.costNote.text}</p>
-                  </>
-                )}
-                {!action.busy && action.costNote?.type === 'info' && (
-                  <p className={`${MUTED} text-[11px] text-right max-w-[230px] leading-snug`}>{action.costNote.text}</p>
-                )}
-              </div>
+              <button
+                key={action.key}
+                type="button"
+                className={BTN_PRIMARY}
+                onClick={() => generate(action)}
+                disabled={action.busy}
+              >
+                {action.busy ? 'Generating…' : action.label(pickedAngleNames.size)}
+              </button>
             ))}
           </div>
         )}

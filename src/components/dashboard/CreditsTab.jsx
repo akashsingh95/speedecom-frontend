@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import api from '../../api';
@@ -172,9 +170,7 @@ const CreditsTab = ({ tenantId, viewMode = 'grid' }) => {
     };
 
     const getTransactionIcon = (type, resolvedAmt) => {
-        // REVERSAL_CHARGE deliberately excluded: it can be either sign (a refund or an extra
-        // charge), so it falls through to the resolvedAmt-based check below instead.
-        const creditTypes = ['CREDIT_PURCHASE', 'ADMIN_GIFT', 'TIER_ADJUSTMENT_REFUND', 'REFUND', 'FREE_TRIAL_CREDIT', 'INVOICE_CREDIT'];
+        const creditTypes = ['CREDIT_PURCHASE', 'ADMIN_GIFT', 'TIER_ADJUSTMENT_REFUND', 'REFUND', 'FREE_TRIAL_CREDIT', 'REVERSAL_CHARGE', 'INVOICE_CREDIT'];
         const deductionTypes = ['USAGE_CHARGE', 'TIER_ADJUSTMENT_CHARGE', 'ADMIN_DEDUCTION', 'INVOICE_CANCELLATION', 'INVOICE_DELETION', 'INVOICE_REFUND'];
         if (creditTypes.includes(type)) {
             return <ArrowDownLeft className="text-emerald-600" size={18} />;

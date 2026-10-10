@@ -1,10 +1,8 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { BTN, BTN_PRIMARY, BADGE, BADGE_BAD, CARD_TITLE, MUTED, SMALL } from './ui/classNames';
-import { listingStudioApi, uploadTemplateViaSignedUrl } from './api';
+import { listingStudioApi } from './api';
 import { getErrorMessage } from './errors';
 
 const MAX_IMAGES = 9;
@@ -32,8 +30,8 @@ function fieldOptions(field, productType) {
   return field.validValuesByProductType?.[productType] || field.validValues || null;
 }
 
-function formatExpiry(from, days) {
-  const d = new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
+function formatExpiry(days) {
+  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
@@ -42,8 +40,6 @@ function formatExpiry(from, days) {
  * Central (any category), and gets it back with this campaign's title, description, bullets,
  * keywords and images in its product row. Two steps against a stateless server: inspect the
  * file (what we fill, what Amazon still needs), then re-send it with the seller's answers.
- * Both steps upload the file fresh, direct to the bucket (uploadTemplateViaSignedUrl) — the
- * server deletes it the moment each step is done reading it, so nothing is ever kept.
  */
 export function FillSellerTemplateModal({ project, onClose }) {
   const [file, setFile] = useState(null);
@@ -58,33 +54,13 @@ export function FillSellerTemplateModal({ project, onClose }) {
   const [missing, setMissing] = useState([]);
   const [downloading, setDownloading] = useState(false);
   const [downloadedAt, setDownloadedAt] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef(null);
-  const inspectRequestRef = useRef(0);
 
   const images = useMemo(() => defaultTemplateImages(project), [project]);
   const listing = project?.listing;
   const hasListingCopy = Boolean(listing?.title);
 
-  const onFileDropped = (e) => {
-    e.preventDefault();
-    setDragOver(false);
-    const dropped = e.dataTransfer?.files?.[0];
-    if (dropped && !/\.xlsm$|\.xlsx$/i.test(dropped.name)) {
-      setError('Please drop an .xlsm or .xlsx file — that\'s the format Seller Central exports.');
-      return;
-    }
-    onPickFile(dropped);
-  };
-
   const onPickFile = async (picked) => {
-    // Block a new pick while one is already in flight — an inspect or download in progress is
-    // for the currently loaded file, and swapping it out mid-request is what lets a stale
-    // response land after a newer one and overwrite its state.
-    if (!picked || inspecting || downloading) return;
-    // A later drop/pick must win even if its inspect response arrives before an earlier one's —
-    // only the response matching the most recent request is allowed to write state.
-    const requestId = ++inspectRequestRef.current;
+    if (!picked) return;
     setFile(picked);
     setInspection(null);
     setError('');
@@ -92,9 +68,9 @@ export function FillSellerTemplateModal({ project, onClose }) {
     setDownloadedAt(null);
     setInspecting(true);
     try {
-      const templateKey = await uploadTemplateViaSignedUrl(project.id, picked);
-      const result = await listingStudioApi.inspectSellerTemplate(project.id, templateKey);
-      if (inspectRequestRef.current !== requestId) return;
+      const form = new FormData();
+      form.append('template', picked);
+      const result = await listingStudioApi.inspectSellerTemplate(project.id, form);
       setInspection(result);
       setMode(result.defaultMode);
       setConfirmReplace(false);
@@ -102,10 +78,9 @@ export function FillSellerTemplateModal({ project, onClose }) {
       setProductType(result.currentProductType || (result.productTypes.length === 1 ? result.productTypes[0] : ''));
       setValues(Object.fromEntries(result.sellerFields.map((f) => [f.attributePath, f.currentValue || ''])));
     } catch (e) {
-      if (inspectRequestRef.current !== requestId) return;
       setError(getErrorMessage(e));
     } finally {
-      if (inspectRequestRef.current === requestId) setInspecting(false);
+      setInspecting(false);
     }
   };
 
@@ -133,19 +108,17 @@ export function FillSellerTemplateModal({ project, onClose }) {
     setMissing([]);
     setDownloading(true);
     try {
-      const templateKey = await uploadTemplateViaSignedUrl(project.id, file);
+      const form = new FormData();
+      form.append('template', file);
+      form.append('sku', sku.trim());
+      form.append('mode', mode);
+      if (isNew) form.append('productType', productType);
+      form.append('images', JSON.stringify(images));
       const extraFields = Object.fromEntries(
         visibleFields.map((f) => [f.attributePath, values[f.attributePath]?.trim() || '']).filter(([, v]) => v),
       );
-      await listingStudioApi.downloadSellerTemplate(project.id, {
-        templateKey,
-        filename: file.name,
-        sku: sku.trim(),
-        mode,
-        ...(isNew ? { productType } : {}),
-        images,
-        extraFields,
-      });
+      form.append('extraFields', JSON.stringify(extraFields));
+      await listingStudioApi.downloadSellerTemplate(project.id, form);
       setDownloadedAt(new Date());
     } catch (e) {
       setError(getErrorMessage(e));
@@ -185,42 +158,22 @@ export function FillSellerTemplateModal({ project, onClose }) {
         </div>
       )}
 
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => fileInputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            fileInputRef.current?.click();
-          }
-        }}
-        className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed p-4 transition-colors ${
-          dragOver ? 'border-brand-400 bg-brand-50' : 'border-slate-200 bg-slate-50 hover:border-brand-300 hover:bg-brand-50'
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onFileDropped}
-      >
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 transition-colors hover:border-brand-300 hover:bg-brand-50">
         {inspecting ? <Loader2 size={20} className="animate-spin text-brand-600" /> : <Upload size={20} className="text-brand-600" />}
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-900 truncate">{file ? file.name : 'Choose your template (.xlsm) or drag it in'}</div>
+          <div className="text-sm font-semibold text-slate-900 truncate">{file ? file.name : 'Choose your template (.xlsm)'}</div>
           <div className={`${MUTED} ${SMALL}`}>{file ? 'Click to choose a different file' : 'Your file is not stored — it is only read to fill it in'}</div>
         </div>
         <input
-          ref={fileInputRef}
           type="file"
           accept=".xlsm,.xlsx"
-          hidden
+          className="hidden"
           onChange={(e) => {
             onPickFile(e.target.files?.[0]);
             e.target.value = '';
           }}
         />
-      </div>
+      </label>
 
       {error && (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -370,7 +323,7 @@ export function FillSellerTemplateModal({ project, onClose }) {
           <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
           <span>
             Image links in this file work for <b>{IMAGE_LINK_DAYS} days</b>
-            {downloadedAt ? ` (until ${formatExpiry(downloadedAt, IMAGE_LINK_DAYS)})` : ''}. Upload it to Seller Central before then — or
+            {downloadedAt ? ` (until ${formatExpiry(IMAGE_LINK_DAYS)})` : ''}. Upload it to Seller Central before then — or
             download it again for fresh links.
           </span>
         </div>

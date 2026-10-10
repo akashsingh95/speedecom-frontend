@@ -1,18 +1,14 @@
 /* eslint-disable no-unused-vars -- see ListingStudioPlansManager.jsx for why (JSX-only usage
    false-positives as unused under this client's eslint config). */
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { useAuth } from '../AuthContext';
 import { toast } from 'sonner';
 import { loadRazorpay } from '../utils/loadRazorpay';
-import { parseGstin } from '../utils/gstinUtils';
-import GstAutoFill from './GstAutoFill';
 import {
     Loader2, AlertCircle, Zap, CreditCard, Check, X, CheckCircle, Clock,
     Image as ImageIcon, Video, Sparkles, Package, Download, Eye, FileText,
 } from 'lucide-react';
-
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 const colorMap = {
     blue: { bg: 'bg-blue-50', border: 'border-blue-200', accent: 'bg-blue-600', badge: 'bg-blue-100 text-blue-700', btn: 'bg-blue-600 hover:bg-blue-700' },
@@ -47,79 +43,11 @@ const ListingStudioSubscriptionTab = () => {
     const [buying, setBuying] = useState(null); // { kind: 'plan'|'addon', title }
     const [features, setFeatures] = useState({ razorpayEnabled: false, razorpayAllowedEmail: '' });
 
-    // ── GST details (required before every purchase — every Listing Studio invoice must carry
-    //    a buyer GSTIN, same as Reconciliation's flow in client/src/pages/Subscription.jsx) ──
-    const [pendingPurchase, setPendingPurchase] = useState(null); // { kind, title, price, orderPath, verifyPath, bodyKey }
-    const [savedGst, setSavedGst] = useState(null);   // loaded from profile
-    const [gstEditing, setGstEditing] = useState(false);
-    const [gstForm, setGstForm] = useState({ businessName: '', gstin: '', pan: '', address: '', state: '', stateCode: '', phone: '' });
-    const [gstinError, setGstinError] = useState('');
-    const [gstLookupLoading, setGstLookupLoading] = useState(false);
-    const gstinInputRef = useRef(null);
-    const gstinCursorRef = useRef(null);
-    const gstAutoFillRef = useRef(null);
-
     useEffect(() => {
         fetchCatalog();
         fetchHistory();
         api.get('/config/features').then(({ data }) => { if (data) setFeatures(data); }).catch(() => {});
-        // /auth/gst-details is Admin-only (server/routes/authRoutes.js) — a non-Admin tenant
-        // user (e.g. a User-role teammate) gets a 403 here. skipErrorToast avoids surfacing
-        // that as a permission-denied toast on page load; the .catch below just leaves the
-        // GST form blank so they can type it in manually at checkout.
-        api.get('/auth/gst-details', { skipErrorToast: true })
-            .then(({ data }) => {
-                setSavedGst(data || {});
-                setGstForm({
-                    businessName: data?.businessName || '',
-                    gstin: data?.gstin || '',
-                    pan: data?.pan || '',
-                    address: data?.address || '',
-                    state: data?.state || '',
-                    stateCode: data?.stateCode || '',
-                    phone: data?.phone || '',
-                });
-            })
-            .catch(() => setSavedGst({}));
     }, []);
-
-    // Reset edit mode when the purchase modal closes
-    useEffect(() => {
-        if (!pendingPurchase) {
-            setGstEditing(false);
-            setGstinError('');
-        }
-    }, [pendingPurchase]);
-
-    // GSTIN change handler — auto-fill state/PAN instantly (mirrors Subscription.jsx)
-    const handleGstinChange = (e) => {
-        const input = e.target;
-        gstinInputRef.current = input;
-        gstinCursorRef.current = input.selectionStart;
-        const g = input.value.toUpperCase();
-        setGstForm((f) => ({ ...f, gstin: g }));
-        setGstinError('');
-        if (g.length < 15) return;
-        if (!GSTIN_RE.test(g)) {
-            setGstinError('Invalid GSTIN format');
-            return;
-        }
-        const parsed = parseGstin(g);
-        if (parsed.valid) {
-            setGstForm((f) => ({ ...f, gstin: g, pan: parsed.pan, state: parsed.stateName || f.state, stateCode: parsed.stateCode }));
-            setGstLookupLoading(true);
-            api.get(`/invoices/gstin-lookup/${g}`)
-                .then(({ data }) => { if (data?.businessName) setGstForm((f) => ({ ...f, businessName: data.businessName })); })
-                .catch(() => {})
-                .finally(() => setGstLookupLoading(false));
-        }
-    };
-
-    useLayoutEffect(() => {
-        if (gstinCursorRef.current !== null && gstinInputRef.current) {
-            gstinInputRef.current.setSelectionRange(gstinCursorRef.current, gstinCursorRef.current);
-        }
-    }, [gstForm.gstin]);
 
     const fetchCatalog = async () => {
         setLoading(true);
@@ -221,25 +149,8 @@ const ListingStudioSubscriptionTab = () => {
         user?.email?.toLowerCase() === features.razorpayAllowedEmail.toLowerCase()
     );
 
-    // Opens the purchase-confirmation modal (GST details required there) instead of launching
-    // Razorpay immediately — every Listing Studio invoice must carry a buyer GSTIN.
-    const buyPlan = (plan) => setPendingPurchase({
-        kind: 'plan', title: plan.title, price: plan.price,
-        orderPath: '/listing-studio/wallet/razorpay/create-order',
-        verifyPath: '/listing-studio/wallet/razorpay/verify-payment',
-        bodyKey: 'planTitle',
-    });
-
-    const buyAddon = (pack) => setPendingPurchase({
-        kind: 'addon', title: pack.title, price: pack.price,
-        orderPath: '/listing-studio/wallet/addons/razorpay/create-order',
-        verifyPath: '/listing-studio/wallet/addons/razorpay/verify-payment',
-        bodyKey: 'packTitle',
-    });
-
-    const confirmPurchase = async () => {
-        if (!pendingPurchase || buying) return;
-        const { kind, title, orderPath, verifyPath, bodyKey } = pendingPurchase;
+    const runPurchase = async ({ kind, title, price, orderPath, verifyPath, bodyKey }) => {
+        if (buying) return;
         setBuying({ kind, title });
         try {
             const loaded = await loadRazorpay();
@@ -248,16 +159,7 @@ const ListingStudioSubscriptionTab = () => {
                 setBuying(null);
                 return;
             }
-            const { data } = await api.post(orderPath, {
-                [bodyKey]: title,
-                buyerGstin: gstForm.gstin,
-                buyerBusinessName: gstForm.businessName,
-                buyerState: gstForm.state,
-                buyerAddress: gstForm.address,
-                buyerPan: gstForm.pan,
-                buyerStateCode: gstForm.stateCode,
-                buyerPhone: gstForm.phone,
-            });
+            const { data } = await api.post(orderPath, { [bodyKey]: title });
             const { orderId, amount, currency, keyId } = data;
 
             const options = {
@@ -271,21 +173,10 @@ const ListingStudioSubscriptionTab = () => {
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature: response.razorpay_signature,
                             [bodyKey]: title,
-                            buyerGstin: gstForm.gstin,
-                            buyerBusinessName: gstForm.businessName,
-                            buyerState: gstForm.state,
-                            buyerAddress: gstForm.address,
-                            buyerPan: gstForm.pan,
-                            buyerStateCode: gstForm.stateCode,
-                            buyerPhone: gstForm.phone,
+                            buyerBusinessName: user?.fullName || '',
+                            buyerGstin: '', // Listing Studio purchases don't gate on GST like Reconciliation's flow
                         });
-                        // Auto-save GST details to profile (silent) — Admin-only route, so a
-                        // non-Admin buyer's 403 here is expected and shouldn't toast (see the
-                        // matching GET above).
-                        api.put('/auth/gst-details', gstForm, { skipErrorToast: true }).catch(() => {});
-                        setSavedGst({ ...gstForm });
                         toast.success(`${title} added to your Speedy Listing wallet!`);
-                        setPendingPurchase(null);
                         fetchCatalog();
                         fetchHistory();
                     } catch {
@@ -308,6 +199,20 @@ const ListingStudioSubscriptionTab = () => {
             setBuying(null);
         }
     };
+
+    const buyPlan = (plan) => runPurchase({
+        kind: 'plan', title: plan.title, price: plan.price,
+        orderPath: '/listing-studio/wallet/razorpay/create-order',
+        verifyPath: '/listing-studio/wallet/razorpay/verify-payment',
+        bodyKey: 'planTitle',
+    });
+
+    const buyAddon = (pack) => runPurchase({
+        kind: 'addon', title: pack.title, price: pack.price,
+        orderPath: '/listing-studio/wallet/addons/razorpay/create-order',
+        verifyPath: '/listing-studio/wallet/addons/razorpay/verify-payment',
+        bodyKey: 'packTitle',
+    });
 
     if (loading) {
         return <div className="flex items-center justify-center py-24"><Loader2 className="animate-spin text-brand-500" size={36} /></div>;
@@ -563,155 +468,6 @@ const ListingStudioSubscriptionTab = () => {
                     </div>
                 )}
             </div>
-
-            {/* ── Purchase confirmation — GST details required before every payment ────── */}
-            {pendingPurchase && (() => {
-                const pricing = getPriceBreakdown(pendingPurchase.price);
-                const gstValid = gstForm.gstin.length === 15 && !gstinError && gstForm.businessName;
-                return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
-                            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-800">Complete Payment</h3>
-                                    <p className="text-xs text-slate-400 mt-0.5">Secured by Razorpay</p>
-                                </div>
-                                <button
-                                    onClick={() => { if (!buying) setPendingPurchase(null); }}
-                                    disabled={!!buying}
-                                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600 disabled:opacity-40"
-                                >
-                                    <X size={18} />
-                                </button>
-                            </div>
-
-                            <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar">
-                                <div className="flex items-center gap-3 p-4 rounded-xl border-2 bg-purple-50 border-purple-200">
-                                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-purple-600">
-                                        <Zap size={18} className="text-white" fill="white" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-slate-800 truncate">{pendingPurchase.title}</div>
-                                        <div className="text-sm font-semibold text-purple-700">{pendingPurchase.kind === 'plan' ? 'Speedy Listing Plan' : 'Add-on Pack'}</div>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                        <div className="text-lg font-extrabold text-slate-800">₹{pricing.total.toFixed(2)}</div>
-                                        <div className="text-xs text-slate-400">incl. GST</div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-50 rounded-xl px-4 py-3 grid grid-cols-3 text-sm text-center divide-x divide-slate-200">
-                                    <div><div className="text-slate-400 text-xs mb-0.5">Base Price</div><div className="font-semibold text-slate-700">₹{pricing.base.toFixed(2)}</div></div>
-                                    <div><div className="text-slate-400 text-xs mb-0.5">GST (18%)</div><div className="font-semibold text-slate-700">₹{pricing.gst.toFixed(2)}</div></div>
-                                    <div><div className="text-slate-400 text-xs mb-0.5">Total</div><div className="font-bold text-slate-900">₹{pricing.total.toFixed(2)}</div></div>
-                                </div>
-
-                                {/* ── GST Details (Required) ──────────────────── */}
-                                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                    {savedGst?.gstin && !gstEditing && (
-                                        <>
-                                            <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 border-b border-emerald-100">
-                                                <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                                                    <CheckCircle size={12} /> Invoice will be issued to
-                                                </span>
-                                                <button onClick={() => setGstEditing(true)} className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1">
-                                                    ✏ Edit
-                                                </button>
-                                            </div>
-                                            <div className="px-4 py-3 space-y-0.5">
-                                                <p className="font-bold text-sm text-slate-800">{savedGst.businessName || user?.fullName}</p>
-                                                <p className="text-xs text-slate-500 font-mono">GSTIN: {savedGst.gstin}</p>
-                                                {savedGst.pan && <p className="text-xs text-slate-500">PAN: {savedGst.pan}</p>}
-                                                <p className="text-xs text-slate-500">State: {savedGst.state}{savedGst.stateCode ? ` (${savedGst.stateCode})` : ''}</p>
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {!savedGst?.gstin && !gstEditing && (
-                                        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border-b border-amber-100">
-                                            <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
-                                                <FileText size={12} /> GST details are required before payment
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {(gstEditing || !savedGst?.gstin) && (
-                                        <div className="px-4 pb-4 pt-3 space-y-3 border-t border-slate-100 bg-slate-50/50">
-                                            <div>
-                                                <label className="block text-xs font-semibold text-slate-600 mb-1">GSTIN <span className="font-normal text-slate-400">— state &amp; PAN auto-fill</span></label>
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={gstForm.gstin}
-                                                        onChange={handleGstinChange}
-                                                        onKeyDown={(e) => { if (e.key === 'Enter' && gstForm.gstin.length === 15 && !gstinError) gstAutoFillRef.current?.click(); }}
-                                                        placeholder="e.g. 24AARFH4419D1ZH"
-                                                        maxLength={15}
-                                                        className={`flex-1 px-3 py-2 text-sm font-mono rounded-lg border focus:outline-none focus:ring-2 focus:ring-brand-400 ${gstinError ? 'border-red-300' : 'border-slate-200'}`}
-                                                    />
-                                                    <GstAutoFill
-                                                        gstin={gstForm.gstin}
-                                                        disabled={!gstForm.gstin || gstForm.gstin.length < 15}
-                                                        buttonLabel={null}
-                                                        buttonRef={gstAutoFillRef}
-                                                        buttonClassName="px-3 py-2 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700"
-                                                        onGstFetched={(data) => {
-                                                            if (!data) return;
-                                                            setGstForm((f) => ({
-                                                                ...f,
-                                                                gstin: data.gstin || f.gstin,
-                                                                businessName: data.businessName || f.businessName,
-                                                                pan: data.pan || f.pan,
-                                                                address: data.address || f.address,
-                                                                state: data.state || f.state,
-                                                                stateCode: data.stateCode || f.stateCode,
-                                                                phone: data.phone || f.phone,
-                                                            }));
-                                                        }}
-                                                    />
-                                                </div>
-                                                {gstinError ? <p className="text-red-500 text-xs mt-1">{gstinError}</p>
-                                                    : gstForm.state ? <p className="text-emerald-600 text-xs mt-1">✓ State: {gstForm.state} auto-filled</p> : null}
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Business Name {gstLookupLoading && <span className="text-brand-400 font-normal">fetching…</span>}</label>
-                                                <input type="text" value={gstForm.businessName} onChange={(e) => setGstForm((f) => ({ ...f, businessName: e.target.value }))} placeholder="e.g. Hmsquare Solutions LLP"
-                                                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Address</label>
-                                                <input type="text" value={gstForm.address} onChange={(e) => setGstForm((f) => ({ ...f, address: e.target.value }))} placeholder="Billing address"
-                                                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                                            </div>
-                                            <div className="flex items-center justify-between pt-1">
-                                                <p className="text-xs text-slate-400">Auto-saved to your profile after payment.</p>
-                                                {gstEditing && (
-                                                    <button type="button" onClick={() => {
-                                                        setGstEditing(false);
-                                                        setGstinError('');
-                                                        setGstForm({
-                                                            businessName: savedGst?.businessName || '', gstin: savedGst?.gstin || '', pan: savedGst?.pan || '',
-                                                            address: savedGst?.address || '', state: savedGst?.state || '', stateCode: savedGst?.stateCode || '', phone: savedGst?.phone || '',
-                                                        });
-                                                    }} className="text-xs text-slate-500 hover:text-slate-700 font-medium">✕ Cancel</button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <button
-                                    onClick={confirmPurchase}
-                                    disabled={!!buying || !gstValid || gstLookupLoading}
-                                    className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2.5 shadow-sm hover:shadow-md active:scale-[0.98] text-base"
-                                >
-                                    {buying ? (<><Loader2 size={18} className="animate-spin" /> Processing…</>) : (<><CreditCard size={18} /> Pay ₹{pricing.total.toFixed(2)}</>)}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                );
-            })()}
 
             {viewingInvoiceUrl && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

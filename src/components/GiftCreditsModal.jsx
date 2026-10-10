@@ -12,9 +12,7 @@ const isValidCount = (value) => /^\d+$/.test(value) && Number(value) > 0;
 /**
  * Extended with a product selector (LISTING_STUDIO_PAYMENTS.md §5) rather than a second,
  * separate menu entry — Reconciliation keeps its single-credits form, Speedy Listing swaps in
- * three optional fields (rupee amount, free images, free videos), any combination in one call.
- * The rupee amount is priced like a real purchase (category decided by price on the server);
- * the "Charge credits at rates of" dropdown only changes which plan's usage rates apply.
+ * three optional fields (credits, free images, free videos), any combination in one call.
  */
 const GiftCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
     const [product, setProduct] = useState('reconciliation'); // 'reconciliation' | 'listing-studio'
@@ -63,7 +61,7 @@ const GiftCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
             const hasImages = freeImages !== '';
             const hasVideos = freeVideos !== '';
             if (!hasCredits && !hasImages && !hasVideos) {
-                toast.error('Give at least one of amount, free images, or free videos');
+                toast.error('Give at least one of credits, free images, or free videos');
                 return;
             }
             if ((hasCredits && !isValidAmount(amount)) || (hasImages && !isValidCount(freeImages)) || (hasVideos && !isValidCount(freeVideos))) {
@@ -87,7 +85,7 @@ const GiftCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
             } else {
                 await api.post('/listing-studio/wallet/admin/gift', {
                     tenantId: targetTenantId,
-                    ...(amount !== '' && { amount: Number(amount), planTitle }),
+                    ...(amount !== '' && { credits: Number(amount), planTitle }),
                     ...(freeImages !== '' && { freeImages: Number(freeImages) }),
                     ...(freeVideos !== '' && { freeVideos: Number(freeVideos) }),
                     note,
@@ -184,13 +182,13 @@ const GiftCreditsModal = ({ isOpen, onClose, tenant, onSuccess }) => {
 
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            {product === 'reconciliation' ? <>Amount <span className="text-red-500">*</span></> : <>Amount (₹, optional)</>}
+                                            {product === 'reconciliation' ? <>Amount <span className="text-red-500">*</span></> : <>Credits (optional)</>}
                                         </label>
                                         <input
                                             type="number"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
-                                            placeholder={product === 'reconciliation' ? 'Enter credit amount' : 'Enter rupee amount'}
+                                            placeholder={product === 'reconciliation' ? 'Enter credit amount' : 'Enter credits'}
                                             className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                                             min="0.01"
                                             step="0.01"

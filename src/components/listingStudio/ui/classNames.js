@@ -41,10 +41,6 @@ export const PROJECT_CARD =
   'hover-lift flex gap-3 items-center text-slate-900 bg-white border border-slate-200 rounded-2xl p-4 shadow-card transition-all hover:border-brand-400 hover:shadow-card-hover';
 export const THUMB = 'w-16 h-16 rounded-lg object-cover bg-white border border-slate-200 flex-shrink-0';
 export const THUMB_PLACEHOLDER = 'w-16 h-16 rounded-lg bg-white border border-slate-200 flex-shrink-0';
-// Wrap a removable THUMB in this, then render THUMB_REMOVE as its sibling.
-export const THUMB_WRAP = 'relative group flex-shrink-0';
-export const THUMB_REMOVE =
-  'absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white shadow-md ring-1 ring-slate-200 text-slate-600 grid place-items-center opacity-90 hover:text-red-600 hover:ring-red-200 transition-colors';
 // Bigger variant for the Campaigns list, where the product photo should be the card's most
 // visible element rather than one detail among several — see ProjectsPage.
 export const THUMB_LG = 'w-20 h-20 rounded-xl object-cover bg-white border border-slate-200 flex-shrink-0';
