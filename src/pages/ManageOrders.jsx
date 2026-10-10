@@ -1104,19 +1104,26 @@ const ManageOrders = () => {
                                             {!manualLabelHistoryLoading && manualLabelHistory.map((d, idx) => {
                                                 const subOrders = Array.isArray(d.sub_order_nums) ? d.sub_order_nums : JSON.parse(d.sub_order_nums || '[]');
                                                 const requestedAt = new Date(d.created_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+                                                const isFailed = !d.in_progress && !d.label_url;
+                                                const isMeeshoSide = isFailed && d.error_message?.startsWith('Meesho');
                                                 return (
-                                                    <div key={d.request_id} className={`p-3 border rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-left-2 ${d.in_progress ? 'border-blue-200' : d.label_url ? 'border-slate-200' : 'border-rose-200'}`} style={{ animationDelay: `${idx * 30}ms` }}>
-                                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${d.in_progress ? 'bg-blue-50 text-blue-500' : d.label_url ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                                                            {d.in_progress ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                                                    <div key={d.request_id} className={`p-3 border rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-left-2 ${d.in_progress && !d.timed_out ? 'border-blue-200' : d.label_url ? 'border-slate-200' : isMeeshoSide ? 'border-amber-200' : 'border-rose-200'}`} style={{ animationDelay: `${idx * 30}ms` }}>
+                                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${d.in_progress && !d.timed_out ? 'bg-blue-50 text-blue-500' : d.label_url ? 'bg-emerald-50 text-emerald-600' : isMeeshoSide ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'}`}>
+                                                            {d.in_progress && !d.timed_out ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <span className="text-xs font-semibold text-slate-700">{subOrders.length} order{subOrders.length !== 1 ? 's' : ''}</span>
-                                                                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${d.in_progress ? 'bg-blue-100 text-blue-700' : d.label_url ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                                                    {d.in_progress ? 'Generating…' : d.label_url ? 'Ready' : 'Failed'}
+                                                                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${d.in_progress && !d.timed_out ? 'bg-blue-100 text-blue-700' : d.label_url ? 'bg-emerald-100 text-emerald-700' : isMeeshoSide ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                                    {d.in_progress && !d.timed_out ? 'Generating…' : d.label_url ? 'Ready' : isMeeshoSide ? 'Meesho Issue' : 'Failed'}
                                                                 </span>
                                                             </div>
                                                             <p className="text-[11px] text-slate-400 mt-0.5">{requestedAt}</p>
+                                                            {isMeeshoSide && (
+                                                                <p className="text-[11px] text-amber-600 mt-1 leading-relaxed">
+                                                                    Meesho&#39;s servers were under heavy load — no penalty charged. Try generating again.
+                                                                </p>
+                                                            )}
                                                         </div>
                                                         {d.label_url && (
                                                             <a href={d.label_url} target="_blank" rel="noopener noreferrer" className="shrink-0 self-center flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
@@ -1346,11 +1353,13 @@ const ManageOrders = () => {
                                 const isFailed = run.status === 'failed';
                                 const isSkipped = run.status === 'skipped';
                                 const isRunning = run.status === 'running' || run.status === 'queued';
+                                const isMeeshoSideErr = (isFailed || isSkipped) && run.error_message?.startsWith('Meesho');
                                 const dateLabel = new Date(run.run_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
                                 return (
                                     <div
                                         key={run.run_date}
                                         className={`p-3 bg-white border rounded-xl transition-colors animate-in fade-in slide-in-from-left-2 ${
+                                            isFailed && isMeeshoSideErr ? 'border-amber-200 hover:border-amber-300' :
                                             isFailed ? 'border-rose-200 hover:border-rose-300' :
                                             isRunning ? 'border-blue-200 hover:border-blue-300' :
                                             'border-slate-200 hover:border-slate-300'
@@ -1359,6 +1368,7 @@ const ManageOrders = () => {
                                     >
                                         <div className="flex items-start gap-3">
                                             <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                                                isFailed && isMeeshoSideErr ? 'bg-amber-50 text-amber-600' :
                                                 isFailed ? 'bg-rose-50 text-rose-600' :
                                                 isReady ? 'bg-emerald-50 text-emerald-600' :
                                                 isRunning ? 'bg-blue-50 text-blue-600' :
@@ -1371,6 +1381,7 @@ const ManageOrders = () => {
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="font-semibold text-sm text-slate-800">{dateLabel}</span>
                                                     <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full tracking-wide inline-flex items-center gap-1 ${
+                                                        isFailed && isMeeshoSideErr ? 'bg-amber-100 text-amber-700' :
                                                         isFailed ? 'bg-rose-100 text-rose-700' :
                                                         isReady ? 'bg-emerald-100 text-emerald-700' :
                                                         isRunning ? 'bg-blue-100 text-blue-700' :
@@ -1382,7 +1393,7 @@ const ManageOrders = () => {
                                                         {isRunning && <Loader2 size={10} className="animate-spin" />}
                                                         {isSkipped && <AlertCircle size={10} />}
                                                         {isNone && <Check size={10} />}
-                                                        {isFailed ? 'Failed' : isReady ? 'Ready' : isRunning ? (run.status === 'queued' ? 'Queued' : 'Running') : isSkipped ? 'Skipped' : 'No Orders'}
+                                                        {isFailed ? (isMeeshoSideErr ? 'Meesho Issue' : 'Failed') : isReady ? 'Ready' : isRunning ? (run.status === 'queued' ? 'Queued' : 'Running') : isSkipped ? 'Skipped' : 'No Orders'}
                                                     </span>
                                                 </div>
                                                 {isReady && (
@@ -1394,7 +1405,11 @@ const ManageOrders = () => {
                                                     </p>
                                                 )}
                                                 {(isFailed || isSkipped) && run.error_message && (
-                                                    <p className="text-[11px] text-rose-600 mt-1 leading-relaxed">{run.error_message}</p>
+                                                    <p className={`text-[11px] mt-1 leading-relaxed ${isMeeshoSideErr ? 'text-amber-600' : 'text-rose-600'}`}>
+                                                        {isMeeshoSideErr
+                                                            ? "Meesho’s courier partners were handling heavy load — no penalty charged. Will retry tonight."
+                                                            : run.error_message}
+                                                    </p>
                                                 )}
                                             </div>
                                             {run.label_url && (
