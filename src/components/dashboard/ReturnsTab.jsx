@@ -5,7 +5,7 @@ import {
     PackageX, Truck, CheckCircle, Clock, AlertTriangle, BarChart3,
     FileDown, RefreshCw, ScanLine, Search, Loader2, X, Zap,
     Filter, ChevronDown, Tag, AlertOctagon, Ticket, CalendarDays, Info,
-    Inbox, Package,
+    Inbox, Package, Lock,
 } from 'lucide-react';
 import ConfirmModal from '../ConfirmModal';
 import {
@@ -18,6 +18,8 @@ import ReturnDateRangePicker from '../ReturnDateRangePicker';
 import { useAuth } from '../../AuthContext';
 import InfoTooltip from '../Tooltip';
 import MarketplaceAccountSelector from '../MarketplaceAccountSelector';
+import RaiseClaimModal from './claims/RaiseClaimModal';
+import { ClaimStatusBadge } from './claims/claimUi';
 
 // ─── Colour tokens ────────────────────────────────────────────────────────────
 const COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#3b82f6'];
@@ -937,11 +939,14 @@ const getReturnsDefaultDates = () => {
 };
 
 const RETURNS_SYNC_ROLES = ['Admin', 'SBM', 'SuperAdmin'];
+const CLAIM_ROLES = ['Admin', 'SBM', 'RM', 'SuperAdmin'];
 
 const ReturnsTab = () => {
     const MAX_RANGE_DAYS = 190;
     const { user } = useAuth();
     const canTriggerReturnsSync = RETURNS_SYNC_ROLES.includes(user?.role);
+    const canManageClaims = CLAIM_ROLES.includes(user?.role);
+    const [claimTarget, setClaimTarget] = useState(null);
 
     // Marketplace state — Meesho only
     const [meeshoAccounts, setMeeshoAccounts] = useState([]);
@@ -1363,6 +1368,44 @@ const ReturnsTab = () => {
         setPagination(p => ({ ...p, currentPage: 1 }));
         setDrawerOpen(true);
     }, []);
+
+    const handleClaimRaised = useCallback((claim, suborderNumber) => {
+        if (claim) {
+            setReturns(prev => prev.map(r => (
+                String(r.marketplace_id) === String(claim.marketplace_id) && r.suborder_number === suborderNumber
+                    ? { ...r, claim: { ticket_id: claim.ticket_id, ticket_status: claim.ticket_status, claim_amount: claim.claim_amount } }
+                    : r
+            )));
+        }
+    }, []);
+
+    const renderClaimControl = (r, accountName) => {
+        if (r.claim) {
+            return (
+                <span className="inline-flex items-center gap-1" title={`Claim ticket #${r.claim.ticket_id}`}>
+                    <Ticket size={11} className="text-violet-500" />
+                    <ClaimStatusBadge status={r.claim.ticket_status} size="sm" />
+                </span>
+            );
+        }
+        if (!canManageClaims) return null;
+        if (!r.claim_eligible) {
+            return (
+                <button type="button" disabled title="Raising claims needs an Auto Sync account — connect this account's Meesho login in Settings"
+                    className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-400">
+                    <Lock size={11} /> Claim
+                </button>
+            );
+        }
+        return (
+            <button type="button"
+                onClick={() => setClaimTarget({ marketplaceId: r.marketplace_id, suborderNumber: r.suborder_number, awbNumber: r.awb_number || r.tracking_id || '', accountName })}
+                title="Raise a non-delivery claim on Meesho"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm shadow-violet-200 hover:from-violet-700 hover:to-indigo-700 active:scale-95 transition-all">
+                <Ticket size={11} /> Raise Claim
+            </button>
+        );
+    };
 
     // ── Chart data derived ─────────────────────────────────────────────────
     const trendSeries = useMemo(() => {
@@ -1977,11 +2020,14 @@ const ReturnsTab = () => {
                                                             </button>
                                                         </div>
                                                     ) : (
-                                                        <button type="button" disabled={loadingAnalysis}
-                                                            onClick={() => expandTableRow(r.id)}
-                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                                                            <CheckCircle size={11} />Mark Arrived
-                                                        </button>
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            {overdue && renderClaimControl(r, accountName)}
+                                                            <button type="button" disabled={loadingAnalysis}
+                                                                onClick={() => expandTableRow(r.id)}
+                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                                                                <CheckCircle size={11} />Mark Arrived
+                                                            </button>
+                                                        </div>
                                                     )
                                                 ) : r.arrival_status === 'arrived' &&
                                                     (tableFilters.status === 'physically_received' ||
@@ -2013,13 +2059,8 @@ const ReturnsTab = () => {
                                                             <span className="hidden group-hover:block">Mark as Damaged</span>
                                                         </button>
                                                     )
-                                                ) : overdue ? (
-                                                    <button type="button"
-                                                        onClick={() => toast('Upcoming Feature! 🚧', { description: 'Raise ticket for overdue returns coming soon.' })}
-                                                        title="Raise Ticket"
-                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors">
-                                                        <Ticket size={11} /> Raise Ticket
-                                                    </button>
+                                                ) : overdue && (r.claim || canManageClaims) ? (
+                                                    renderClaimControl(r, accountName)
                                                 ) : (
                                                     <span className="text-xs text-slate-400">—</span>
                                                 )}
@@ -2032,6 +2073,12 @@ const ReturnsTab = () => {
                     </div>
                 )}
             </PopupModal>
+
+            <RaiseClaimModal
+                target={claimTarget}
+                onClose={() => setClaimTarget(null)}
+                onRaised={handleClaimRaised}
+            />
 
             {/* Export Picker */}
             <ExportPickerModal

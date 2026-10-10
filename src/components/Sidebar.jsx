@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
     LayoutDashboard, CheckCircle, Upload, Building, User, ChevronDown,
-    Settings, ShoppingBag, CreditCard, UserPen, Download, PackageOpen, ScanLine, BarChart3, DollarSign, Sparkles, LifeBuoy, FileText, PackageCheck
+    Settings, ShoppingBag, CreditCard, UserPen, Download, PackageOpen, ScanLine, BarChart3, DollarSign, Sparkles, LifeBuoy, FileText, PackageCheck, Ticket
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -59,6 +59,7 @@ const Sidebar = () => {
             { name: 'Downloads', icon: Download, path: '/downloads' },
             { name: 'Scan Returns', icon: ScanLine, path: '/returns/scan' },
             { name: 'Manage Orders', icon: PackageCheck, path: '/orders/manage' },
+            { name: 'Return Claims', icon: Ticket, path: '/returns/claims' },
             // Speedy Listing — tenant-configurable via LISTING_STUDIO_ALLOWED_TENANT_IDS
             // (defaults to enabled when that env var is unset). Hidden while impersonationSyncing
             // is true: right after startImpersonating flips isImpersonating, listingStudioEnabled
@@ -97,6 +98,9 @@ const Sidebar = () => {
         }
         if (user?.permissions?.manageOrders) {
             menuItems.push({ name: 'Manage Orders', icon: PackageCheck, path: '/orders/manage' });
+        }
+        if (user?.permissions?.returnsAnalysis) {
+            menuItems.push({ name: 'Return Claims', icon: Ticket, path: '/returns/claims' });
         }
         if (user?.permissions?.support) {
             menuItems.push({ name: 'Support', icon: LifeBuoy, path: '/support' });
