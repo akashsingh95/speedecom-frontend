@@ -107,8 +107,8 @@ api.interceptors.response.use(
             }
         }
 
-        // Some callers poll for a resource that legitimately may not exist yet
-        // (e.g. a research job right after it's kicked off) and already handle
+        // Some callers poll for a resource that legitimately may not exist yet,
+        // or make background requests (e.g. tour state). They already handle
         // the rejection themselves — they opt out of the global toast via this flag.
         if (!error.config?.skipErrorToast) {
             toast.error(message);

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import { MarketplaceProvider } from './contexts/MarketplaceContext';
+import { TourProvider } from './tour/TourProvider';
 import ProtectedRoute from './ProtectedRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -193,6 +194,10 @@ function App() {
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }} basename="/client">
       <AuthProvider>
         <MarketplaceProvider>
+          {/* Sits above the routes on purpose: a tour that walks from the
+              dashboard to uploads has to survive navigation, and
+              DashboardLayout remounts on every route change. */}
+          <TourProvider>
           <Toaster position="top-center" richColors />
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -285,6 +290,7 @@ function App() {
           <Route path="*" element={<DefaultRedirect />} />
         </Routes >
         {/* <SpeedyAgent /> */}
+          </TourProvider>
       </MarketplaceProvider>
       </AuthProvider >
     </Router >
