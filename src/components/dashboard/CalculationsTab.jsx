@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -13,6 +11,7 @@ import { useAuth } from '../../AuthContext';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { toast } from 'sonner';
 import { decideCalculationBeforeReport } from '../../utils/calculationGate';
+import { TOUR } from '../../tour/targets';
 
 // Static step config — hoisted so it isn't recreated every render.
 const WIZARD_STEPS = [
@@ -620,7 +619,7 @@ const CalculationsTab = ({ viewMode = 'grid', filterData, handleFilterChange }) 
                 {!workflowReady ? (
                     <WorkflowSkeleton />
                 ) : (
-                    <div className="relative space-y-6">
+                    <div data-tour={TOUR.calc.workflow} className="relative space-y-6">
                         {/* Vertical Connector Line */}
                         <div className="absolute left-6 sm:left-7 top-7 bottom-7 w-0.5 bg-slate-200 z-0" />
 
@@ -762,7 +761,7 @@ const CalculationsTab = ({ viewMode = 'grid', filterData, handleFilterChange }) 
                                                     )}
 
                                                     {(calculating || ['pending', 'processing'].includes(calculationStatus) || showCompletedBanner) && (
-                                                        <div className={`mt-2.5 p-3.5 rounded-xl border space-y-2 animate-in fade-in duration-300 ${showCompletedBanner && !calculating
+                                                        <div data-tour={TOUR.calc.progress} className={`mt-2.5 p-3.5 rounded-xl border space-y-2 animate-in fade-in duration-300 ${showCompletedBanner && !calculating
                                                             ? 'bg-emerald-50/90 border-emerald-200'
                                                             : 'bg-blue-50/90 border-blue-200'
                                                             }`}>
@@ -870,6 +869,7 @@ const CalculationsTab = ({ viewMode = 'grid', filterData, handleFilterChange }) 
                                             return (
                                                 <Tooltip text={disabledReason || step.title}>
                                                     <button
+                                                        data-tour={step.index === 3 ? TOUR.calc.calculateBtn : step.index === 2 ? TOUR.calc.openCostSheetBtn : undefined}
                                                         onClick={() => {
                                                             if (step.index === 1) {
                                                                 if (hasMarketplaces) {

@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import api from "../api";
 import {
@@ -20,8 +18,9 @@ import CalculationsFunnel from "../components/calculations/CalculationsFunnel";
 import CalculationsColumnSelector from "../components/calculations/CalculationsColumnSelector";
 import CalculationModal from "../components/calculations/Calculation";
 import CalculationsSearchModal from "../components/calculations/CalculationsSearchModal";
-import AddColumnSidebar from "../components/calculations/AddColumnSidebar";
 import ConfirmModal from "../components/ConfirmModal";
+import AddColumnSidebar from "../components/calculations/AddColumnSidebar";
+import { TOUR } from '../tour/targets';
 import {
   COLUMN_LABELS,
   formatCellValue,
@@ -393,7 +392,7 @@ const MasterSkuCalculations = () => {
         handleMasterSkuSkuClick(masterSku, childSku, skuKey, childSize);
       }
     });
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calculations]);
 
   // When return status filter changes, clear all expanded/cached drill-down data
@@ -782,7 +781,7 @@ const MasterSkuCalculations = () => {
     } else {
       setColumnOrder(allColumns);
     }
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allColumnsKey, isAmazon, isMeesho, isFlipkart, isMyntra, platformType, isPlatformLoaded]);
 
   // Filter columns based on visibility, preserving drag order
@@ -912,8 +911,9 @@ const MasterSkuCalculations = () => {
         </CalculationsHeader>
 
         {funnelData && showFiltersPanel && (
-          <CalculationsFunnel
-            isMeesho={isMeesho}
+          <div data-tour={TOUR.payments.funnel}>
+            <CalculationsFunnel
+              isMeesho={isMeesho}
             isFlipkart={isFlipkart}
             isAmazon={isAmazon}
             isMyntra={isMyntra}
@@ -1008,6 +1008,7 @@ const MasterSkuCalculations = () => {
               setMasterSkuSkuOrders({});
             }}
           />
+          </div>
         )}
 
         {/* Column Selector Modal Overlay */}
@@ -1374,6 +1375,7 @@ const MasterSkuCalculations = () => {
         {!error && calculations.length >= 0 && (
           <>
             <div
+              data-tour={TOUR.payments.table}
               className="bg-white rounded-2xl shadow-card border border-slate-200 overflow-hidden transition-opacity duration-200"
               style={{
                 opacity: loading ? 0.5 : 1,
