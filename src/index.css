@@ -1,0 +1,481 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+
+
+/* Custom Scrollbar — light mode, ultra-thin ghost */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; transition: background 0.2s; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.45); }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.7); }
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.custom-scrollbar:hover { scrollbar-color: rgba(148, 163, 184, 0.45) transparent; }
+
+/* Dark Scrollbar — purple-tinted, appears only on hover */
+.dark-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.dark-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.dark-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; transition: background 0.2s; }
+.dark-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.25); }
+.dark-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.5); }
+.dark-scrollbar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.dark-scrollbar:hover { scrollbar-color: rgba(139, 92, 246, 0.25) transparent; }
+
+/* Table inner scrollbar — thinner, appears on hover */
+.table-scrollbar::-webkit-scrollbar { width: 3px; height: 3px; }
+.table-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.table-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; transition: background 0.15s; }
+.table-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); }
+.dark .table-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(100, 80, 180, 0.3); }
+.table-scrollbar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.table-scrollbar:hover { scrollbar-color: rgba(148, 163, 184, 0.35) transparent; }
+
+/* Smooth animations for marketplace */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Slide Page Transition - Right to Left */
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Forward navigation (push) */
+.page-transition-enter {
+  animation: slideInFromRight 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.page-transition-exit {
+  animation: slideOutToLeft 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Backward navigation (pop) */
+.page-transition-enter-back {
+  animation: slideInFromLeft 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.page-transition-exit-back {
+  animation: slideOutToRight 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.page-transition {
+  animation: slideInFromRight 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes successPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slideInFromBottom {
+  animation: slideInFromBottom 0.22s ease-out both;
+}
+
+.animate-slideInFromLeft {
+  animation: slideInFromLeft 0.2s ease-out;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-zoomIn {
+  animation: zoomIn 0.3s ease-out;
+}
+
+.animate-successPulse {
+  animation: successPulse 0.6s ease-in-out;
+}
+
+/* Hover lift effect for cards */
+.hover-lift {
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+}
+
+/* Loading shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.loading-shimmer {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(to right, #f0f0f0 0%, #f8f8f8 50%, #f0f0f0 100%);
+  background-size: 1000px 100%;
+}
+
+/* Thin top progress bar for optimistic UI loading */
+@keyframes progress-bar-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.progress-bar-shimmer {
+  background: linear-gradient(90deg, transparent 0%, #4f46e5 40%, #818cf8 60%, transparent 100%);
+  background-size: 200% 100%;
+  animation: progress-bar-shimmer 1.2s infinite linear;
+}
+
+/* Calculation queue / indeterminate progress animation */
+@keyframes shimmer-progress {
+  0%   { transform: translateX(-150%); }
+  100% { transform: translateX(350%); }
+}
+
+/* ─── Speedy AI Dark Theme Overrides ─────────────── */
+
+/* Tables inside dark agent page */
+.dark .speedy-light-chart table {
+  border-color: #1E2540;
+}
+
+.dark .speedy-light-chart thead tr {
+  background: #141A2E !important;
+}
+
+.dark .speedy-light-chart thead th {
+  color: #9CA3AF !important;
+  border-color: #1E2540 !important;
+}
+
+.dark .speedy-light-chart tbody tr:nth-child(odd) {
+  background: #0F1219 !important;
+}
+
+.dark .speedy-light-chart tbody tr:nth-child(even) {
+  background: #111827 !important;
+}
+
+.dark .speedy-light-chart tbody td {
+  color: #D1D5DB !important;
+  border-color: #1A1F2E !important;
+}
+
+.dark .speedy-light-chart tbody td.text-red-600 {
+  color: #F87171 !important;
+}
+
+.dark .speedy-light-chart .overflow-x-auto {
+  border-color: #1E2540 !important;
+}
+
+.dark .speedy-light-chart .bg-gray-50 {
+  background: #141A2E !important;
+  color: #6B7280 !important;
+  border-color: #1E2540 !important;
+}
+
+/* Chart containers in dark theme */
+.dark .speedy-light-chart .recharts-cartesian-grid line {
+  stroke: #1E2540;
+}
+
+.dark .speedy-light-chart .recharts-text {
+  fill: #9CA3AF;
+}
+
+.dark .speedy-light-chart .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #141A2E !important;
+  border: 1px solid #1E2540 !important;
+  color: #E5E7EB !important;
+}
+
+/* Empty state in dark theme */
+.dark .speedy-light-chart .text-gray-400 {
+  color: #6B7280;
+}
+
+/* Select dropdowns in dark theme for the agent page */
+.speedy-dark-select {
+  color-scheme: dark;
+}
+
+/* ─── Speedy Robot Continuous Animation ─────────────── */
+
+@keyframes bot-think-fade {
+  0%, 40% { opacity: 1; transform: translateY(0px) scale(1); }
+  45% { opacity: 0; transform: translateY(-5px) scale(0.9); }
+  50%, 95% { opacity: 0; transform: translateY(-5px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0px) scale(1); }
+}
+
+@keyframes bot-sparkle-pulse {
+  0% { opacity: 0.5; transform: scale(0.8) rotate(0deg); }
+  20% { opacity: 1; transform: scale(1.2) rotate(15deg); }
+  40% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+
+@keyframes bot-write-fade {
+  0%, 40% { opacity: 0; transform: translateY(5px) scale(0.9); }
+  45% { opacity: 1; transform: translateY(0px) scale(1); }
+  90% { opacity: 1; transform: translateY(0px) scale(1); }
+  95%, 100% { opacity: 0; transform: translateY(5px) scale(0.9); }
+}
+
+@keyframes bot-pen-scribble {
+  0%, 45% { transform: translate(6px, -6px) rotate(20deg); }
+  50% { transform: translate(0px, 0px) rotate(0deg); }
+  55% { transform: translate(-3px, 2px) rotate(-15deg); }
+  65% { transform: translate(2px, -1px) rotate(10deg); }
+  75% { transform: translate(-2px, 3px) rotate(-5deg); }
+  85% { transform: translate(1px, 0px) rotate(5deg); }
+  90% { transform: translate(0px, 0px) rotate(0deg); }
+  95%, 100% { transform: translate(6px, -6px) rotate(20deg); }
+}
+
+.animate-bot-think { animation: bot-think-fade 3s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-bot-sparkle { animation: bot-sparkle-pulse 3s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-bot-write { animation: bot-write-fade 3s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-bot-pen { animation: bot-pen-scribble 3s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+
+/* ── FAQ Result Panel animations ───────────────────────── */
+@keyframes faq-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes faq-glow-in {
+  0%   { box-shadow: 0 0 0   0px rgba(139,92,246,0);    }
+  40%  { box-shadow: 0 0 18px 3px rgba(139,92,246,0.22); }
+  100% { box-shadow: 0 0 8px  1px rgba(139,92,246,0.08); }
+}
+@keyframes faq-border-flow {
+  0%   { background-position: 0%   50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0%   50%; }
+}
+@keyframes faq-dot-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%       { transform: scale(1.4); opacity: 0.6; }
+}
+
+.faq-block {
+  opacity: 0;
+  animation: faq-fade-up 0.45s cubic-bezier(0.22,1,0.36,1) forwards;
+}
+.faq-ai-glow {
+  animation: faq-glow-in 1.2s ease-out 0.2s 1 forwards;
+}
+.faq-gradient-border {
+  background: linear-gradient(135deg, #7c3aed, #6366f1, #8b5cf6, #4f46e5);
+  background-size: 300% 300%;
+  animation: faq-border-flow 4s ease infinite;
+}
+.faq-live-dot {
+  animation: faq-dot-pulse 1.8s ease-in-out infinite;
+}
+
+/* ── Trial Offer Popup Animations ───────────────────────── */
+@keyframes popup-slide-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes popup-slide-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.95);
+  }
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0);
+  }
+}
+
+@keyframes icon-glow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes icon-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes sparkle-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes clock-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-popup-slide-in {
+  animation: popup-slide-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-popup-slide-out {
+  animation: popup-slide-out 0.3s ease-out forwards;
+}
+
+.animate-badge-pulse {
+  animation: badge-pulse 2s infinite;
+}
+
+.animate-icon-glow {
+  animation: icon-glow 2s infinite;
+}
+
+.animate-icon-bounce {
+  animation: icon-bounce 1.5s ease-in-out infinite;
+}
+
+.animate-sparkle-rotate {
+  animation: sparkle-rotate 3s linear infinite;
+}
+
+.animate-clock-spin {
+  animation: clock-spin 2s linear infinite;
+}

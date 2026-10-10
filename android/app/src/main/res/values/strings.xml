@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SpeedEcom</string>
+    <string name="title_activity_main">SpeedEcom</string>
+    <string name="package_name">com.speedecom.app</string>
+    <string name="custom_url_scheme">com.speedecom.app</string>
+</resources>
