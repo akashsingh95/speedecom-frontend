@@ -37,7 +37,7 @@ const isInRange = (day, start, end) => {
 
 // minDate (optional, "YYYY-MM-DD"): earliest selectable day — days, months and years before it
 // are disabled (e.g. SBM users, who can only see the last 7 days).
-const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', maxDays = 31, hideDisplayChip = false, availableMonths = null, availableYears = null, forceMonthOpen = false, onMonthToggle, minDate = null }) => {
+const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', maxDays = 31, hideDisplayChip = false, availableMonths = null, availableYears = null, forceMonthOpen = false, onMonthToggle, minDate = null, allowFuture = false }) => {
     // Today (no future dates allowed)
     const today = useMemo(() => {
         const t = new Date();
@@ -172,18 +172,19 @@ const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', 
     const nextMonth = () => {
         const nextM = viewMonth === 11 ? 0 : viewMonth + 1;
         const nextY = viewMonth === 11 ? viewYear + 1 : viewYear;
-        if (nextY > today.getFullYear() || (nextY === today.getFullYear() && nextM > today.getMonth())) return;
+        if (!allowFuture && (nextY > today.getFullYear() || (nextY === today.getFullYear() && nextM > today.getMonth()))) return;
         if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
         else setViewMonth(m => m + 1);
     };
 
-    const isFuture = (date) => date > today;
+    const isFuture = (date) => !allowFuture && date > today;
 
     const isNextDisabled = useMemo(() => {
+        if (allowFuture) return false;
         const nextM = viewMonth === 11 ? 0 : viewMonth + 1;
         const nextY = viewMonth === 11 ? viewYear + 1 : viewYear;
         return nextY > today.getFullYear() || (nextY === today.getFullYear() && nextM > today.getMonth());
-    }, [viewMonth, viewYear, today]);
+    }, [viewMonth, viewYear, today, allowFuture]);
 
     const handleDayClick = (day) => {
         if (isFuture(day) || isBeforeMin(day)) return;
@@ -205,9 +206,9 @@ const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', 
             if (diff >= maxDays) {
                 const clamped = new Date(finalStart);
                 clamped.setDate(clamped.getDate() + maxDays - 1);
-                onChange({ min: fmt(finalStart), max: fmt(clamped > today ? today : clamped) });
+                onChange({ min: fmt(finalStart), max: fmt(!allowFuture && clamped > today ? today : clamped) });
             } else {
-                onChange({ min: fmt(finalStart), max: fmt(finalEnd > today ? today : finalEnd) });
+                onChange({ min: fmt(finalStart), max: fmt(!allowFuture && finalEnd > today ? today : finalEnd) });
             }
             setSelectingEnd(false);
             setHoverDate(null);
@@ -219,7 +220,7 @@ const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', 
     };
 
     const handleMonthSelect = (month) => {
-        if (viewYear === today.getFullYear() && month > today.getMonth()) return;
+        if (!allowFuture && viewYear === today.getFullYear() && month > today.getMonth()) return;
         if (isBeforeMinMonth(viewYear, month)) return;
         setViewMonth(month);
 
@@ -233,12 +234,12 @@ const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', 
         // Never start the selected range before minDate (the month containing it is selectable).
         const firstDay = min && monthStart < min ? new Date(min) : monthStart;
         const lastDayOfMonth = new Date(viewYear, month + 1, 0);
-        let lastDay = lastDayOfMonth > today ? today : lastDayOfMonth;
+        let lastDay = (!allowFuture && lastDayOfMonth > today) ? today : lastDayOfMonth;
         const diff = Math.round((lastDay - firstDay) / (1000 * 60 * 60 * 24));
         if (diff >= maxDays) {
             const clamped = new Date(firstDay);
             clamped.setDate(clamped.getDate() + maxDays - 1);
-            lastDay = clamped > today ? today : clamped;
+            lastDay = (!allowFuture && clamped > today) ? today : clamped;
         }
         onChange({ min: fmt(firstDay), max: fmt(lastDay) });
         setSelectingEnd(false);
@@ -246,7 +247,7 @@ const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', 
 
     const handleYearSelect = (year) => {
         setViewYear(year);
-        if (year === today.getFullYear() && viewMonth > today.getMonth()) {
+        if (!allowFuture && year === today.getFullYear() && viewMonth > today.getMonth()) {
             setViewMonth(today.getMonth());
         }
     };
@@ -349,7 +350,7 @@ const DateRangePicker = ({ startDate, endDate, onChange, accentColor = 'brand', 
                             {/* Month grid */}
                             <div className="grid grid-cols-4 gap-1.5">
                                 {MONTHS_SHORT.map((m, i) => {
-                                    const isFutureMonth = viewYear === today.getFullYear() && i > today.getMonth();
+                                    const isFutureMonth = !allowFuture && viewYear === today.getFullYear() && i > today.getMonth();
                                     // If availableMonths has data, only enable months explicitly present for this year
                                     // If no availableMonths data exists (new marketplace), all non-future months are enabled
                                     const hasAvailableData = availableMonths && Object.keys(availableMonths).length > 0;
