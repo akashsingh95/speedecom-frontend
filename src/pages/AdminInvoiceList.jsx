@@ -19,7 +19,7 @@ import {
     Search, Plus, Trash2, Pencil, FileText, Loader2, X, CheckCircle,
     Building2, User, Gift, Award,
     Download, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Hash,
-    MoreVertical, Mail, Printer, FileSpreadsheet, CalendarDays, ChevronDown, RotateCw, RotateCcw, Package
+    MoreVertical, Mail, Printer, FileSpreadsheet, CalendarDays, ChevronDown, RotateCw, RotateCcw, Package, Clock, AlertTriangle
 } from 'lucide-react';
 
 const GST_RATE = Number(import.meta.env.VITE_GST_RATE || 18);
@@ -2000,7 +2000,7 @@ const AdminInvoiceList = () => {
                                                 <th className="py-3.5 px-3 text-left" style={{ width: 100 }}>
                                                     <span className="text-[11px] font-bold uppercase tracking-wider text-black">GSTIN</span>
                                                 </th>
-                                                <th className="py-3.5 px-3 text-right" style={{ width: 85 }}><SortBtn label="Amount" columnKey="totalAmount" /></th>
+                                                <th className="py-3.5 px-3 text-right" style={{ width: 160 }}><SortBtn label="Amount" columnKey="totalAmount" /></th>
                                                 <th className="py-3.5 px-3 text-center" style={{ width: 65 }}>
                                                     <span className="text-[11px] font-bold uppercase tracking-wider text-black">Source</span>
                                                 </th>
@@ -2073,25 +2073,6 @@ const AdminInvoiceList = () => {
                                                                         {inv.razorpayOrderId && <><br /><span title={inv.razorpayOrderId}>Ord: {inv.razorpayOrderId}</span></>}
                                                                     </div>
                                                                 )}
-                                                                {inv.settlementState && (
-                                                                    <div className="mt-1" title={inv.settlementState === 'settled'
-                                                                        ? `Gross ₹${inv.settlement.amount} · fee+tax ₹${((inv.settlement.fee || 0) + (inv.settlement.tax || 0)).toFixed(2)} · net ₹${inv.settlement.netAmount}`
-                                                                        : undefined}>
-                                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                                                                            inv.settlementState === 'settled' ? 'text-green-700 bg-green-50 border-green-200'
-                                                                                : inv.settlementState === 'overdue' ? 'text-red-700 bg-red-50 border-red-200'
-                                                                                    : 'text-amber-700 bg-amber-50 border-amber-200'
-                                                                        }`}>
-                                                                            {inv.settlementState === 'settled' ? 'Settled' : inv.settlementState === 'overdue' ? 'Settlement overdue' : 'Settlement pending'}
-                                                                        </span>
-                                                                        {inv.settlementState === 'settled' && (
-                                                                            <div className="mt-0.5 text-[10px] text-slate-400 font-mono leading-tight">
-                                                                                <span title={inv.settlement.utr}>UTR: {inv.settlement.utr || '—'}</span>
-                                                                                <br />{formatDateDDMMYYYY(inv.settlement.settledAt)}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="py-4 px-3 text-left">
@@ -2123,9 +2104,41 @@ const AdminInvoiceList = () => {
                                                             <span className="text-xs font-mono text-slate-500 break-all">{inv.buyer?.gstin || '-'}</span>
                                                         </td>
                                                         <td className="py-4 px-3 text-right">
-                                                            <span className="text-sm font-semibold text-slate-600">
-                                                                &#8377;{Number(inv.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                            </span>
+                                                            <div
+                                                                title={inv.settlementState === 'settled'
+                                                                    ? `Settled on ${formatDateDDMMYYYY(inv.settlement.settledAt)}\nSettlement ${inv.settlement.settlementId} · UTR ${inv.settlement.utr || '—'}\nGross ₹${inv.settlement.amount} · fee+tax ₹${((inv.settlement.fee || 0) + (inv.settlement.tax || 0)).toFixed(2)} · net ₹${inv.settlement.netAmount}`
+                                                                    : inv.settlementState === 'overdue' ? 'Razorpay has not settled this payment yet — overdue'
+                                                                        : inv.settlementState === 'pending' ? 'Waiting for Razorpay settlement' : undefined}
+                                                            >
+                                                                <span className={`text-sm font-semibold ${
+                                                                    inv.settlementState === 'settled' ? 'text-emerald-600'
+                                                                        : inv.settlementState === 'overdue' ? 'text-red-600'
+                                                                            : inv.settlementState === 'pending' ? 'text-amber-600'
+                                                                                : 'text-slate-600'
+                                                                }`}>
+                                                                    &#8377;{Number(inv.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                                {inv.settlementState && (
+                                                                    <p className={`mt-0.5 flex items-center justify-end gap-1 whitespace-nowrap text-[10px] font-bold uppercase tracking-wide ${
+                                                                        inv.settlementState === 'settled' ? 'text-emerald-500'
+                                                                            : inv.settlementState === 'overdue' ? 'text-red-500' : 'text-amber-500'
+                                                                    }`}>
+                                                                        {inv.settlementState === 'settled' ? <CheckCircle size={11} /> : inv.settlementState === 'overdue' ? <AlertTriangle size={11} /> : <Clock size={11} />}
+                                                                        {inv.settlementState === 'settled'
+                                                                            ? `Settled ${formatDateDDMMYYYY(inv.settlement.settledAt)}`
+                                                                            : inv.settlementState === 'overdue' ? 'Overdue' : 'Pending'}
+                                                                    </p>
+                                                                )}
+                                                                {inv.settlementState === 'settled' && inv.settlement.utr && (
+                                                                    <p
+                                                                        className="mt-0.5 text-[10px] font-mono text-slate-500 select-all"
+                                                                        title="UTR — click to select, then copy"
+                                                                        onClick={e => e.stopPropagation()}
+                                                                    >
+                                                                        UTR {inv.settlement.utr}
+                                                                    </p>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                         <td className="py-4 px-3 text-center">
                                                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold ${
