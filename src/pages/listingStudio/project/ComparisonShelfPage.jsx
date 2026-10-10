@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, GitCompare } from 'lucide-react';
@@ -73,7 +75,7 @@ export default function ComparisonShelfPage() {
   useEffect(() => {
     if (picker && !allProjects) {
       // The shared axios instance's response interceptor already shows a toast on failure.
-      listingStudioApi.listProjects().then(setAllProjects, () => {});
+      listingStudioApi.listProjects().then((data) => setAllProjects(data.projects), () => {});
     }
   }, [picker, allProjects]);
 
@@ -105,7 +107,11 @@ export default function ComparisonShelfPage() {
 
   const maxRows = Math.max(0, ...columns.map((c) => c.images.length));
   const rowLabel = (i) => (i === 0 ? 'Main Image' : `Secondary Image ${i}`);
-  const pickerCandidates = (allProjects ?? []).filter((p) => p.id !== project.id && !extraProjects.some((e) => e.id === p.id));
+  // Excludes campaigns the user started but never finished (e.g. abandoned the wizard before any
+  // image was generated) — there'd be nothing to show in a "Previous Campaign" column for those.
+  const pickerCandidates = (allProjects ?? []).filter(
+    (p) => p.id !== project.id && p.hasGeneratedImages && !extraProjects.some((e) => e.id === p.id),
+  );
 
   return (
     <div>
