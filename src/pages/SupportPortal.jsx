@@ -7,6 +7,9 @@ import DashboardLayout from '../components/DashboardLayout';
 import { LifeBuoy, X, Paperclip, CheckCircle2, Clock, Plus, Image as ImageIcon, Send, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown } from 'lucide-react';
 import StarRating from '../components/StarRating';
 import RatingModal from '../components/RatingModal';
+import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { SUPPORT_TOUR } from '../tour/steps';
 
 const SupportPortal = () => {
     const { user } = useAuth();
@@ -354,7 +357,7 @@ const SupportPortal = () => {
                     <div className="relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-700 to-blue-800 rounded-2xl p-7 text-white shadow-lg mb-6">
                         <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-2xl"></div>
                         <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-400/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl"></div>
-                        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div data-tour={TOUR.support.header} className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 bg-white/15 rounded-xl backdrop-blur-sm border border-white/10">
                                     <LifeBuoy size={20} className="text-white" />
@@ -364,19 +367,23 @@ const SupportPortal = () => {
                                     <p className="mt-1 text-sm text-blue-100">Create and manage your support requests.</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={handleCreateClick}
-                                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm rounded-xl font-medium transition-all shadow-sm hover:shadow-md"
-                            >
-                                <Plus size={18} />
-                                Create Ticket
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <TourLauncher tourKey={SUPPORT_TOUR} label="Tour" className="!bg-white/10 !border-white/20 !text-white hover:!bg-white/20 hover:!text-white backdrop-blur-sm" />
+                                <button
+                                    data-tour={TOUR.support.createBtn}
+                                    onClick={handleCreateClick}
+                                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm rounded-xl font-medium transition-all shadow-sm hover:shadow-md"
+                                >
+                                    <Plus size={18} />
+                                    Create Ticket
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden transition-all duration-300">
+                <div data-tour={TOUR.support.ticketList} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden transition-all duration-300">
                     <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
-                        <div className="relative" ref={statusDropdownRef}>
+                        <div data-tour={TOUR.support.statusFilter} className="relative" ref={statusDropdownRef}>
                             <button
                                 onClick={() => setStatusDropdownOpen(o => !o)}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-semibold transition-colors ${statusFilters.length > 0 ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50 shadow-sm'}`}

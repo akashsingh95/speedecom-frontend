@@ -4,6 +4,9 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../AuthContext';
 import { UserPlus, Trash2, Copy, Check, Search, User as UserIcon, CheckCircle, Shield, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
+import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { USER_MANAGEMENT_TOUR } from '../tour/steps';
 
 const PERMISSION_GROUPS = [
     {
@@ -242,15 +245,17 @@ const UserManagement = () => {
     return (
         <DashboardLayout>
             <div className="w-full flex flex-col h-full overflow-hidden bg-slate-50">
-                <header className="bg-slate-50 backdrop-blur-md sticky top-0 z-10 px-8 py-3 flex items-center justify-between">
+                <header data-tour={TOUR.users.header} className="bg-slate-50 backdrop-blur-md sticky top-0 z-10 px-8 py-3 flex items-center justify-between">
                     <div>
                         <h2 className="text-2xl font-heading font-bold text-slate-800">
                             User Management
                         </h2>
                     </div>
                     <div className="flex items-center gap-5">
+                        <TourLauncher tourKey={USER_MANAGEMENT_TOUR} />
                         {!isImpersonating && (
                             <button
+                                data-tour={TOUR.users.addUserBtn}
                                 onClick={() => { setEditingUser(null); setIsModalOpen(true); setCreatedUserCreds(null); setFormData(initialFormState); }}
                                 className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors shadow-lg shadow-brand-500/20"
                             >
@@ -306,9 +311,9 @@ const UserManagement = () => {
                         </div>
                     )}
 
-                    <div className="bg-white rounded-2xl shadow-card border border-slate-200 overflow-hidden mb-12">
+                    <div data-tour={TOUR.users.table} className="bg-white rounded-2xl shadow-card border border-slate-200 overflow-hidden mb-12">
                         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <div className="relative w-full md:w-80">
+                            <div data-tour={TOUR.users.search} className="relative w-full md:w-80">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                 <input
                                     type="text"
@@ -327,7 +332,7 @@ const UserManagement = () => {
                                         <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
-                                        <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Permissions</th>
+                                        <th data-tour={TOUR.users.permissionsColumn} className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Permissions</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                                     </tr>
                                 </thead>

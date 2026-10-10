@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import CostSheetNotGeneratedModal from '../components/CostSheetNotGeneratedModal';
@@ -8,6 +6,7 @@ import api from '../api';
 
 import { Save, ArrowLeft, Loader2, AlertCircle, AlertTriangle, CheckCircle, Search, X, Plus, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Filter, Info, Calculator, Download, Check, Store } from 'lucide-react';
 import { toast } from 'sonner';
+import { TOUR } from '../tour/targets';
 import ExportButton from '../components/ExportButton';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
 import Tooltip from '../components/Tooltip';
@@ -1484,7 +1483,7 @@ const CostSheet = () => {
     return (
         <div className="h-screen bg-gray-50 p-2.5 sm:p-4 md:px-6 md:py-4 flex flex-col overflow-hidden" style={{ userSelect: isDragging ? 'none' : 'auto' }}>
             {/* Header */}
-            <div className="max-w-full mb-3 shrink-0">
+            <div data-tour={TOUR.costSheet.header} className="max-w-full mb-3 shrink-0">
                 <div className="flex items-start sm:items-center justify-between gap-3 sm:gap-4 flex-wrap">
                     <div className="flex items-center gap-2 sm:gap-3">
                         <Tooltip text="Go Back">
@@ -1608,12 +1607,13 @@ const CostSheet = () => {
                         )}
 
                         {/* Filter Dropdown */}
-                        <MarketplaceAccountSelector
-                            variant="popover"
-                            selectionMode="single"
-                            accountSelection="multiple"
-                            showCheckbox={true}
-                            showClearAll={true}
+                        <div data-tour={TOUR.costSheet.accountFilter}>
+                            <MarketplaceAccountSelector
+                                variant="popover"
+                                selectionMode="single"
+                                accountSelection="multiple"
+                                showCheckbox={true}
+                                showClearAll={true}
                             availableMarketplaces={availableMarketplaces}
                             marketplaceFilters={marketplaceFilters}
                             onApplyFilters={(selectedIds) => {
@@ -1628,6 +1628,7 @@ const CostSheet = () => {
                             buttonLabel="Filter Accounts"
                             align="left"
                         />
+                        </div>
 
                         <div className="relative z-40 flex items-center h-full" ref={columnSelectorRef}>
                             <button
@@ -1702,6 +1703,7 @@ const CostSheet = () => {
 
                         <Tooltip text={saving ? "Saving..." : editedRows.size === 0 ? "No unsaved changes" : `Save ${editedRows.size} unsaved change${editedRows.size !== 1 ? 's' : ''}`}>
                             <button
+                                data-tour={TOUR.costSheet.saveBtn}
                                 onClick={handleSave}
                                 disabled={saving || editedRows.size === 0}
                                 className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold text-[11px] sm:text-xs shadow-sm cursor-pointer whitespace-nowrap"
@@ -1780,6 +1782,7 @@ const CostSheet = () => {
                 </div>
             )}
             <div
+                data-tour={TOUR.costSheet.table}
                 className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl shadow-card border border-slate-200 overflow-hidden transition-opacity duration-200"
                 style={{ cursor: isDragging ? 'crosshair' : 'default', opacity: filtering ? 0.5 : 1, pointerEvents: filtering ? 'none' : 'auto' }}
             >
