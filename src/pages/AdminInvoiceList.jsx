@@ -14,11 +14,12 @@ import GstAutoFill from '../components/GstAutoFill';
 import DateRangePicker from '../components/DateRangePicker';
 import { parseGstin, STATE_CODES } from '../utils/gstinUtils';
 import AdminGiftModal from '../components/AdminGiftModal';
+import RefundedPaymentsTab from '../components/RefundedPaymentsTab';
 import {
     Search, Plus, Trash2, Pencil, FileText, Loader2, X, CheckCircle,
     Building2, User, Gift, Award,
     Download, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Hash,
-    MoreVertical, Mail, Printer, FileSpreadsheet, CalendarDays, ChevronDown, RotateCw, RotateCcw, Package
+    MoreVertical, Mail, Printer, FileSpreadsheet, CalendarDays, ChevronDown, RotateCw, RotateCcw, Package, Clock, AlertTriangle
 } from 'lucide-react';
 
 const GST_RATE = Number(import.meta.env.VITE_GST_RATE || 18);
@@ -167,6 +168,8 @@ const AdminInvoiceList = () => {
     const [bulkUnverifying, setBulkUnverifying] = useState(false);
     const [transferringId, setTransferringId] = useState(null);
     const [paymentCategoryFilter, setPaymentCategoryFilter] = useState('all');
+    const [settlementFilter, setSettlementFilter] = useState('all');
+    const [syncingSettlements, setSyncingSettlements] = useState(false);
     const menuRef = useRef(null);
     const creditMenuRef = useRef(null);
     const gstButtonRef = useRef(null);
@@ -370,6 +373,7 @@ const AdminInvoiceList = () => {
             if (billingType !== 'all') params.billingType = billingType;
             if (verified !== 'all') params.verified = verified;
             if (paymentCategoryFilter !== 'all') params.paymentCategory = paymentCategoryFilter;
+            if (settlementFilter !== 'all') params.settlement = settlementFilter;
             params.sortBy = sortBy;
             params.sortOrder = sortOrder;
             const { data } = await api.get('/admin/invoices/list', { params });
@@ -381,7 +385,22 @@ const AdminInvoiceList = () => {
         } finally {
             setLoading(false);
         }
-    }, [sortBy, sortOrder, paymentCategoryFilter]);
+    }, [sortBy, sortOrder, paymentCategoryFilter, settlementFilter]);
+
+    const handleSyncSettlements = async () => {
+        setSyncingSettlements(true);
+        try {
+            const { data } = await api.post('/admin/invoices/sync-settlements', {}, { timeout: 5 * 60 * 1000 });
+            toast.success(data.monthsScanned === 0
+                ? 'Nothing to sync — no unsettled Razorpay invoices'
+                : `Settlement sync done: ${data.matched} newly settled. Pending: ${data.stillPending}, overdue: ${data.overdue}`);
+            fetchInvoices(invoicePagination.page, debouncedSearchTerm, sourceFilter, statusFilter, startDate, endDate, fyFilter, billingTypeFilter, verifiedFilter);
+        } catch {
+            toast.error('Failed to sync settlements from Razorpay');
+        } finally {
+            setSyncingSettlements(false);
+        }
+    };
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 400);
@@ -430,7 +449,7 @@ const AdminInvoiceList = () => {
     }, [creditSearchTerm]);
 
     useEffect(() => {
-        if (activeTab !== 'invoices') {
+        if (activeTab === 'freeTrialCredits' || activeTab === 'adminGift') {
             fetchCreditHistory(1, debouncedCreditSearch, creditTypeFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter, fyFilter, creditSortBy, creditSortOrder);
         }
     }, [activeTab, fetchCreditHistory, debouncedCreditSearch, creditTypeFilter, creditCategoryFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter, fyFilter, creditSortBy, creditSortOrder]);
@@ -563,7 +582,7 @@ const AdminInvoiceList = () => {
             const url = q ? `/admin/invoices/buyers?q=${encodeURIComponent(q)}` : '/admin/invoices/buyers';
             const { data } = await api.get(url);
             setEditCreditBuyers(data || []);
-        } catch {} finally { setEditCreditBuyerSearching(false); }
+        } catch { setEditCreditBuyers([]); } finally { setEditCreditBuyerSearching(false); }
     }, []);
 
     const handleEditCreditBuyerInput = (value) => {
@@ -1385,7 +1404,7 @@ const AdminInvoiceList = () => {
                                 </div>
                                 <div>
                                     <h1 className="text-xl font-bold tracking-tight">
-                                        {activeTab === 'adminGift' ? 'Admin Gift' : activeTab === 'freeTrialCredits' ? 'Free Trial Credits' : 'Invoices'}
+                                        {activeTab === 'adminGift' ? 'Admin Gift' : activeTab === 'freeTrialCredits' ? 'Free Trial Credits' : activeTab === 'refundedPayments' ? 'Refunded Payments' : 'Invoices'}
                                     </h1>
                                     <p className={`mt-1 text-sm ${
                                         activeTab === 'adminGift'
@@ -1398,7 +1417,9 @@ const AdminInvoiceList = () => {
                                             ? 'View admin gift credits given to buyers'
                                             : activeTab === 'freeTrialCredits'
                                                 ? 'Give and track free trial credits for buyers'
-                                                : 'Create and manage GST invoices'}
+                                                : activeTab === 'refundedPayments'
+                                                    ? 'Payments refunded by Razorpay (not part of the invoice series)'
+                                                    : 'Create and manage GST invoices'}
                                     </p>
                                 </div>
                             </div>
@@ -1449,10 +1470,20 @@ const AdminInvoiceList = () => {
                         >
                             <Award size={15} className="inline mr-1.5" />Admin Gift
                         </button>
+                        {!isSBM && (
+                        <button
+                            onClick={() => setActiveTab('refundedPayments')}
+                            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'refundedPayments' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <RotateCcw size={15} className="inline mr-1.5" />Refunded Payments
+                        </button>
+                        )}
                     </div>
 
                     {/* ── Invoices Tab ── */}
-                    {activeTab === 'invoices' ? (
+                    {activeTab === 'refundedPayments' ? (
+                        <RefundedPaymentsTab canExport={canExport} />
+                    ) : activeTab === 'invoices' ? (
                         <>
                             <div className="space-y-3">
                                 <h3 className="text-lg font-heading font-bold text-slate-800 flex items-center gap-2">
@@ -1479,6 +1510,17 @@ const AdminInvoiceList = () => {
                                             <RotateCw size={12} />
                                             Refresh
                                         </button>
+                                        {user?.role === 'SuperAdmin' && (
+                                            <button
+                                                onClick={handleSyncSettlements}
+                                                disabled={syncingSettlements}
+                                                title="Check Razorpay for settlements of all unsettled invoices"
+                                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {syncingSettlements ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                                                {syncingSettlements ? 'Syncing…' : 'Sync settlements'}
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
                                             className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
@@ -1555,6 +1597,7 @@ const AdminInvoiceList = () => {
                                                                     if (fyFilter && fyFilter !== 'all') params.fy = fyFilter;
                                                                     if (billingTypeFilter !== 'all') params.billingType = billingTypeFilter;
                                                                     if (verifiedFilter !== 'all') params.verified = verifiedFilter;
+                                                                    if (settlementFilter !== 'all') params.settlement = settlementFilter;
                                                                     response = await api.post('/admin/invoices/export-excel', {}, { params, responseType: 'blob' });
                                                                 }
                                                                 const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
@@ -1667,7 +1710,7 @@ const AdminInvoiceList = () => {
                                             <ChevronDown size={12} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
                                             Filters
                                             {(() => {
-                                                const activeCount = [sourceFilter !== 'all' ? 1 : 0, billingTypeFilter !== 'all' ? 1 : 0, statusFilter !== 'all' ? 1 : 0, fyFilter !== 'all' ? 1 : 0, (!isSBM && startDate) ? 1 : 0, verifiedFilter !== 'all' ? 1 : 0].reduce((a, b) => a + b, 0);
+                                                const activeCount = [sourceFilter !== 'all' ? 1 : 0, billingTypeFilter !== 'all' ? 1 : 0, statusFilter !== 'all' ? 1 : 0, fyFilter !== 'all' ? 1 : 0, (!isSBM && startDate) ? 1 : 0, verifiedFilter !== 'all' ? 1 : 0, settlementFilter !== 'all' ? 1 : 0].reduce((a, b) => a + b, 0);
                                                 return activeCount > 0 ? <span className="ml-0.5 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeCount}</span> : null;
                                             })()}
                                         </button>
@@ -1685,7 +1728,7 @@ const AdminInvoiceList = () => {
                                                 <div className="flex items-center gap-2">
                                                     <h3 className="text-xs font-bold text-white uppercase tracking-wide">Filters</h3>
                                                     {(() => {
-                                                        const activeCount = [sourceFilter !== 'all', billingTypeFilter !== 'all', statusFilter !== 'all', fyFilter !== 'all', (!isSBM && !!startDate), verifiedFilter !== 'all'].filter(Boolean).length;
+                                                        const activeCount = [sourceFilter !== 'all', billingTypeFilter !== 'all', statusFilter !== 'all', fyFilter !== 'all', (!isSBM && !!startDate), verifiedFilter !== 'all', settlementFilter !== 'all'].filter(Boolean).length;
                                                         return activeCount > 0 ? (
                                                             <span className="flex items-center justify-center w-4 h-4 rounded-full bg-white text-[#1a2c5e] text-[10px] font-bold">{activeCount}</span>
                                                         ) : null;
@@ -1712,6 +1755,7 @@ const AdminInvoiceList = () => {
                                                 if (billingTypeFilter !== 'all') chips.push({ key: 'billing', label: `Billing: ${billingTypeFilter}`, onRemove: () => setBillingTypeFilter('all') });
                                                 if (statusFilter !== 'all') chips.push({ key: 'status', label: `Status: ${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`, onRemove: () => setStatusFilter('all') });
                                                 if (verifiedFilter !== 'all') chips.push({ key: 'verified', label: `Verified: ${verifiedFilter.charAt(0).toUpperCase() + verifiedFilter.slice(1)}`, onRemove: () => setVerifiedFilter('all') });
+                                                if (settlementFilter !== 'all') chips.push({ key: 'settlement', label: `Settlement: ${settlementFilter.charAt(0).toUpperCase() + settlementFilter.slice(1)}`, onRemove: () => setSettlementFilter('all') });
 
                                                 return chips.length > 0 ? (
                                                     <div className="flex flex-wrap gap-1.5 px-4 pt-3">
@@ -1874,13 +1918,32 @@ const AdminInvoiceList = () => {
                                                             ))}
                                                         </div>
                                                     </div>
+
+                                                    <div>
+                                                        <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Settlement</label>
+                                                        <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+                                                            {['all', 'settled', 'pending', 'overdue'].map(v => (
+                                                                <button
+                                                                    key={v}
+                                                                    onClick={() => setSettlementFilter(v)}
+                                                                    className={`flex-1 px-2 py-1.5 text-xs font-bold rounded transition-all capitalize ${
+                                                                        settlementFilter === v
+                                                                            ? 'bg-[#1a2c5e] text-white shadow-sm'
+                                                                            : 'text-slate-500 hover:text-slate-800 hover:bg-white/60'
+                                                                    }`}
+                                                                >
+                                                                    {v === 'all' ? 'All' : v}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
 
                                             {/* Sticky footer */}
                                             <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between gap-3">
                                                 <button
-                                                    onClick={() => { setSourceFilter('all'); setBillingTypeFilter('all'); setPaymentCategoryFilter('all'); setStatusFilter('all'); setFyFilter('all'); setStartDate(getDefaultStartDate()); setEndDate(getDefaultEndDate()); setVerifiedFilter('all'); setShowFilters(false); }}
+                                                    onClick={() => { setSourceFilter('all'); setBillingTypeFilter('all'); setPaymentCategoryFilter('all'); setStatusFilter('all'); setFyFilter('all'); setStartDate(getDefaultStartDate()); setEndDate(getDefaultEndDate()); setVerifiedFilter('all'); setSettlementFilter('all'); setShowFilters(false); }}
                                                     className="text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors"
                                                 >
                                                     Clear all
@@ -1937,7 +2000,7 @@ const AdminInvoiceList = () => {
                                                 <th className="py-3.5 px-3 text-left" style={{ width: 100 }}>
                                                     <span className="text-[11px] font-bold uppercase tracking-wider text-black">GSTIN</span>
                                                 </th>
-                                                <th className="py-3.5 px-3 text-right" style={{ width: 85 }}><SortBtn label="Amount" columnKey="totalAmount" /></th>
+                                                <th className="py-3.5 px-3 text-right" style={{ width: 160 }}><SortBtn label="Amount" columnKey="totalAmount" /></th>
                                                 <th className="py-3.5 px-3 text-center" style={{ width: 65 }}>
                                                     <span className="text-[11px] font-bold uppercase tracking-wider text-black">Source</span>
                                                 </th>
@@ -2041,9 +2104,41 @@ const AdminInvoiceList = () => {
                                                             <span className="text-xs font-mono text-slate-500 break-all">{inv.buyer?.gstin || '-'}</span>
                                                         </td>
                                                         <td className="py-4 px-3 text-right">
-                                                            <span className="text-sm font-semibold text-slate-600">
-                                                                &#8377;{Number(inv.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                            </span>
+                                                            <div
+                                                                title={inv.settlementState === 'settled'
+                                                                    ? `Settled on ${formatDateDDMMYYYY(inv.settlement.settledAt)}\nSettlement ${inv.settlement.settlementId} · UTR ${inv.settlement.utr || '—'}\nGross ₹${inv.settlement.amount} · fee+tax ₹${((inv.settlement.fee || 0) + (inv.settlement.tax || 0)).toFixed(2)} · net ₹${inv.settlement.netAmount}`
+                                                                    : inv.settlementState === 'overdue' ? 'Razorpay has not settled this payment yet — overdue'
+                                                                        : inv.settlementState === 'pending' ? 'Waiting for Razorpay settlement' : undefined}
+                                                            >
+                                                                <span className={`text-sm font-semibold ${
+                                                                    inv.settlementState === 'settled' ? 'text-emerald-600'
+                                                                        : inv.settlementState === 'overdue' ? 'text-red-600'
+                                                                            : inv.settlementState === 'pending' ? 'text-amber-600'
+                                                                                : 'text-slate-600'
+                                                                }`}>
+                                                                    &#8377;{Number(inv.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                                {inv.settlementState && (
+                                                                    <p className={`mt-0.5 flex items-center justify-end gap-1 whitespace-nowrap text-[10px] font-bold uppercase tracking-wide ${
+                                                                        inv.settlementState === 'settled' ? 'text-emerald-500'
+                                                                            : inv.settlementState === 'overdue' ? 'text-red-500' : 'text-amber-500'
+                                                                    }`}>
+                                                                        {inv.settlementState === 'settled' ? <CheckCircle size={11} /> : inv.settlementState === 'overdue' ? <AlertTriangle size={11} /> : <Clock size={11} />}
+                                                                        {inv.settlementState === 'settled'
+                                                                            ? `Settled ${formatDateDDMMYYYY(inv.settlement.settledAt)}`
+                                                                            : inv.settlementState === 'overdue' ? 'Overdue' : 'Pending'}
+                                                                    </p>
+                                                                )}
+                                                                {inv.settlementState === 'settled' && inv.settlement.utr && (
+                                                                    <p
+                                                                        className="mt-0.5 text-[10px] font-mono text-slate-500 select-all"
+                                                                        title="UTR — click to select, then copy"
+                                                                        onClick={e => e.stopPropagation()}
+                                                                    >
+                                                                        UTR {inv.settlement.utr}
+                                                                    </p>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                         <td className="py-4 px-3 text-center">
                                                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold ${
@@ -3920,4 +4015,4 @@ const BuyerField = ({ label, value, onChange, disabled, prefix }) => (
     </div>
 );
 
-export default AdminInvoiceList;
+export default AdminInvoiceList;
