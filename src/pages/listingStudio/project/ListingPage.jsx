@@ -41,7 +41,9 @@ export default function ListingPage({ startInPreview = false }) {
   const navigate = useNavigate();
   const fileRef = useRef(null);
 
-  const images = project.generatedImages ?? [];
+  // Sorted by position (display order), matching sortedGeneratedImages/AmazonPreviewPanel —
+  // drag-and-drop below reorders by this same order, not raw collection/fetch order.
+  const images = [...(project.generatedImages ?? [])].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity));
   // Only used to label a generated image's provenance below (GEN_CARD_CONCEPT_LABEL) — the
   // project's listing copy is generated once, synthesized across every marketing angle
   // (pipeline/strategy.js generateAndSaveStrategy), not per concept; there is no "pick a
@@ -59,6 +61,8 @@ export default function ListingPage({ startInPreview = false }) {
   const [removingImage, setRemovingImage] = useState(null);
   const [activeImage, setActiveImage] = useState(null);
   const [lightboxSrc, setLightboxSrc] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
   const libraryEntries = project.imageLibrary?.entries ?? [];
 
   const finalizeRemoveImage = async (imageId) => {
@@ -130,14 +134,26 @@ export default function ListingPage({ startInPreview = false }) {
 
   const reorderImages = async (from, to) => {
     const ids = sortedGeneratedImages(project).map((img) => img.id);
-    const [moved] = ids.splice(from, 1);
-    ids.splice(to, 0, moved);
+    [ids[from], ids[to]] = [ids[to], ids[from]];
     try {
       await listingStudioApi.reorderGeneratedImages(project.id, ids);
       await refresh();
     } catch {
       // The shared axios instance's response interceptor already shows a toast for this.
     }
+  };
+
+  // Looks up by id rather than trusting raw array indices — the gallery below filters out
+  // removingImage mid-render, which would otherwise desync a dragged item's position from
+  // what sortedGeneratedImages (and thus reorderImages) expects.
+  const dropOnImage = (targetId) => {
+    if (dragId && dragId !== targetId) {
+      const from = images.findIndex((img) => img.id === dragId);
+      const to = images.findIndex((img) => img.id === targetId);
+      if (from !== -1 && to !== -1) void reorderImages(from, to);
+    }
+    setDragId(null);
+    setOverId(null);
   };
 
   if (startInPreview) {
@@ -193,14 +209,31 @@ export default function ListingPage({ startInPreview = false }) {
 
       {images.length > 0 && (
         <div className={CARD}>
-          <h2 className={`${CARD_TITLE} mb-3`}>Generated images</h2>
+          <h2 className={`${CARD_TITLE} mb-3`}>Product photos</h2>
+          {images.length > 1 && (
+            <p className={`${MUTED} text-xs mb-3`}>Drag a photo to reorder — the first photo is the Main Image.</p>
+          )}
           <div className={GALLERY}>
             {images
               .filter((img) => img.id !== removingImage?.id)
               .map((img) => {
                 const sourceConcept = concepts.find((c) => c.id === img.sourceConceptId);
+                const canDrag = images.length > 1;
                 return (
-                  <div key={img.id} className={GEN_CARD}>
+                  <div
+                    key={img.id}
+                    className={GEN_CARD}
+                    draggable={canDrag}
+                    onDragStart={canDrag ? (e) => { e.dataTransfer.effectAllowed = 'move'; setDragId(img.id); } : undefined}
+                    onDragOver={canDrag ? (e) => { e.preventDefault(); if (overId !== img.id) setOverId(img.id); } : undefined}
+                    onDrop={canDrag ? (e) => { e.preventDefault(); dropOnImage(img.id); } : undefined}
+                    onDragEnd={canDrag ? () => { setDragId(null); setOverId(null); } : undefined}
+                    style={{
+                      opacity: dragId === img.id ? 0.4 : 1,
+                      outline: overId === img.id && dragId !== null && dragId !== img.id ? '2px dashed #007185' : undefined,
+                      cursor: canDrag ? 'grab' : undefined,
+                    }}
+                  >
                     <button
                       type="button"
                       title="Remove from listing"
