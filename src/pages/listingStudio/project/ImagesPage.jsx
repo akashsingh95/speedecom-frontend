@@ -27,7 +27,13 @@ export default function ImagesPage() {
   // concurrently, so whichever one the model finishes first lands first. `position` (0/1 for
   // the 2 primary images, 2-5 for the 4 secondary ones — see pipeline/research.js) is the
   // stable intent order; sort=stable in modern JS keeps createdAt as the tiebreak.
-  const generated = [...(project.generatedImages ?? [])].sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity));
+  //
+  // Raw photos uploaded from Listing & Images (type: 'photo', see projectsService.addImages)
+  // live in the same generatedImages collection so they have somewhere to display there, but
+  // they aren't AI-generated concept art — they don't belong in this "Generated images" grid.
+  const generated = [...(project.generatedImages ?? [])]
+    .filter((img) => img.type !== 'photo')
+    .sort((a, b) => (a.position ?? Infinity) - (b.position ?? Infinity));
   const library = project.imageLibrary?.entries ?? [];
 
   const downloadAll = () => {
