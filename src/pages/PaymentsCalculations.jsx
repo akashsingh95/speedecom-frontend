@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../api';
 import { ArrowLeft, Loader2, FileSpreadsheet, ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, Columns, Filter, GripVertical, Search, X } from 'lucide-react';
@@ -12,8 +10,9 @@ import CalculationsFunnel from '../components/calculations/CalculationsFunnel';
 import CalculationModal from '../components/calculations/Calculation';
 import CalculationsColumnSelector from '../components/calculations/CalculationsColumnSelector';
 import CalculationsSearchModal from '../components/calculations/CalculationsSearchModal';
-import AddColumnSidebar from '../components/calculations/AddColumnSidebar';
 import ConfirmModal from '../components/ConfirmModal';
+import AddColumnSidebar from '../components/calculations/AddColumnSidebar';
+import { TOUR } from '../tour/targets';
 import {
     COLUMN_LABELS,
     PCT_COLS,
@@ -273,7 +272,7 @@ const PaymentsCalculations = () => {
         }
     }, [filterData.startDate, filterData.endDate, nullDateFilter, marketplaceFilter, returnStatusFilter, warehouseFilter, filters.brandFilter, dataTypeFilter, adsMode, shopsyFilter, meeshoOrderSourceFilter, compensationReasonFilter, recoveryReasonFilter, filters.sizeFilter, isFlipkart, isMeesho, appliedSearchItems, profitabilityFilter]);
 
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         setCurrentPage(1);
     }, [debouncedSearchTerm]);
@@ -295,7 +294,7 @@ const PaymentsCalculations = () => {
                 handleOrderClick(sku, orderId, orderKey);
             }
         });
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [calculations]);
 
     // When return status filter changes, clear all expanded/cached drill-down data
@@ -701,7 +700,7 @@ const PaymentsCalculations = () => {
         } else {
             setColumnOrder(allColumns);
         }
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [allColumnsKey, isPlatformLoaded, platformType]);
 
     // COLUMN_LABELS, PCT_COLS, AMAZON_NUMERIC_COLS, formatCellValue, getCellStyleClasses, enrichRowWithContributions
@@ -833,9 +832,10 @@ const PaymentsCalculations = () => {
                 </CalculationsHeader>
 
                 {funnelData && showFiltersPanel && (
-                    <CalculationsFunnel
-                        isMeesho={isMeesho}
-                        isFlipkart={isFlipkart}
+                    <div data-tour={TOUR.payments.funnel}>
+                        <CalculationsFunnel
+                            isMeesho={isMeesho}
+                            isFlipkart={isFlipkart}
                         isAmazon={isAmazon}
                         isMyntra={isMyntra}
                         isMeeshoSizeDisabled={isMeeshoSizeDisabled}
@@ -929,6 +929,7 @@ const PaymentsCalculations = () => {
                             if (typeof setNeftsByOrder === 'function') setNeftsByOrder({});
                         }}
                     />
+                    </div>
                 )}
 
                 {/* Column Selector Modal */}
@@ -1283,6 +1284,7 @@ const PaymentsCalculations = () => {
                     {!error && calculations.length >= 0 && (
                         <>
                             <div
+                                data-tour={TOUR.payments.table}
                                 className="bg-white rounded-2xl shadow-card border border-slate-200 overflow-hidden transition-opacity duration-200"
                                 style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : 'auto' }}
                             >
@@ -1717,11 +1719,3 @@ const PaymentsCalculations = () => {
 };
 
 export default PaymentsCalculations;
-
-
-
-
-
-
-
-

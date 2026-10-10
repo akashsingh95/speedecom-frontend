@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import { useAuth } from '../AuthContext';
+import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { BILLING_TOUR } from '../tour/steps';
 import { toast } from 'sonner';
 import { loadRazorpay } from '../utils/loadRazorpay';
 import { parseGstin } from '../utils/gstinUtils';
@@ -434,13 +437,16 @@ const Subscription = () => {
             <div className="w-full flex flex-col h-full overflow-hidden bg-slate-50">
 
                 {/* ── Header ───────────────────────────────────────────────── */}
-                <header className="bg-slate-50 sticky top-0 z-10 px-8 py-4 border-b border-slate-100">
-                    <h2 className="text-2xl font-heading font-bold text-slate-800">Subscription & Billing</h2>
-                    <p className="text-sm text-slate-500 mt-0.5">
-                        {canUseRazorpay
-                            ? 'Pay instantly via Razorpay'
-                            : 'Contact support to purchase credits'}
-                    </p>
+                <header data-tour={TOUR.billing.header} className="bg-slate-50 sticky top-0 z-10 px-8 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+                    <div>
+                        <h2 className="text-2xl font-heading font-bold text-slate-800">Subscription & Billing</h2>
+                        <p className="text-sm text-slate-500 mt-0.5">
+                            {canUseRazorpay
+                                ? 'Pay instantly via Razorpay'
+                                : 'Contact support to purchase credits'}
+                        </p>
+                    </div>
+                    <TourLauncher tourKey={BILLING_TOUR} />
                 </header>
 
                 {/* ── Product tabs ─────────────────────────────────────────── */}
@@ -490,7 +496,7 @@ const Subscription = () => {
 
                             {/* <div className={`grid grid-cols-1 gap-10 ${plans.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}> */}
                             {/* <div className={`max-w-6xl mx-auto grid grid-cols-1 gap-10 px-10 ${plans.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}> */}
-                            <div className="flex flex-wrap justify-center gap-3"
+                            <div data-tour={TOUR.billing.plans} className="flex flex-wrap justify-center gap-3"
                                 style={{
                                     gridTemplateColumns: "repeat(auto-fit, 350px)",
                                 }}>
@@ -562,6 +568,7 @@ const Subscription = () => {
                                                             </div>
 
                                                             <button
+                                                                data-tour={TOUR.billing.buyBtn}
                                                                 onClick={() => setSelectedPlan(plan)}
                                                                 className={`w-full py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 ${c.btn}`}
                                                             >
@@ -634,7 +641,7 @@ const Subscription = () => {
                     )}
 
                     {/* ── Payment History ──────────────────────────────────── */}
-                    <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+                    <section data-tour={TOUR.billing.history} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
                         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                             <h3 className="font-bold text-slate-800">Payment History</h3>
                             <button

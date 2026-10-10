@@ -3,6 +3,7 @@ import { Download, FileSpreadsheet, Clock, CheckCircle, XCircle, Trash2, Refresh
 import DashboardLayout from '../components/DashboardLayout';
 import api from '../api';
 import { useAuth } from '../AuthContext';
+import { TOUR } from '../tour/targets';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
 
 const Downloads = () => {
@@ -272,7 +273,7 @@ const Downloads = () => {
         <DashboardLayout>
             <div className="w-full flex flex-col h-full overflow-hidden bg-slate-50">
                 {/* Header */}
-                <header className="bg-slate-50 backdrop-blur-md sticky top-0 z-10 px-8 py-3 flex items-center justify-between">
+                <header data-tour={TOUR.downloads.header} className="bg-slate-50 backdrop-blur-md sticky top-0 z-10 px-8 py-3 flex items-center justify-between">
                     <div>
                         <h2 className="text-2xl font-heading font-bold text-slate-800 flex items-center gap-3">
                             Downloads Management
@@ -282,7 +283,7 @@ const Downloads = () => {
 
                 <main className="flex-1 w-full flex flex-col overflow-hidden relative">
                     {/* Filters */}
-                    <div className="z-10 bg-slate-50/90 backdrop-blur-md pt-2 pb-3 px-4 md:px-8 border-b border-slate-200/40 shadow-[0_8px_16px_-6px_rgba(0,0,0,0.05)] shrink-0">
+                    <div data-tour={TOUR.downloads.filters} className="z-10 bg-slate-50/90 backdrop-blur-md pt-2 pb-3 px-4 md:px-8 border-b border-slate-200/40 shadow-[0_8px_16px_-6px_rgba(0,0,0,0.05)] shrink-0">
                         <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
                             <div className="flex flex-wrap items-center gap-4">
                                 <MarketplaceAccountSelector
@@ -358,7 +359,7 @@ const Downloads = () => {
                         )}
 
                         {/* Table */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div data-tour={TOUR.downloads.table} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             {loading ? (
                                 <div className="flex items-center justify-center py-20">
                                     <RefreshCw className="animate-spin text-brand-600" size={32} />
@@ -457,6 +458,7 @@ const Downloads = () => {
                                                             <div className="flex items-center justify-end gap-2">
                                                                 {exp.status === 'completed' && (
                                                                     <button
+                                                                        data-tour={TOUR.downloads.downloadBtn}
                                                                         onClick={() => handleDownload(exp._id)}
                                                                         className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors"
                                                                     >

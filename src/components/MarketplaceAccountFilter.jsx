@@ -1,8 +1,7 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, X, Calendar, Check, Search, Store } from 'lucide-react';
 import { toast } from 'sonner';
+import { TOUR } from '../tour/targets';
 import api from '../api';
 import { useMarketplace } from '../contexts/MarketplaceContext';
 import AdvancedDateRangePicker from './AdvancedDateRangePicker';
@@ -259,7 +258,7 @@ const MarketplaceAccountFilter = ({
 
         if (!onChange) return;
         emitFilters();
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedMarketplaceKeys, accountSelections]);
 
     // Safety net: if either date gets cleared, reset both to the default range
@@ -600,7 +599,7 @@ const MarketplaceAccountFilter = ({
     }
 
     return (
-        <div className="bg-gradient-to-br from-white to-slate-50/50 rounded-xl shadow-sm border border-slate-200/80 mb-4 animate-in fade-in duration-300 backdrop-blur-sm overflow-visible relative z-50">
+        <div data-tour={TOUR.filter.root} className="bg-gradient-to-br from-white to-slate-50/50 rounded-xl shadow-sm border border-slate-200/80 mb-4 animate-in fade-in duration-300 backdrop-blur-sm overflow-visible relative z-50">
             <div className="p-5 overflow-visible">
                 <div className={`grid grid-cols-1 ${showDateFilter ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-6 overflow-visible`}>
                     {/* Left Side: Marketplace Selector */}
@@ -637,7 +636,7 @@ const MarketplaceAccountFilter = ({
                         </div>
                         <div className="flex items-center gap-2.5 flex-wrap overflow-visible">
                             {/* Add Marketplace Button with Dropdown */}
-                            <div className="relative z-50" ref={dropdownRef}>
+                            <div data-tour={TOUR.filter.marketplace} className="relative z-50" ref={dropdownRef}>
                                 <button
                                     onClick={() => setIsMarketplaceDropdownOpen(!isMarketplaceDropdownOpen)}
                                     className="group flex min-w-[150px] sm:min-w-[170px] h-10 items-center justify-between px-4 sm:px-5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl shadow-md hover:shadow-lg transition-all duration-200 text-sm sm:text-base font-bold cursor-pointer"
@@ -886,7 +885,7 @@ const MarketplaceAccountFilter = ({
 
                     {/* Right Side: Date Filter */}
                     {showDateFilter && (
-                        <div className="overflow-visible mt-4 lg:mt-0">
+                        <div data-tour={TOUR.filter.date} className="overflow-visible mt-4 lg:mt-0">
                             <div className="flex items-center justify-between xl:justify-start xl:gap-8 mb-4 min-h-[32px]">
                                 <div className="flex items-center gap-2">
                                     <div className="w-1 h-4 bg-brand-600 rounded-full"></div>

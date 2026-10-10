@@ -13,6 +13,7 @@ import UploadConfirmationModal from '../components/UploadConfirmationModal';
 import QueueLimitModal from '../components/QueueLimitModal';
 import YouTubeModal from '../components/YouTubeModal';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
+import { TOUR } from '../tour/targets';
 
 const MAX_FILES_PER_UPLOAD = 5;
 
@@ -73,6 +74,7 @@ const UploadTypeCard = ({ id, currentId, onClick, icon: Icon, title, subtitle, o
                 <div className="absolute top-2 right-2 z-10 block">
                     <button
                         type="button"
+                        data-tour={TOUR.uploads.typeCardTutorial}
                         className="text-red-400 hover:text-red-600 bg-white hover:bg-red-50 rounded-full p-1.5 shadow-sm border border-gray-200 hover:border-red-200 transition-all flex items-center justify-center"
                         title="Watch Upload Tutorial"
                         onClick={(e) => {
@@ -488,6 +490,7 @@ const Uploads = () => {
                             <div className="flex items-center gap-2 p-1.5 bg-slate-100/80 rounded-2xl shadow-sm">
                                 {(user?.role !== 'User' || user?.permissions?.uploadNew) && (
                                     <button
+                                        data-tour={TOUR.uploads.tabNew}
                                         onClick={() => setActiveTab('upload')}
                                         className={`px-4 py-2 text-sm font-bold rounded-xl transition-all duration-200 whitespace-nowrap ${activeTab === 'upload'
                                             ? 'bg-white text-brand-700 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-slate-200/50'
@@ -500,6 +503,7 @@ const Uploads = () => {
 
                                 {(user?.role !== 'User' || user?.permissions?.uploadHistory) && (
                                     <button
+                                        data-tour={TOUR.uploads.tabHistory}
                                         onClick={() => setActiveTab('history')}
                                         className={`px-4 py-2 text-sm font-bold rounded-xl transition-all duration-200 whitespace-nowrap ${activeTab === 'history'
                                             ? 'bg-white text-brand-700 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-slate-200/50'
@@ -529,7 +533,7 @@ const Uploads = () => {
 
                                         <div className="p-5 sm:p-7 space-y-7">
                                             {/* Step 1: Marketplace & Account Selection */}
-                                            <div className="space-y-4">
+                                            <div data-tour={TOUR.uploads.accountSelect} className="space-y-4">
                                                 <label className="flex items-center text-sm font-semibold text-gray-800">
                                                     <StepBadge number="1" />
                                                     Select Account
@@ -561,7 +565,7 @@ const Uploads = () => {
 
                                             {/* Step 2: Upload Type */}
                                             {marketplaceId && (
-                                                <div className="space-y-3 animate-slideInFromBottom">
+                                                <div data-tour={TOUR.uploads.typeGrid} className="space-y-3 animate-slideInFromBottom">
                                                     <label className="flex items-center text-sm font-semibold text-gray-800">
                                                         <StepBadge number="2" />
                                                         Select Upload Type
@@ -611,7 +615,7 @@ const Uploads = () => {
                                             )}
 
                                             {/* Step 3: File Upload */}
-                                            <div className="space-y-2.5">
+                                            <div data-tour={TOUR.uploads.fileSelector} className="space-y-2.5">
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                     <label className="flex items-center text-sm font-semibold text-gray-800">
                                                         <StepBadge number="3" />
@@ -631,7 +635,7 @@ const Uploads = () => {
 
                                 {/* Right: Upload Queue */}
                                 {hasFiles && (
-                                    <div className="xl:col-span-1">
+                                    <div data-tour={TOUR.uploads.queue} className="xl:col-span-1">
                                         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
 
                                             {/* Queue Header */}

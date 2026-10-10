@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import successSoundFile from '../assets/sounds/success.mp3';
 import errorSoundFile from '../assets/sounds/error.mp3';
@@ -14,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { TOUR } from '../tour/targets';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
 import MeeshoReturnHandoverTab from '../components/handover/MeeshoReturnHandoverTab';
@@ -76,7 +75,7 @@ const TodayPagination = ({ page, totalPages, total, onPageChange }) => {
         if (p < 1 || p > totalPages) return;
         const timer = setTimeout(() => { onPageChangeRef.current(p); }, 600);
         return () => clearTimeout(timer);
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [goTo, totalPages]);
 
     if (totalPages <= 1) return null;
@@ -232,7 +231,7 @@ const ScanReturns = () => {
         errorAudioRef.current   = new Audio(errorSoundFile);
         if (inputRef.current) inputRef.current.focus();
         return () => { stopCamera(); };
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -717,7 +716,7 @@ const ScanReturns = () => {
         }
         if (activeTab === 'unverified') fetchUnverified(1, unverifiedSearchRef.current);
         if (activeTab === 'scan') requestAnimationFrame(() => { if (inputRef.current) inputRef.current.focus(); });
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, fetchAccountSummary, fetchTodayScan, fetchUnverified]);
 
     // ── Camera ───────────────────────────────────────────────────────────────
@@ -906,7 +905,7 @@ const ScanReturns = () => {
     useEffect(() => { cameraActiveRef.current = cameraActive; }, [cameraActive]);
     useEffect(() => {
         if (activeTab !== 'scan' && cameraActiveRef.current) stopCamera();
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
 
     // ── Derived ──────────────────────────────────────────────────────────────
@@ -970,7 +969,7 @@ const ScanReturns = () => {
             <div className="w-full flex flex-col h-full overflow-hidden bg-slate-50">
 
                 {/* ── Header ─────────────────────────────────────────────── */}
-                <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between shrink-0">
+                <header data-tour={TOUR.scanReturns.header} className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between shrink-0">
                     <div>
                         <h1 className="text-xl font-heading font-bold text-slate-800">Scan Returns</h1>
                         <p className="text-xs text-slate-400 mt-0.5">Scan or type tracking IDs to mark returns as arrived</p>
@@ -994,7 +993,7 @@ const ScanReturns = () => {
                 </header>
 
                 {/* ── Tab bar ────────────────────────────────────────────── */}
-                <div className="bg-white border-b border-slate-200 px-8 flex items-center gap-1 shrink-0 overflow-x-auto custom-scrollbar">
+                <div data-tour={TOUR.scanReturns.tabs} className="bg-white border-b border-slate-200 px-8 flex items-center gap-1 shrink-0 overflow-x-auto custom-scrollbar">
                     {[
                         { key: 'scan',       label: 'Scan Barcode',  icon: Scan },
                         { key: 'today',      label: "Today's Scan",  icon: List },
@@ -1028,7 +1027,7 @@ const ScanReturns = () => {
                     <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${feedbackState === 'error' ? 'animate-shake' : ''}`}>
 
                         {/* ── Left: Scan Input ─────────────────────────────── */}
-                        <div className={`rounded-2xl shadow-sm flex flex-col p-6 transition-all duration-300 ${scanPanelCls}`}>
+                        <div data-tour={TOUR.scanReturns.input} className={`rounded-2xl shadow-sm flex flex-col p-6 transition-all duration-300 ${scanPanelCls}`}>
 
                             {/* Panel header */}
                             <div className="flex items-center justify-between mb-5 gap-3">
@@ -1147,7 +1146,7 @@ const ScanReturns = () => {
                                         Tracking ID / AWB / Order ID
                                     </label>
                                     {/* Condition selector toggle */}
-                                    <div className="relative flex bg-slate-100 p-1.5 rounded-xl items-center border border-slate-200/60 shadow-inner">
+                                    <div data-tour={TOUR.scanReturns.conditionToggle} className="relative flex bg-slate-100 p-1.5 rounded-xl items-center border border-slate-200/60 shadow-inner">
                                         <div
                                             className="absolute left-1.5 top-1.5 bottom-1.5 bg-white rounded-lg shadow-sm border border-slate-200 transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
                                             style={{
@@ -1201,7 +1200,7 @@ const ScanReturns = () => {
                         </div>
 
                         {/* ── Right: Scanned Items ─────────────────────────── */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col" style={{ maxHeight: 640 }}>
+                        <div data-tour={TOUR.scanReturns.scannedItems} className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col" style={{ maxHeight: 640 }}>
                             {/* Header */}
                             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
                                 <div>

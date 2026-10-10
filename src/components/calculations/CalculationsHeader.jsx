@@ -4,6 +4,9 @@ import ExportButton from '../ExportButton';
 import AdvancedDateRangePicker from '../AdvancedDateRangePicker';
 import { getMarketplaceLogo, MARKETPLACE_LOGOS } from '../../utils/marketplaceLogos';
 import CalculationAccountFilter from '../CalculationAccountFilter';
+import { TOUR } from '../../tour/targets';
+import TourLauncher from '../../tour/TourLauncher';
+import { PAYMENTS_TOUR } from '../../tour/steps';
 
 /**
  * Shared page header for PaymentsCalculations and MasterSkuCalculations.
@@ -46,12 +49,9 @@ const CalculationsHeader = ({
     const hasActiveFilters = (marketplaceFilter && Array.isArray(marketplaceFilter) && marketplaceFilter.length > 0) || (returnStatusFilter && returnStatusFilter.length > 0);
 
     return (
-        // <div className="mb-6">
-        <div className="sticky top-0 z-[40] bg-slate-50 pt-4 pb-1 mb-2 border-b border-slate-200 shadow-sm">
-
+        <div data-tour={TOUR.payments.header} className="sticky top-0 z-[40] bg-slate-50 pt-4 pb-1 mb-2 border-b border-slate-200 shadow-sm">
             {/* ── Row 1: Back button & Marketplace Logo (left) | Action buttons (right) ── */}
             <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-
                 {/* Left: Back button + Marketplace Logo Indicator */}
                 <div className="flex items-center gap-3">
                     {/* <button
@@ -177,6 +177,7 @@ const CalculationsHeader = ({
 
                     <button
                         type="button"
+                        data-tour={TOUR.payments.settlementsBtn}
                         onClick={onGoToSettlements}
                         className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-[14px] font-semibold border border-cyan-300/50 shadow-[0_8px_25px_rgba(6,182,212,0.35)] hover:shadow-[0_10px_35px_rgba(6,182,212,0.55)] hover:scale-105 transition-all duration-300"
                     >
@@ -188,6 +189,7 @@ const CalculationsHeader = ({
                             {/* Toggle Panel Eye / Eye-off Icon */}
                             <button
                                 type="button"
+                                data-tour={TOUR.payments.panelToggle}
                                 onClick={() => setShowFiltersPanel(prev => !prev)}
                                 className={`p-2 rounded-lg border transition-colors shadow-sm cursor-pointer ${showFiltersPanel
                                     ? 'bg-brand-50 border-brand-300 text-brand-700 hover:bg-brand-100'
@@ -201,17 +203,13 @@ const CalculationsHeader = ({
                         </>
                     )}
 
-                    {/* <button
-                        type="button"
-                        onClick={onGoToSettlements}
-                        className="flex items-center gap-1.5 px-3.5 py-[7px] rounded-lg bg-brand-600 hover:bg-brand-700 text-white border-0 cursor-pointer text-[13px] font-semibold transition-colors shadow-sm"
-                    >
-                        Verify Bank Received
-                    </button> */}
-
                     {!loading && !error && calculations?.length > 0 && exportProps && (
-                        <ExportButton {...exportProps} />
+                        <span data-tour={TOUR.payments.exportBtn} className="inline-flex">
+                            <ExportButton {...exportProps} />
+                        </span>
                     )}
+
+                    {currentView === 'sku-wise' && <TourLauncher tourKey={PAYMENTS_TOUR} label="Tour" />}
                 </div>
             </div>
 
@@ -226,4 +224,3 @@ const CalculationsHeader = ({
 };
 
 export default CalculationsHeader;
-

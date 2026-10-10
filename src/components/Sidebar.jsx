@@ -5,11 +5,32 @@ import {
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { TOUR } from '../tour/targets';
 
 const Sidebar = () => {
     const location = useLocation();
     const { user, isImpersonating, impersonatedTenant, impersonationSyncing } = useAuth();
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+    const NAV_TOUR_MAP = {
+        '/dashboard': TOUR.nav.dashboard,
+        '/uploads': TOUR.nav.uploads,
+        '/downloads': TOUR.nav.downloads,
+        '/returns/scan': TOUR.nav.scanReturns,
+        '/support': TOUR.nav.support,
+        '/speedy-agent': TOUR.nav.speedyAi,
+        '/settings/marketplace': TOUR.nav.settingsMarketplace,
+        '/users': TOUR.nav.settingsUsers,
+        '/subscription': TOUR.nav.settingsBilling,
+        '/profile': TOUR.nav.profile,
+        '/admin/approvals': TOUR.nav.adminApprovals,
+        '/admin/tenants': TOUR.nav.adminTenants,
+        '/admin/pricing': TOUR.nav.adminPricing,
+        '/admin/roles': TOUR.nav.adminRoles,
+        '/admin/invoices': TOUR.nav.adminInvoices,
+        '/admin/support': TOUR.nav.adminSupport,
+        '/rm/tenants': TOUR.nav.rmTenants,
+    };
 
     let menuItems = [];
 
@@ -101,6 +122,7 @@ const Sidebar = () => {
 
     const NavItem = ({ item, isActive }) => (
         <Link
+            data-tour={NAV_TOUR_MAP[item.path]}
             to={item.path}
             className={`group flex items-center gap-3 px-4 py-3.5 text-sm font-medium rounded-full transition-all duration-200 ${isActive
                 ? 'bg-brand-50/60 text-brand-700 shadow-[0_2px_4px_rgba(0,0,0,0.02)] border border-brand-100/50'
@@ -145,6 +167,7 @@ const Sidebar = () => {
                 {/* Speedy Agent — special AI button (Admin, or User with speedAi permission) */}
                 {(user?.role === 'Admin' || isImpersonating || user?.permissions?.speedAi) && (
                     <Link
+                        data-tour={TOUR.nav.speedyAi}
                         to="/speedy-agent"
                         className="group flex items-center gap-3 px-4 py-3.5 text-sm font-semibold rounded-xl
                             transition-all duration-300
@@ -176,6 +199,7 @@ const Sidebar = () => {
                 {(user?.role === 'Admin' || isImpersonating) && (
                     <div className="mt-4 pt-4 border-t border-slate-50">
                         <div
+                            data-tour={TOUR.nav.settings}
                             className="flex items-center justify-between px-4 py-2 cursor-pointer text-slate-400 hover:text-slate-600"
                             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                         >
@@ -209,6 +233,7 @@ const Sidebar = () => {
                 {user?.role === 'User' && !isImpersonating && (user?.permissions?.marketplace || user?.permissions?.billing) && (
                     <div className="mt-4 pt-4 border-t border-slate-50">
                         <div
+                            data-tour={TOUR.nav.settings}
                             className="flex items-center justify-between px-4 py-2 cursor-pointer text-slate-400 hover:text-slate-600"
                             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                         >

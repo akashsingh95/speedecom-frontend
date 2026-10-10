@@ -1,28 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../AuthContext';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useSearchParams } from 'react-router-dom';
 import { Calendar, Settings as Search, LayoutDashboard, TrendingUp, LogOut, User as UserIcon, ChevronDown, Loader2, AlertCircle, Store } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import ViewToggle from '../components/ViewToggle';
 import MarketplaceAccountFilter from '../components/MarketplaceAccountFilter';
 import { useDateRangeFilter } from '../hooks/useDateRangeFilter';
+import { TOUR } from '../tour/targets';
 import api from '../api';
 
 // Stable reference — an inline array literal here would recreate on every Dashboard render,
 // which cascades into MarketplaceAccountFilter re-fetching on a loop (see its refreshTrigger effect).
 const ADS_DISABLED_MARKETPLACES = ['meesho', 'myntra'];
+const DASHBOARD_TABS = ['actions', 'calculations', 'payments', 'ads', 'returns'];
 
 const Dashboard = () => {
     const { user, logout, isImpersonating, impersonatedTenant } = useAuth();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [viewingTenantName, setViewingTenantName] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState(() => {
-        try {
-            const params = new URLSearchParams(window.location.search);
-            const tabParam = params.get('tab');
-            if (tabParam) return tabParam;
-        } catch (_) { }
-        return 'calculations';
+        // ?tab= makes the dashboard deep-linkable — used by shared links and,
+        // later, by tours that need a specific tab mounted before highlighting.
+        const requested = searchParams.get('tab');
+        return DASHBOARD_TABS.includes(requested) ? requested : 'calculations';
     });
     const [viewModes, setViewModes] = useState(() => {
         const stored = localStorage.getItem('analyticsViewModes');
@@ -90,6 +91,15 @@ const Dashboard = () => {
             setActiveTab(visibleTabs[0]);
         }
     }, [visibleTabs, activeTab]);
+
+    // Mirror the active tab back into the URL. Runs after the permission
+    // redirect above, so the URL always reflects the tab actually shown.
+    useEffect(() => {
+        if (searchParams.get('tab') === activeTab) return;
+        const next = new URLSearchParams(searchParams);
+        next.set('tab', activeTab);
+        setSearchParams(next, { replace: true });
+    }, [activeTab, searchParams, setSearchParams]);
 
     // Compute a flag so content knows whether to render the empty state
     const hasNoAccess = visibleTabs.length === 0;
@@ -209,37 +219,37 @@ const Dashboard = () => {
                         {/* Tabs with View Toggle */}
                         <div className="z-10 bg-slate-50/90 backdrop-blur-md pt-4 pb-4 px-4 md:px-8 border-b border-slate-200/40 shadow-[0_8px_16px_-6px_rgba(0,0,0,0.05)] shrink-0">
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <div className="flex items-center p-1.5 bg-slate-100/80 rounded-2xl overflow-x-auto custom-scrollbar w-full md:w-auto">
+                                <div data-tour={TOUR.dash.tabs} className="flex items-center p-1.5 bg-slate-100/80 rounded-2xl overflow-x-auto custom-scrollbar w-full md:w-auto">
                                     {visibleTabs.includes('actions') && (
-                                        <button onClick={() => handleTabChange('actions')}
+                                        <button data-tour={TOUR.dash.tabActions} onClick={() => handleTabChange('actions')}
                                             className={`px-4 py-2 text-sm font-bold rounded-xl transition-all duration-200 whitespace-nowrap ${activeTab === 'actions'
                                                 ? 'bg-white text-brand-700 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-slate-200/50'
                                                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                                                 }`}>Action Required</button>
                                     )}
                                     {visibleTabs.includes('calculations') && (
-                                        <button onClick={() => handleTabChange('calculations')}
+                                        <button data-tour={TOUR.dash.tabCalculations} onClick={() => handleTabChange('calculations')}
                                             className={`px-4 py-2 text-sm font-bold rounded-xl transition-all duration-200 whitespace-nowrap ${activeTab === 'calculations'
                                                 ? 'bg-white text-brand-700 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-slate-200/50'
                                                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                                                 }`}>Calculations Analysis</button>
                                     )}
                                     {visibleTabs.includes('payments') && (
-                                        <button onClick={() => handleTabChange('payments')}
+                                        <button data-tour={TOUR.dash.tabPayments} onClick={() => handleTabChange('payments')}
                                             className={`px-4 py-2 text-sm font-bold rounded-xl transition-all duration-200 whitespace-nowrap ${activeTab === 'payments'
                                                 ? 'bg-white text-brand-700 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-slate-200/50'
                                                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                                                 }`}>Payments Analysis</button>
                                     )}
                                     {visibleTabs.includes('ads') && (
-                                        <button onClick={() => handleTabChange('ads')}
+                                        <button data-tour={TOUR.dash.tabAds} onClick={() => handleTabChange('ads')}
                                             className={`px-4 py-2 text-sm font-bold rounded-xl transition-all duration-200 whitespace-nowrap ${activeTab === 'ads'
                                                 ? 'bg-white text-brand-700 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-slate-200/50'
                                                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                                                 }`}>Ads Analysis</button>
                                     )}
                                     {visibleTabs.includes('returns') && (
-                                        <button onClick={() => setActiveTab('returns')}
+                                        <button data-tour={TOUR.dash.tabReturns} onClick={() => setActiveTab('returns')}
                                             className={`px-4 py-2 text-sm font-bold rounded-xl transition-all duration-200 whitespace-nowrap ${activeTab === 'returns'
                                                 ? 'bg-white text-brand-700 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)] ring-1 ring-slate-200/50'
                                                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
@@ -553,7 +563,7 @@ const ActionRequiredTab = ({ sharedFilterData, sharedHasMarketplacesSelected, sh
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Dynamic Filters Row */}
             {hasMarketplacesSelected && (
-                <div className="mb-6 flex flex-wrap items-center gap-3 relative z-[15]">
+                <div data-tour={TOUR.dash.actionsStatusFilter} className="mb-6 flex flex-wrap items-center gap-3 relative z-[15]">
                     {/* Payment Status Toggle */}
                     <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
                         {paymentStatusOptions.map(opt => (
@@ -643,7 +653,7 @@ const ActionRequiredTab = ({ sharedFilterData, sharedHasMarketplacesSelected, sh
             )}
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 relative z-10">
+            <div data-tour={TOUR.dash.actionsStats} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 relative z-10">
                 {statsData.map((stat, index) => (
                     <div key={index} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col hover:shadow-card-hover transition-shadow duration-300 cursor-default group relative overflow-hidden">
                         <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity ${stat.color}`}>
@@ -663,7 +673,7 @@ const ActionRequiredTab = ({ sharedFilterData, sharedHasMarketplacesSelected, sh
             </div>
 
             {/* Actions Section */}
-            <div className="bg-white rounded-2xl shadow-card border border-slate-100 overflow-hidden">
+            <div data-tour={TOUR.dash.actionsTable} className="bg-white rounded-2xl shadow-card border border-slate-100 overflow-hidden">
                 <div className="border-b border-slate-100 px-8 py-6 flex justify-between items-center bg-slate-50/50">
                     <div className="flex items-center gap-4">
                         <h3 className="font-heading font-bold text-lg text-slate-800">
@@ -811,4 +821,3 @@ const ActionRequiredTab = ({ sharedFilterData, sharedHasMarketplacesSelected, sh
     );
 };
 export default Dashboard;
-

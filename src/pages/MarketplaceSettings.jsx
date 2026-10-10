@@ -9,6 +9,9 @@ import ChangeAnalysisDateModal from '../components/ChangeAnalysisDateModal';
 import Tooltip from '../components/Tooltip';
 import SuccessToast from '../components/SuccessToast';
 import DateRangePicker from '../components/DateRangePicker';
+import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { MARKETPLACE_SETTINGS } from '../tour/steps';
 import forge from 'node-forge';
 import { getFriendlySyncErrorMessage } from '../utils/meeshoSyncErrorMessages';
 const base = import.meta.env.BASE_URL;
@@ -94,7 +97,7 @@ const MarketplaceCard = React.memo(({ m, onConnect, onSeeAccounts, isImpersonati
     const isUpcoming = m.upcoming;
 
     return (
-        <div className={`bg-white rounded-2xl border border-slate-200 p-6 flex flex-col items-center text-center transition-all duration-300 relative group ${isUpcoming ? 'opacity-70' : 'hover:shadow-card-hover hover:scale-105'}`}>
+        <div data-tour={TOUR.marketplace.card} className={`bg-white rounded-2xl border border-slate-200 p-6 flex flex-col items-center text-center transition-all duration-300 relative group ${isUpcoming ? 'opacity-70' : 'hover:shadow-card-hover hover:scale-105'}`}>
             <MarketplaceLogo name={m.name} />
             <h3 className="font-bold text-slate-800 mb-1">{m.name}</h3>
 
@@ -122,6 +125,7 @@ const MarketplaceCard = React.memo(({ m, onConnect, onSeeAccounts, isImpersonati
                 ) : m.accounts && m.accounts.length > 0 ? (
                     <>
                         <button
+                            data-tour={TOUR.marketplace.seeConnectedBtn}
                             onClick={() => onSeeAccounts(m)}
                             className="w-full py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:scale-105 active:scale-95 rounded-lg text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2"
                         >
@@ -131,6 +135,7 @@ const MarketplaceCard = React.memo(({ m, onConnect, onSeeAccounts, isImpersonati
                     </>
                 ) : (
                     <button
+                        data-tour={TOUR.marketplace.connectBtn}
                         onClick={() => onConnect(m.name)}
                         className="w-full py-2.5 bg-brand-600 text-white hover:bg-brand-700 hover:scale-105 active:scale-95 rounded-lg text-sm font-bold transition-all duration-200 shadow-lg shadow-brand-500/20 hover:shadow-xl hover:shadow-brand-500/30"
                     >
@@ -886,17 +891,18 @@ const MarketplaceSettings = () => {
         <DashboardLayout>
             <div className="w-full flex flex-col h-full overflow-hidden bg-slate-50">
                 {/* Header */}
-                <header className="bg-slate-50 backdrop-blur-md sticky top-0 z-10 px-8 py-3 flex items-center justify-between">
+                <header data-tour={TOUR.marketplace.header} className="bg-slate-50 backdrop-blur-md sticky top-0 z-10 px-8 py-3 flex items-center justify-between">
                     <div>
                         <h2 className="text-2xl font-heading font-bold text-slate-800">
                             Marketplace Management
                         </h2>
                     </div>
+                    <TourLauncher tourKey={MARKETPLACE_SETTINGS} />
                 </header>
 
                 <main className="flex-1 p-8 w-full overflow-y-auto custom-scrollbar">
 
-                    <div className="flex items-center gap-3 mb-6">
+                    <div data-tour={TOUR.marketplace.connectedOnlyToggle} className="flex items-center gap-3 mb-6">
                         <span className="text-sm font-medium text-slate-600">Show Connected Only</span>
                         <button
                             onClick={() => setShowConnectedOnly(!showConnectedOnly)}
@@ -906,7 +912,7 @@ const MarketplaceSettings = () => {
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-8">
+                    <div data-tour={TOUR.marketplace.grid} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-8">
                         {filteredMarketplaces.map((m) => (
                             <MarketplaceCard
                                 key={m.name}
@@ -1897,4 +1903,3 @@ const MarketplaceSettings = () => {
 };
 
 export default MarketplaceSettings;
-
