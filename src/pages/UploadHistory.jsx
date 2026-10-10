@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
@@ -35,10 +33,10 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
         return defaultMarketplaceKey || '';
     });
     const [filterAccount, setFilterAccount] = useState(() => {
-        const histSaved = localStorage.getItem('uploadHist_account');
-        if (histSaved && histSaved !== 'all') return histSaved;
         const uploadSaved = localStorage.getItem('uploads_marketplaceId');
         if (uploadSaved) return uploadSaved;
+        const histSaved = localStorage.getItem('uploadHist_account');
+        if (histSaved && histSaved !== 'all') return histSaved;
         return defaultAccountId || '';
     });
     const [filterType, setFilterType] = useState(() => localStorage.getItem('uploadHist_type') || 'all');
@@ -60,12 +58,12 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
             activeMarketplaces[0];
 
         if (targetMp) {
-            let targetAcc = (targetMp.accounts || []).find(a => filterAccount && filterAccount !== 'all' && filterAccount.split(',').includes(String(a._id))) ||
+            let targetAcc = (targetMp.accounts || []).find(a => a._id === filterAccount && a._id !== 'all') ||
                 (targetMp.accounts || []).find(a => a._id === currentUploadAccId) ||
                 (targetMp.accounts || []).find(a => a.status !== 'inactive') ||
                 targetMp.accounts?.[0];
 
-            const hasValidAccount = filterAccount && filterAccount !== 'all' && filterAccount.split(',').some(accId => (targetMp.accounts || []).some(a => String(a._id) === accId));
+            const hasValidAccount = (targetMp.accounts || []).some(a => a._id === filterAccount);
             if (!filterMarketplace || filterMarketplace === 'all' || !filterAccount || filterAccount === 'all' || !hasValidAccount) {
                 setFilterMarketplace(targetMp.key);
                 if (targetAcc) setFilterAccount(targetAcc._id);
@@ -208,25 +206,19 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
     };
 
     const availableUploadTypes = useMemo(() => {
-        if (!filterMarketplace || filterMarketplace === 'all') return [];
-        const typesMap = new Map();
-        
-        const keys = filterMarketplace.toLowerCase().split(',');
-        keys.forEach(key => {
-            let options = [];
-            if (key === 'flipkart' || key.includes('flipkart')) {
-                options = uploadTypesConfig.flipkart || [];
-            } else if (key === 'meesho') {
-                options = uploadTypesConfig.meesho || [];
-            } else if (key.includes('amazon')) {
-                options = uploadTypesConfig.amazon || [];
-            } else if (key.includes('myntra')) {
-                options = uploadTypesConfig.myntra || [];
-            }
-            options.forEach(opt => typesMap.set(opt.value, opt));
-        });
-        
-        return Array.from(typesMap.values());
+        if (filterMarketplace === 'all') return [];
+
+        const key = filterMarketplace?.toLowerCase();
+        if (key === 'flipkart' || key?.includes('flipkart')) {
+            return uploadTypesConfig.flipkart || [];
+        } else if (key === 'meesho') {
+            return uploadTypesConfig.meesho || [];
+        } else if (key?.includes('amazon')) {
+            return uploadTypesConfig.amazon || [];
+        } else if (key?.includes('myntra')) {
+            return uploadTypesConfig.myntra || [];
+        }
+        return [];
     }, [filterMarketplace, uploadTypesConfig]);
 
     // Format upload type for display
@@ -422,25 +414,20 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
 
                         {/* Marketplace & Account Selector */}
                         <MarketplaceAccountSelector
-                            selectionMode="single"
-                            accountSelection="multiple"
-                            variant="popover"
                             marketplaces={activeMarketplaces}
                             selectedMarketplaceKey={filterMarketplace !== 'all' ? filterMarketplace : ''}
-                            selectedAccountIds={filterAccount !== 'all' ? filterAccount.split(',') : []}
-                            onApply={({ selectedMarketplaces, selectedAccountIds }) => {
-                                const newMp = selectedMarketplaces[0] || 'all';
-                                const newAcc = selectedAccountIds.length > 0 ? selectedAccountIds.join(',') : 'all';
-                                setFilterMarketplace(newMp);
-                                setFilterAccount(newAcc);
+                            selectedAccountId={filterAccount !== 'all' ? filterAccount : ''}
+                            onSelect={({ marketplaceKey, accountId }) => {
+                                setFilterMarketplace(marketplaceKey);
+                                setFilterAccount(accountId);
                                 setFilterType('all');
                                 setPagination(prev => ({ ...prev, page: 1 }));
-                                if (selectedAccountIds.length > 0) {
-                                    localStorage.setItem('dashboardSelectedMarketplaces', JSON.stringify(selectedAccountIds));
-                                    localStorage.setItem('uploads_marketplaceId', selectedAccountIds[0]);
-                                    localStorage.setItem('uploads_marketplaceKey', newMp);
-                                    localStorage.setItem('uploadHist_marketplace', newMp);
-                                    localStorage.setItem('uploadHist_account', newAcc);
+                                if (accountId) {
+                                    localStorage.setItem('dashboardSelectedMarketplaces', JSON.stringify([accountId]));
+                                    localStorage.setItem('uploads_marketplaceId', accountId);
+                                    localStorage.setItem('uploads_marketplaceKey', marketplaceKey);
+                                    localStorage.setItem('uploadHist_marketplace', marketplaceKey);
+                                    localStorage.setItem('uploadHist_account', accountId);
                                 }
                             }}
                         />

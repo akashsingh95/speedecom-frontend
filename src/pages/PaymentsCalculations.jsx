@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../api';
 import { ArrowLeft, Loader2, FileSpreadsheet, ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, Columns, Filter, GripVertical, Search, X } from 'lucide-react';
@@ -108,7 +106,6 @@ const PaymentsCalculations = () => {
     // Applied search terms — set only when the user presses "Search & Apply"
     // in the modal, which is what makes the table refetch.
     const [appliedSearchItems, setAppliedSearchItems] = useState([]);
-    const [appliedSearchType, setAppliedSearchType] = useState(searchType);
 
     /**
      * Attach the applied search to a request under the param its type maps to.
@@ -118,9 +115,9 @@ const PaymentsCalculations = () => {
     const applySearchParams = (params) => {
         if (!appliedSearchItems || appliedSearchItems.length === 0) return params;
         const value = JSON.stringify(appliedSearchItems);
-        if (appliedSearchType === 'order_id') params.searchOrderId = value;
-        else if (appliedSearchType === 'order_item_id') params.searchOrderItemId = value;
-        else if (appliedSearchType === 'master_sku') params.masterSkuSearch = value;
+        if (searchType === 'order_id') params.searchOrderId = value;
+        else if (searchType === 'order_item_id') params.searchOrderItemId = value;
+        else if (searchType === 'master_sku') params.masterSkuSearch = value;
         else params.skuSearch = value;
         return params;
     };
@@ -273,7 +270,7 @@ const PaymentsCalculations = () => {
         }
     }, [filterData.startDate, filterData.endDate, nullDateFilter, marketplaceFilter, returnStatusFilter, warehouseFilter, filters.brandFilter, dataTypeFilter, adsMode, shopsyFilter, meeshoOrderSourceFilter, compensationReasonFilter, recoveryReasonFilter, filters.sizeFilter, isFlipkart, isMeesho, appliedSearchItems, profitabilityFilter]);
 
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         setCurrentPage(1);
     }, [debouncedSearchTerm]);
@@ -295,7 +292,7 @@ const PaymentsCalculations = () => {
                 handleOrderClick(sku, orderId, orderKey);
             }
         });
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [calculations]);
 
     // When return status filter changes, clear all expanded/cached drill-down data
@@ -701,7 +698,7 @@ const PaymentsCalculations = () => {
         } else {
             setColumnOrder(allColumns);
         }
-         
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [allColumnsKey, isPlatformLoaded, platformType]);
 
     // COLUMN_LABELS, PCT_COLS, AMAZON_NUMERIC_COLS, formatCellValue, getCellStyleClasses, enrichRowWithContributions
@@ -963,16 +960,12 @@ const PaymentsCalculations = () => {
                     onClose={() => setIsSearchModalOpen(false)}
                     searchType={searchType}
                     setSearchType={setSearchType}
-                    onApply={(items) => {
-                        setAppliedSearchItems(items);
-                        setAppliedSearchType(searchType);
-                    }}
+                    onApply={setAppliedSearchItems}
                     marketplaceFilter={marketplaceFilter}
                     startDate={filterData.startDate}
                     endDate={filterData.endDate}
                     nullDateFilter={nullDateFilter}
                     isFlipkart={isFlipkart}
-                    initialSelectedItems={searchType === appliedSearchType ? appliedSearchItems : []}
                 />
 
                 {showResetConfirm && (
@@ -1390,19 +1383,7 @@ const PaymentsCalculations = () => {
                                                                 )}
 
                                                                 {idx === 0 && (
-                                                                    <div className="shrink-0 ml-2 flex items-center gap-1">
-                                                                        {appliedSearchItems?.length > 0 && (
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setIsSearchModalOpen(true);
-                                                                                }}
-                                                                                className="p-1.5 rounded-full transition-all shadow-sm backdrop-blur-sm bg-blue-500/40 text-white hover:bg-blue-500/60 border border-blue-400/50"
-                                                                                title="Edit Search Filter"
-                                                                            >
-                                                                                <Search size={14} />
-                                                                            </button>
-                                                                        )}
+                                                                    <div className="shrink-0 ml-2">
                                                                         <button
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();

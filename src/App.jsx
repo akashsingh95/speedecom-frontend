@@ -23,6 +23,8 @@ import PaymentsSettlements from './pages/PaymentsSettlements';
 import MarketplacePaymentDetails from './pages/MarketplacePaymentDetails';
 import Downloads from './pages/Downloads';
 import ScanReturns from './pages/ScanReturns';
+import ManageOrders from './pages/ManageOrders';
+import ReturnClaims from './pages/ReturnClaims';
 import SpeedyAgentPage from './pages/SpeedyAgentPage';
 import SuperAdminPricing from './pages/SuperAdminPricing';
 import SBMRMManagement from './pages/SBMRMManagement';
@@ -216,6 +218,8 @@ function App() {
             <Route path="/payments/details" element={<TenantOnly><MarketplacePaymentDetails /></TenantOnly>} />
             <Route path="/downloads" element={<TenantOnly><UserPermissionRequired permission="downloads"><Downloads /></UserPermissionRequired></TenantOnly>} />
             <Route path="/returns/scan" element={<TenantOnly><UserPermissionRequired permission="scanReturns"><ScanReturns /></UserPermissionRequired></TenantOnly>} />
+            <Route path="/orders/manage" element={<TenantOnly><UserPermissionRequired permission="manageOrders"><ManageOrders /></UserPermissionRequired></TenantOnly>} />
+            <Route path="/returns/claims" element={<TenantOnly><UserPermissionRequired permission="returnsAnalysis"><ReturnClaims /></UserPermissionRequired></TenantOnly>} />
             <Route path="/support" element={<TenantOnly><UserPermissionRequired permission="support"><SupportPortal /></UserPermissionRequired></TenantOnly>} />
             <Route path="/speedy-agent" element={<TenantOnly><UserPermissionRequired permission="speedAi"><SpeedyAgentPage /></UserPermissionRequired></TenantOnly>} />
 
@@ -237,6 +241,8 @@ function App() {
             <Route path="/payments/details" element={<MarketplacePaymentDetails />} />
             <Route path="/downloads" element={<Downloads />} />
             <Route path="/returns/scan" element={<ScanReturns />} />
+            <Route path="/orders/manage" element={<ManageOrders />} />
+            <Route path="/returns/claims" element={<ReturnClaims />} />
             <Route path="/admin/pricing" element={<NotImpersonating><SBMPermissionGuard requiredPermission="viewPricing"><SuperAdminPricing /></SBMPermissionGuard></NotImpersonating>} />
             <Route path="/speedy-agent" element={<SpeedyAgentPage />} />
             <Route path="/listing-studio/*" element={<ListingStudioGuard><ListingStudioShell /></ListingStudioGuard>}>

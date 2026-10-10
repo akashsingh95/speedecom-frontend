@@ -459,8 +459,7 @@ const AdminInvoiceList = () => {
         if (!editingCredit) return;
         setUpdatingCredit(true);
         try {
-            const base = editingCredit.category === 'LISTING_STUDIO' ? 'ls-credit-transactions' : 'credit-transactions';
-            await api.put(`/admin/invoices/${base}/${editingCredit._id}`, {
+            await api.put(`/admin/invoices/credit-transactions/${editingCredit._id}`, {
                 amount: Number(editCreditAmount),
                 note: editCreditNote,
                 type: editCreditType,
@@ -477,15 +476,6 @@ const AdminInvoiceList = () => {
         }
     }, [editingCredit, editCreditAmount, editCreditNote, editCreditType, editCreditSelectedTenant, editCreditDate, creditPagination.page, debouncedCreditSearch, creditTypeFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter]);
 
-    // Reconciliation rows are always ₹; Listing Studio rows are credits, or a raw free-image/
-    // free-video count for gift rows that never touch the credit lot at all.
-    const describeCreditAmount = (tx) => {
-        if (tx.category !== 'LISTING_STUDIO') return `₹${tx.amount}`;
-        if (tx.giftKind === 'freeImages') return `${tx.editableAmount} free image${tx.editableAmount === 1 ? '' : 's'}`;
-        if (tx.giftKind === 'freeVideos') return `${tx.editableAmount} free video${tx.editableAmount === 1 ? '' : 's'}`;
-        return `${tx.editableAmount} credits`;
-    };
-
     const handleDeleteCreditTransaction = (tx) => {
         if (!tx) return;
         setOpenCreditMenuId(null);
@@ -493,7 +483,7 @@ const AdminInvoiceList = () => {
         setConfirmDeleteCredit({
             tx,
             title: `Delete ${tx.type === 'ADMIN_GIFT' ? 'Admin Gift' : 'Free Trial Credit'}`,
-            message: `Delete this ${tx.type === 'ADMIN_GIFT' ? 'admin gift' : 'free trial credit'} of ${describeCreditAmount(tx)}? This cannot be undone — the amount will be deducted from the buyer's balance.`,
+            message: `Delete this ${tx.type === 'ADMIN_GIFT' ? 'admin gift' : 'free trial credit'} of ₹${tx.amount}? This cannot be undone — the amount will be deducted from the buyer's balance.`,
         });
     };
 
@@ -503,8 +493,7 @@ const AdminInvoiceList = () => {
         setConfirmDeleteCredit(null);
         setDeletingCreditId(tx._id);
         try {
-            const base = tx.category === 'LISTING_STUDIO' ? 'ls-credit-transactions' : 'credit-transactions';
-            const { data } = await api.delete(`/admin/invoices/${base}/${tx._id}`);
+            const { data } = await api.delete(`/admin/invoices/credit-transactions/${tx._id}`);
             toast.success(data?.message || 'Credit deleted');
             fetchCreditHistory(creditPagination.page, debouncedCreditSearch, creditTypeFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter);
         } catch (error) {
@@ -521,7 +510,7 @@ const AdminInvoiceList = () => {
         setConfirmCancelCredit({
             tx,
             title: `Cancel ${tx.type === 'ADMIN_GIFT' ? 'Admin Gift' : 'Free Trial Credit'}`,
-            message: `Are you sure you want to cancel this ${tx.type === 'ADMIN_GIFT' ? 'admin gift' : 'free trial credit'}? ${describeCreditAmount(tx)} will be reversed from the buyer's balance. The record is kept for history.`,
+            message: `Are you sure you want to cancel this ${tx.type === 'ADMIN_GIFT' ? 'admin gift' : 'free trial credit'}? ₹${tx.amount} will be reversed from the buyer's balance. The record is kept for history.`,
         });
     };
 
@@ -531,8 +520,7 @@ const AdminInvoiceList = () => {
         setConfirmCancelCredit(null);
         setCancellingCreditId(tx._id);
         try {
-            const base = tx.category === 'LISTING_STUDIO' ? 'ls-credit-transactions' : 'credit-transactions';
-            const { data } = await api.post(`/admin/invoices/${base}/${tx._id}/cancel`);
+            const { data } = await api.post(`/admin/invoices/credit-transactions/${tx._id}/cancel`);
             toast.success(data?.message || 'Credit cancelled');
             fetchCreditHistory(creditPagination.page, debouncedCreditSearch, creditTypeFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter);
         } catch (error) {
@@ -1196,11 +1184,7 @@ const AdminInvoiceList = () => {
             let successCount = 0;
             for (const id of selectedCreditIds) {
                 try {
-                    const tx = creditHistory.find(t => t._id === id);
-                    const endpoint = tx?.category === 'LISTING_STUDIO'
-                        ? `/admin/invoices/ls-credit-transactions/${id}/verify`
-                        : `/superadmin/credits/${id}/verify`;
-                    await api.post(endpoint);
+                    await api.post(`/superadmin/credits/${id}/verify`);
                     successCount++;
                 } catch (err) {
                     console.error(`Failed to verify credit ${id}:`, err);
@@ -1226,11 +1210,7 @@ const AdminInvoiceList = () => {
             let successCount = 0;
             for (const id of selectedCreditIds) {
                 try {
-                    const tx = creditHistory.find(t => t._id === id);
-                    const endpoint = tx?.category === 'LISTING_STUDIO'
-                        ? `/admin/invoices/ls-credit-transactions/${id}/unverify`
-                        : `/superadmin/credits/${id}/unverify`;
-                    await api.post(endpoint);
+                    await api.post(`/superadmin/credits/${id}/unverify`);
                     successCount++;
                 } catch (err) {
                     console.error(`Failed to unverify credit ${id}:`, err);
@@ -1330,7 +1310,7 @@ const AdminInvoiceList = () => {
     };
 
     const toggleSelectCreditAll = () => {
-        const pageIds = creditHistory.map(tx => tx._id);
+        const pageIds = creditHistory.filter(tx => tx.category !== 'LISTING_STUDIO').map(tx => tx._id);
         const allSelected = pageIds.length > 0 && pageIds.every(id => selectedCreditIds.includes(id));
         setSelectedCreditIds(allSelected ? [] : pageIds);
     };
@@ -1355,23 +1335,9 @@ const AdminInvoiceList = () => {
                 <div className="max-w-7xl mx-auto space-y-6">
 
                     {/* ── Header Banner ── */}
-                    {/* Same gradient family as the Edit modal header (line ~3356) — orange for Free
-                        Trial Credits, purple for Admin Gift — so the banner matches each tab's theme. */}
-                    <div className={`relative overflow-hidden rounded-2xl p-7 text-white shadow-lg bg-gradient-to-br ${
-                        activeTab === 'adminGift'
-                            ? 'from-purple-600 via-purple-700 to-indigo-800'
-                            : activeTab === 'freeTrialCredits'
-                                ? 'from-orange-500 via-orange-600 to-amber-700'
-                                : 'from-brand-600 via-brand-700 to-blue-800'
-                    }`}>
+                    <div className="relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-700 to-blue-800 rounded-2xl p-7 text-white shadow-lg">
                         <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-2xl"></div>
-                        <div className={`absolute bottom-0 left-0 w-48 h-48 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl ${
-                            activeTab === 'adminGift'
-                                ? 'bg-purple-300/10'
-                                : activeTab === 'freeTrialCredits'
-                                    ? 'bg-orange-300/10'
-                                    : 'bg-blue-400/10'
-                        }`}></div>
+                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-400/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl"></div>
                         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 bg-white/15 rounded-xl backdrop-blur-sm border border-white/10">
@@ -1387,13 +1353,7 @@ const AdminInvoiceList = () => {
                                     <h1 className="text-xl font-bold tracking-tight">
                                         {activeTab === 'adminGift' ? 'Admin Gift' : activeTab === 'freeTrialCredits' ? 'Free Trial Credits' : 'Invoices'}
                                     </h1>
-                                    <p className={`mt-1 text-sm ${
-                                        activeTab === 'adminGift'
-                                            ? 'text-purple-100'
-                                            : activeTab === 'freeTrialCredits'
-                                                ? 'text-orange-100'
-                                                : 'text-blue-100'
-                                    }`}>
+                                    <p className="mt-1 text-sm text-blue-100">
                                         {activeTab === 'adminGift'
                                             ? 'View admin gift credits given to buyers'
                                             : activeTab === 'freeTrialCredits'
@@ -2502,7 +2462,7 @@ const AdminInvoiceList = () => {
                                                     <th className="py-3.5 px-4 text-center" style={{ width: 40 }}>
                                                         <input
                                                             type="checkbox"
-                                                            checked={creditHistory.length > 0 && creditHistory.every(tx => selectedCreditIds.includes(tx._id))}
+                                                            checked={creditHistory.some(tx => tx.category !== 'LISTING_STUDIO') && creditHistory.filter(tx => tx.category !== 'LISTING_STUDIO').every(tx => selectedCreditIds.includes(tx._id))}
                                                             onChange={toggleSelectCreditAll}
                                                             className="w-4 h-4 rounded accent-[#1a2c5e] cursor-pointer"
                                                         />
@@ -2586,12 +2546,14 @@ const AdminInvoiceList = () => {
                                                     <tr key={`${tx.category}-${tx._id}`} className={`transition-colors${tx.cancelled ? ' bg-slate-100/50' : ' hover:bg-slate-50/50'}`}>
                                                         {!isSBM && (
                                                         <td className="py-3 px-4 text-center align-middle" onClick={e => e.stopPropagation()}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedCreditIds.includes(tx._id)}
-                                                                onChange={() => toggleSelectCreditOne(tx._id)}
-                                                                className="w-4 h-4 rounded accent-[#1a2c5e] cursor-pointer"
-                                                            />
+                                                            {tx.category !== 'LISTING_STUDIO' && (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedCreditIds.includes(tx._id)}
+                                                                    onChange={() => toggleSelectCreditOne(tx._id)}
+                                                                    className="w-4 h-4 rounded accent-[#1a2c5e] cursor-pointer"
+                                                                />
+                                                            )}
                                                         </td>
                                                         )}
                                                         <td className="py-3 px-3 align-middle">
@@ -2664,6 +2626,9 @@ const AdminInvoiceList = () => {
                                                             <span className="text-xs text-slate-600 truncate block max-w-[90px]">{tx.adminName || tx.adminEmail || '-'}</span>
                                                         </td>
                                                         <td className="py-3 px-2 text-center align-middle" onClick={e => e.stopPropagation()}>
+                                                            {tx.category === 'LISTING_STUDIO' ? (
+                                                                <span className="text-slate-300 text-xs">—</span>
+                                                            ) : (
                                                             <button
                                                                 onClick={(e) => {
                                                                     const rect = e.currentTarget.getBoundingClientRect();
@@ -2680,6 +2645,7 @@ const AdminInvoiceList = () => {
                                                                     : <MoreVertical size={16} />
                                                                 }
                                                             </button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -3431,11 +3397,7 @@ const AdminInvoiceList = () => {
                                 <div>
                                     <label className={`block text-sm font-semibold mb-2 ${
                                         activeTab === 'adminGift' ? 'text-purple-900' : 'text-orange-900'
-                                    }`}>
-                                        {editingCredit?.category === 'LISTING_STUDIO'
-                                            ? (editingCredit?.giftKind === 'freeImages' ? 'Free Images (count)' : editingCredit?.giftKind === 'freeVideos' ? 'Free Videos (count)' : 'Credits')
-                                            : 'Amount (₹)'}
-                                    </label>
+                                    }`}>Amount (₹)</label>
                                     <input
                                         type="number"
                                         value={editCreditAmount}
@@ -3791,7 +3753,7 @@ const AdminInvoiceList = () => {
 
             {openCreditMenuId && creditMenuPosition && !confirmDeleteCredit && !confirmCancelCredit && createPortal((() => {
                 const menuTx = creditHistory.find(t => t._id === openCreditMenuId);
-                if (!menuTx) return null;
+                if (!menuTx || menuTx.category === 'LISTING_STUDIO') return null;
                 // Once cancelled, its balance effect is already reversed — editing/verifying it
                 // further would be meaningless, so those actions drop out of the menu (backend
                 // enforces this too, this isn't just a UI hide). Delete stays available either
@@ -3804,7 +3766,7 @@ const AdminInvoiceList = () => {
                                     setOpenCreditMenuId(null);
                                     setCreditMenuPosition(null);
                                     setEditingCredit(menuTx);
-                                    setEditCreditAmount(menuTx.category === 'LISTING_STUDIO' ? menuTx.editableAmount : menuTx.amount);
+                                    setEditCreditAmount(menuTx.amount);
                                     setEditCreditNote(menuTx.note || '');
                                     setEditCreditType(menuTx.type);
                                     setEditCreditDate(getLocalDateInputValue(menuTx.transactionDate || menuTx.createdAt));
@@ -3831,10 +3793,9 @@ const AdminInvoiceList = () => {
                                         setOpenCreditMenuId(null);
                                         setCreditMenuPosition(null);
                                         try {
-                                            const base = menuTx.category === 'LISTING_STUDIO'
-                                                ? `/admin/invoices/ls-credit-transactions/${menuTx._id}`
-                                                : `/superadmin/credits/${menuTx._id}`;
-                                            const endpoint = menuTx.verified ? `${base}/unverify` : `${base}/verify`;
+                                            const endpoint = menuTx.verified
+                                                ? `/superadmin/credits/${menuTx._id}/unverify`
+                                                : `/superadmin/credits/${menuTx._id}/verify`;
                                             await api.post(endpoint);
                                             toast.success(menuTx.verified ? 'Credit unverified' : 'Credit verified');
                                             await fetchCreditHistory(creditPagination.page, debouncedCreditSearch, creditTypeFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter);

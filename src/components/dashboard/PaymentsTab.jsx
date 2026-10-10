@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import CostSheetNotGeneratedModal from '../CostSheetNotGeneratedModal';
@@ -947,7 +945,7 @@ const PaymentsTab = ({ viewMode = 'grid' }) => {
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[99999] p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 my-auto border border-slate-100">
                         {/* Header */}
-                        <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex items-start justify-between gap-3 sm:gap-4">
+                        <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex items-start gap-3 sm:gap-4">
                             <div className="flex items-start gap-3 sm:gap-4">
                                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                                     <AlertTriangle className="text-amber-600" size={22} />
@@ -957,12 +955,6 @@ const PaymentsTab = ({ viewMode = 'grid' }) => {
                                     <p className="text-xs sm:text-sm text-amber-700 mt-1">Action required for accurate reporting</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => setMissingCostModal({ open: false, count: 0, skus: [], reportUrl: '', targetAccount: null, requiresRecalculation: false, calculationPending: false })}
-                                className="p-1.5 text-amber-500 hover:text-amber-700 hover:bg-amber-100/50 rounded-lg transition-colors"
-                            >
-                                <X size={20} />
-                            </button>
                         </div>
 
                         {/* Content */}

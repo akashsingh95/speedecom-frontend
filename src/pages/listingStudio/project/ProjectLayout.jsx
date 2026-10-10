@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, Navigate, NavLink, Link, useParams, useLocation } from 'react-router-dom';
 import {
@@ -144,10 +142,10 @@ function TopNav({ project, onProjectUpdate }) {
   );
 }
 
-function SectionPager({ index, researchContinue, hideNext }) {
+function SectionPager({ index, researchContinue }) {
   if (index === -1) return null;
   const prev = index > 0 ? NAV[index - 1] : null;
-  const next = index < NAV.length - 1 && !hideNext ? NAV[index + 1] : null;
+  const next = index < NAV.length - 1 ? NAV[index + 1] : null;
   return (
     <div className={SECTION_PAGER}>
       {prev ? (
@@ -181,10 +179,6 @@ export default function ProjectLayout() {
   const { id = '' } = useParams();
   const location = useLocation();
   const [project, setProject] = useState(null);
-  // The tenant's live next-charge rates (image/campaign cost, free-image allowance) — null until
-  // the first refresh() resolves, or if that fetch fails; every credit-cost pill treats null as
-  // "unknown" and simply doesn't render, rather than guessing.
-  const [creditRates, setCreditRates] = useState(null);
   const [job, setJob] = useState(null);
   const [jobChecked, setJobChecked] = useState(false);
   const [error, setError] = useState('');
@@ -224,14 +218,7 @@ export default function ProjectLayout() {
 
   const refresh = useCallback(async () => {
     try {
-      const [proj, rates] = await Promise.all([
-        listingStudioApi.getProject(id),
-        // A rates fetch failure must never block the project page — it just means credit-cost
-        // pills stay hidden (same "unknown" treatment as before the first successful fetch).
-        listingStudioApi.getCreditRates().catch(() => null),
-      ]);
-      setProject(proj);
-      if (rates) setCreditRates(rates);
+      setProject(await listingStudioApi.getProject(id));
     } catch (e) {
       // Unlike the other error states in this module, this one isn't a redundant banner next
       // to otherwise-working content — with no project loaded, this is the whole page's only
@@ -328,7 +315,7 @@ export default function ProjectLayout() {
       .catch(() => undefined)
       .finally(() => setJobChecked(true));
     return stopPolling;
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Same clock ProcessingPage's live-progress view ticks (keyed by project id, not by which page
@@ -363,7 +350,7 @@ export default function ProjectLayout() {
   }
 
 
-  const ctx = { project, job, jobRunning, refresh, watchJob, pollUntil, setResearchContinue, creditRates };
+  const ctx = { project, job, jobRunning, refresh, watchJob, pollUntil, setResearchContinue };
   const currentSection = location.pathname.split('/').filter(Boolean).pop() ?? '';
   const navIndex = NAV.findIndex((n) => n.to === currentSection);
   // ProcessingPage has its own full progress display (timer, stepper, live step text) and its
@@ -454,11 +441,7 @@ export default function ProjectLayout() {
           </div>
         )}
         <Outlet context={ctx} />
-        {/* Jumping to Images while research (or its chained image-generation step) is still
-         *  running sends the user to a mostly-empty tab — hide the "Images →" link on the
-         *  Research page for the duration of that job, same as the "prev" link already
-         *  disappears on the first section. */}
-        <SectionPager index={navIndex} researchContinue={researchContinue} hideNext={navIndex === 0 && jobRunning} />
+        <SectionPager index={navIndex} researchContinue={researchContinue} />
       </main>
     </div>
   );

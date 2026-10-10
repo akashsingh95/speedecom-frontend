@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import api from "../api";
 import {
@@ -51,7 +49,6 @@ const MasterSkuCalculations = () => {
   // Applied search terms — set only when the user presses "Search & Apply"
   // in the modal, which is what makes the table refetch.
   const [appliedSearchItems, setAppliedSearchItems] = useState([]);
-  const [appliedSearchType, setAppliedSearchType] = useState('sku');
   const hasAppliedSearch = appliedSearchItems.length > 0;
 
   /**
@@ -62,9 +59,9 @@ const MasterSkuCalculations = () => {
   const applySearchParams = (params) => {
     if (!appliedSearchItems || appliedSearchItems.length === 0) return params;
     const value = JSON.stringify(appliedSearchItems);
-    if (appliedSearchType === "order_id") params.searchOrderId = value;
-    else if (appliedSearchType === "order_item_id") params.searchOrderItemId = value;
-    else if (appliedSearchType === "master_sku") params.masterSkuSearch = value;
+    if (searchType === "order_id") params.searchOrderId = value;
+    else if (searchType === "order_item_id") params.searchOrderItemId = value;
+    else if (searchType === "master_sku") params.masterSkuSearch = value;
     else params.skuSearch = value;
     return params;
   };
@@ -393,7 +390,7 @@ const MasterSkuCalculations = () => {
         handleMasterSkuSkuClick(masterSku, childSku, skuKey, childSize);
       }
     });
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calculations]);
 
   // When return status filter changes, clear all expanded/cached drill-down data
@@ -782,7 +779,7 @@ const MasterSkuCalculations = () => {
     } else {
       setColumnOrder(allColumns);
     }
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allColumnsKey, isAmazon, isMeesho, isFlipkart, isMyntra, platformType, isPlatformLoaded]);
 
   // Filter columns based on visibility, preserving drag order
@@ -1040,16 +1037,12 @@ const MasterSkuCalculations = () => {
           onClose={() => setIsSearchModalOpen(false)}
           searchType={searchType}
           setSearchType={setSearchType}
-          onApply={(items) => {
-            setAppliedSearchItems(items);
-            setAppliedSearchType(searchType);
-          }}
+          onApply={setAppliedSearchItems}
           marketplaceFilter={marketplaceFilter}
           startDate={filterData.startDate}
           endDate={filterData.endDate}
           nullDateFilter={nullDateFilter}
           isFlipkart={isFlipkart}
-          initialSelectedItems={searchType === appliedSearchType ? appliedSearchItems : []}
         />
 
         {showResetConfirm && (
@@ -1515,19 +1508,7 @@ const MasterSkuCalculations = () => {
                               )}
 
                               {idx === 0 && (
-                                <div className="shrink-0 ml-2 flex items-center gap-1">
-                                  {appliedSearchItems?.length > 0 && (
-                                      <button
-                                          onClick={(e) => {
-                                              e.stopPropagation();
-                                              setIsSearchModalOpen(true);
-                                          }}
-                                          className="p-1.5 rounded-full transition-all shadow-sm backdrop-blur-sm bg-blue-500/40 text-white hover:bg-blue-500/60 border border-blue-400/50"
-                                          title="Edit Search Filter"
-                                      >
-                                          <Search size={14} />
-                                      </button>
-                                  )}
+                                <div className="shrink-0 ml-2">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();

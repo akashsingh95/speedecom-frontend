@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -922,7 +920,7 @@ const CalculationsTab = ({ viewMode = 'grid', filterData, handleFilterChange }) 
             {missingCostModal.open && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[99999] p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 my-auto border border-slate-100">
-                        <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex items-start justify-between gap-3">
+                        <div className="bg-amber-50 p-4 sm:p-6 border-b border-amber-100 flex items-start gap-3 sm:gap-4">
                             <div className="flex items-start gap-3 sm:gap-4">
                                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                                     <AlertTriangle className="text-amber-600" size={22} />
@@ -932,13 +930,6 @@ const CalculationsTab = ({ viewMode = 'grid', filterData, handleFilterChange }) 
                                     <p className="text-xs sm:text-sm text-amber-700 mt-1">Action required before calculating</p>
                                 </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setMissingCostModal({ open: false, count: 0, skus: [] })}
-                                className="p-2 -mr-2 -mt-2 text-amber-600 hover:text-amber-900 hover:bg-amber-100/50 rounded-lg transition-colors shrink-0"
-                            >
-                                <X size={20} />
-                            </button>
                         </div>
 
                         <div className="p-4 sm:p-6">

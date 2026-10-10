@@ -1,10 +1,7 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Modal } from './Modal';
-import { CreditCostPill } from './CreditCostPill';
-import { listingStudioApi, uploadImagesViaSignedUrl } from '../api';
+import { listingStudioApi } from '../api';
 import { creditNotificationMessage } from '../creditNotifications';
 import { formatClock } from '../pipelineClock';
 import { MUTED, BTN, BTN_PRIMARY, BADGE, BADGE_GOOD, ERROR_TEXT, FIELD_LABEL, FIELD_INPUT, CANDIDATE_BADGE } from './classNames';
@@ -120,16 +117,7 @@ function useEditProgress(active, startedAt) {
 // Mirrors the server-side cap in llm/images.js editImage (3 references + the edited image = 4 sent).
 const MAX_EDIT_REFERENCES = 3;
 
-export function GeneratedImageModal({
-  projectId,
-  image,
-  libraryEntries,
-  onClose,
-  onRegenerated,
-  onRegenerate,
-  imageCost = null,
-  freeImagesRemaining = 0,
-}) {
+export function GeneratedImageModal({ projectId, image, libraryEntries, onClose, onRegenerated, onRegenerate }) {
   // Starts empty — this is now the actual edit instruction sent to the API (see regenerate()
   // below), not the original generation concept, so prefilling it with image.prompt would just
   // be old scene-description text sitting in front of a "describe your edit" field.
@@ -255,14 +243,13 @@ export function GeneratedImageModal({
         const result = await onRegenerate(prompt, selectedIds, referenceFile);
         doneMessage = creditNotificationMessage(result?.billing, 'Image edit');
       } else {
-        const [referencePhotoKey] = referenceFile ? await uploadImagesViaSignedUrl([referenceFile], { transient: true }) : [];
+        const form = new FormData();
+        form.append('prompt', prompt);
+        form.append('referenceImageIds', JSON.stringify(selectedIds));
+        if (referenceFile) form.append('referencePhoto', referenceFile);
         // Fire once (the server queues the edit and replies 202), then poll until the edited
         // image exists — the edit + upscale can take minutes.
-        await listingStudioApi.regenerateGeneratedImage(projectId, image.id, {
-          prompt,
-          referenceImageIds: selectedIds,
-          referencePhotoKey,
-        });
+        await listingStudioApi.regenerateGeneratedImage(projectId, image.id, form);
         const replacement = await waitForImageEdit(projectId, image.id);
         doneMessage = creditNotificationMessage(replacement?.billing, 'Image edit');
         // Same id notifyImageEditCharge uses, so a resumed modal showing this edit can't toast twice.
@@ -388,12 +375,7 @@ export function GeneratedImageModal({
           </p>
         </div>
       )}
-      {!busy && (
-        <div className="flex justify-end mt-2">
-          <CreditCostPill imageCost={imageCost} freeRemaining={freeImagesRemaining} />
-        </div>
-      )}
-      <div className="flex items-center justify-end gap-2 mt-1.5">
+      <div className="flex justify-end gap-2 mt-2">
         <button type="button" className={BTN} onClick={onClose}>
           Close
         </button>

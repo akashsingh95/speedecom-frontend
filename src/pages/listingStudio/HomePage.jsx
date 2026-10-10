@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkle } from 'lucide-react';
@@ -81,9 +79,7 @@ export default function HomePage() {
                     <span>·</span>
                     <span>{relativeTime(p.createdAt)}</span>
                   </div>
-                  {campaignStatus(p) && (
-                    <div className={`mt-2 text-sm font-medium ${campaignStatus(p).className}`}>{campaignStatus(p).label}</div>
-                  )}
+                  <div className={`mt-2 text-sm font-medium ${campaignStatus(p).className}`}>{campaignStatus(p).label}</div>
                 </div>
               </Link>
             ))}

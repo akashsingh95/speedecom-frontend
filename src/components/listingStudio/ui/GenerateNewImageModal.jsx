@@ -1,9 +1,7 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { Modal } from './Modal';
-import { listingStudioApi, uploadImagesViaSignedUrl } from '../api';
+import { listingStudioApi } from '../api';
 import { creditNotificationMessage } from '../creditNotifications';
 import { MUTED, BTN, BTN_PRIMARY, ERROR_TEXT, FIELD_LABEL, FIELD_INPUT, CANDIDATE_BADGE } from './classNames';
 
@@ -32,13 +30,12 @@ export function GenerateNewImageModal({ projectId, libraryEntries, onClose, onCr
     setBusy(true);
     setError('');
     try {
-      const [referencePhotoKey] = referenceFile ? await uploadImagesViaSignedUrl([referenceFile], { transient: true }) : [];
-      const result = await listingStudioApi.generateNewImage(projectId, {
-        prompt,
-        type,
-        referenceImageIds: selectedIds,
-        referencePhotoKey,
-      });
+      const form = new FormData();
+      form.append('prompt', prompt);
+      form.append('type', type);
+      form.append('referenceImageIds', JSON.stringify(selectedIds));
+      if (referenceFile) form.append('referencePhoto', referenceFile);
+      const result = await listingStudioApi.generateNewImage(projectId, form);
       const message = creditNotificationMessage(result?.billing, 'Image generation');
       if (message) toast.success(message);
       await onCreated();
