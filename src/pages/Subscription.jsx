@@ -263,7 +263,7 @@ const Subscription = () => {
         const manualRows = manualInvoices.map((inv) => ({
             id: inv._id,
             type: 'manual',
-            label: inv.planName || inv.lineItems?.[0]?.description || '—',
+            label: inv.lineItems?.[0]?.description || inv.planName || '—',
             base: Number(inv.baseAmount),
             gst: inv.taxType === 'IGST' ? inv.igst : (inv.cgst + inv.sgst),
             total: Number(inv.totalAmount),
