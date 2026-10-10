@@ -23,6 +23,7 @@ const PERMISSION_GROUPS = [
             { key: 'uploadHistory', label: 'Upload History', desc: 'View past upload history', color: 'teal' },
             { key: 'downloads', label: 'Downloads', desc: 'Access download reports section', color: 'orange' },
             { key: 'scanReturns', label: 'Scan Returns', desc: 'Access scan returns page', color: 'pink' },
+            { key: 'manageOrders', label: 'Manage Orders', desc: 'Access the Meesho order-status tracking page', color: 'lime' },
         ],
     },
     {
@@ -52,6 +53,7 @@ const COLOR_MAP = {
     violet: { border: 'border-violet-300', bg: 'bg-violet-50/50', ring: 'ring-violet-200/50', text: 'text-violet-600', focus: 'focus:ring-violet-500' },
     purple: { border: 'border-purple-300', bg: 'bg-purple-50/50', ring: 'ring-purple-200/50', text: 'text-purple-600', focus: 'focus:ring-purple-500' },
     sky: { border: 'border-sky-300', bg: 'bg-sky-50/50', ring: 'ring-sky-200/50', text: 'text-sky-600', focus: 'focus:ring-sky-500' },
+    lime: { border: 'border-lime-300', bg: 'bg-lime-50/50', ring: 'ring-lime-200/50', text: 'text-lime-600', focus: 'focus:ring-lime-500' },
 };
 
 const UserManagement = () => {
@@ -76,6 +78,7 @@ const UserManagement = () => {
         uploadHistory: true,
         downloads: true,
         scanReturns: true,
+        manageOrders: true,
         marketplace: true,
         billing: true,
         support: true,
@@ -143,6 +146,7 @@ const UserManagement = () => {
             uploadHistory: perms.uploadHistory ?? true,
             downloads: perms.downloads ?? true,
             scanReturns: perms.scanReturns ?? true,
+            manageOrders: perms.manageOrders ?? true,
             marketplace: perms.marketplace ?? true,
             billing: perms.billing ?? true,
             support: perms.support ?? true,
