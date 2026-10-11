@@ -1,9 +1,8 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../api';
 import { ArrowLeft, Loader2, FileSpreadsheet, ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, Columns, Filter, GripVertical, Search, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import ExportButton from '../components/ExportButton';
 import AdvancedDateRangePicker from '../components/AdvancedDateRangePicker';
 import useCalculationsFilters from '../hooks/useCalculationsFilters';
@@ -202,6 +201,10 @@ const PaymentsCalculations = () => {
             setSettlements(data.settlements || []);
             setTotalCount(data.totalCount || 0);
             setDateError(''); // Clear any previous date errors on success
+            
+            if (data.connectedOrdersFound) {
+                toast.info('Connected orders found. Displaying combined metrics.', { id: 'connected-orders-toast' });
+            }
         } catch (error) {
             console.error('Error fetching payment calculations', error);
             const errorMsg = error.response?.data?.message || 'Failed to load payment calculations';
@@ -393,9 +396,12 @@ const PaymentsCalculations = () => {
                     const { data } = await api.get(`/payments/calculations/${encodeURIComponent(sku)}/orders`, { params });
                     setOrdersBySku(prev => ({
                         ...prev,
-                        [cacheKey]: { pages: [{ page: 1, data }], hasMore: data.length === 50 }
+                        [cacheKey]: { pages: [{ page: 1, data: data.data || data }], hasMore: (data.data || data).length === 50 }
                     }));
-                    return data;
+                    if (data.connectedOrdersFound) {
+                        toast.info('Connected orders found. Displaying combined metrics.', { id: 'connected-orders-toast-drilldown' });
+                    }
+                    return data.data || data;
                 } catch (error) {
                     console.error('Error fetching orders for SKU:', sku, error);
                     return null;
@@ -464,14 +470,15 @@ const PaymentsCalculations = () => {
             if (size) params.size = size;
 
             const { data } = await api.get(`/payments/calculations/${encodeURIComponent(sku)}/orders`, { params });
+            const extractedData = data.data || data;
 
             setOrdersBySku(prev => {
                 const prevData = prev[cacheKey];
-                let newPages = [...prevData.pages, { page: nextPage, data }];
+                let newPages = [...prevData.pages, { page: nextPage, data: extractedData }];
                 if (newPages.length > 2) {
                     newPages = newPages.slice(newPages.length - 2);
                 }
-                return { ...prev, [cacheKey]: { pages: newPages, hasMore: data.length === 50 } };
+                return { ...prev, [cacheKey]: { pages: newPages, hasMore: extractedData.length === 50 } };
             });
         } catch (error) {
             console.error('Error fetching more orders for SKU:', sku, error);
@@ -494,10 +501,11 @@ const PaymentsCalculations = () => {
             if (size) params.size = size;
 
             const { data } = await api.get(`/payments/calculations/${encodeURIComponent(sku)}/orders`, { params });
+            const extractedData = data.data || data;
 
             setOrdersBySku(prev => {
                 const prevData = prev[cacheKey];
-                let newPages = [{ page: prevPage, data }, ...prevData.pages];
+                let newPages = [{ page: prevPage, data: extractedData }, ...prevData.pages];
                 if (newPages.length > 2) {
                     newPages = newPages.slice(0, 2);
                 }
@@ -1288,7 +1296,7 @@ const PaymentsCalculations = () => {
                             >
                                 <div
                                     ref={scrollContainerRef}
-                                    className="overflow-x-auto overflow-y-auto outline-none"
+                                    className="overflow-x-auto overflow-y-auto outline-none pb-3"
                                     style={{ maxHeight: 'calc(100vh - 200px)' }}
                                     onKeyDown={handleTableKeyDown}
                                     tabIndex={0}
@@ -1717,11 +1725,3 @@ const PaymentsCalculations = () => {
 };
 
 export default PaymentsCalculations;
-
-
-
-
-
-
-
-

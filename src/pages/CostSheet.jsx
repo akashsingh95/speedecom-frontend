@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import CostSheetNotGeneratedModal from '../components/CostSheetNotGeneratedModal';
@@ -1194,6 +1192,33 @@ const CostSheet = () => {
         }
     };
 
+    const handleAmazonFreeReplacementCostToggle = async (newValue) => {
+        if (newValue === true && hasAmazonFreeReplacementCostEnabled) return;
+        const confirmChange = window.confirm(
+            `This will update the "Consider Replacement Cost" setting for the selected Amazon accounts.\nYou will need to recalculate payments to see the effect on profit/loss. Continue?`
+        );
+        if (!confirmChange) return;
+
+        setFiltering(true);
+        try {
+            const updatePromises = marketplaceFilters.map(id =>
+                api.put(`/marketplaces/${id}/config`, {
+                    config: { amazonConsiderFreeReplacementCost: newValue }
+                })
+            );
+            await Promise.all(updatePromises);
+
+            // Auto re-fetch so it updates state
+            await fetchAvailableMarketplaces();
+            toast.success(`Amazon Replacement Cost setting updated successfully.`);
+        } catch (error) {
+            console.error('Failed to update marketplace setting', error);
+            toast.error('Failed to update marketplace setting');
+        } finally {
+            setFiltering(false);
+        }
+    };
+
     const handleClearFilters = () => {
         withUnsavedWarning(() => {
             setColumnFilters({});
@@ -1343,6 +1368,11 @@ const CostSheet = () => {
     const hasAmazonRefundLossDisabled = isAmazonView && marketplaceFilters.some(id => {
         const account = amazonAccounts.find(a => a._id === id);
         return account?.config?.amazonConsiderRefundLoss === false;
+    });
+
+    const hasAmazonFreeReplacementCostEnabled = isAmazonView && marketplaceFilters.some(id => {
+        const account = amazonAccounts.find(a => a._id === id);
+        return account?.config?.amazonConsiderFreeReplacementCost === true;
     });
 
     // Editable columns configuration
@@ -1573,40 +1603,6 @@ const CostSheet = () => {
                     </div>
 
                     <div className="flex items-center gap-1.5 sm:gap-2 relative flex-wrap justify-end w-full sm:w-auto">
-                        {/* Amazon Refund-Loss Toggle */}
-                        {isAmazonView && (
-                            <div className="flex items-center gap-1.5 mr-1 sm:mr-2">
-                                <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
-                                    Refund Loss:
-                                    <Info size={13} className="text-slate-400" />
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
-                                        consider refund-loss quantity in total-cost
-                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
-                                    </div>
-                                </span>
-                                <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
-                                    <button
-                                        onClick={() => handleAmazonRefundLossToggle(false)}
-                                        className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${hasAmazonRefundLossDisabled
-                                            ? 'bg-brand-600 text-white'
-                                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                                            }`}
-                                    >
-                                        Off
-                                    </button>
-                                    <button
-                                        onClick={() => handleAmazonRefundLossToggle(true)}
-                                        className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${!hasAmazonRefundLossDisabled
-                                            ? 'bg-brand-600 text-white'
-                                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                                            }`}
-                                    >
-                                        On
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Filter Dropdown */}
                         <MarketplaceAccountSelector
                             variant="popover"
@@ -1762,6 +1758,75 @@ const CostSheet = () => {
                         })()}
                     </div>
                 </div>
+
+                {/* Amazon Toggles */}
+                {isAmazonView && (
+                    <div className="flex items-center gap-6 mt-3 px-1">
+                        {/* Amazon Refund-Loss Toggle */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
+                                Refund Loss:
+                                <Info size={13} className="text-slate-400" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
+                                    consider refund-loss quantity in total-cost
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
+                                </div>
+                            </span>
+                            <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
+                                <button
+                                    onClick={() => handleAmazonRefundLossToggle(false)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${hasAmazonRefundLossDisabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    Off
+                                </button>
+                                <button
+                                    onClick={() => handleAmazonRefundLossToggle(true)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${!hasAmazonRefundLossDisabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    On
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Amazon Free-Replacement Cost Toggle */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
+                                Replacement:
+                                <Info size={13} className="text-slate-400" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
+                                    consider replacement & free-replacement quantity in total-cost
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
+                                </div>
+                            </span>
+                            <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
+                                <button
+                                    onClick={() => handleAmazonFreeReplacementCostToggle(false)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${!hasAmazonFreeReplacementCostEnabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    Off
+                                </button>
+                                <button
+                                    onClick={() => handleAmazonFreeReplacementCostToggle(true)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${hasAmazonFreeReplacementCostEnabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    On
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Alerts */}
                 {error && (
