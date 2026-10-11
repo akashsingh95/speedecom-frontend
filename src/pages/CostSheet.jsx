@@ -7,6 +7,8 @@ import api from '../api';
 import { Save, ArrowLeft, Loader2, AlertCircle, AlertTriangle, CheckCircle, Search, X, Plus, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Filter, Info, Calculator, Download, Check, Store } from 'lucide-react';
 import { toast } from 'sonner';
 import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { COST_SHEET_TOUR } from '../tour/steps';
 import ExportButton from '../components/ExportButton';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
 import Tooltip from '../components/Tooltip';
@@ -1495,13 +1497,16 @@ const CostSheet = () => {
                             </button>
                         </Tooltip>
                         <div>
-                            <h1 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Cost Sheet</h1>
-                            <p className="text-slate-500 text-[11px] sm:text-xs font-medium">
+                            <div className="flex items-center gap-3">
+                                <h1 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Cost Sheet</h1>
+                            </div>
+                            <p className="text-slate-500 text-[11px] sm:text-xs font-medium mt-0.5">
                                 Page {currentPage} of {totalPages} • {totalRows} total SKUs • {visibleRowCount} on this page{visibleRowCount !== costSheetData.length ? ` (of ${costSheetData.length})` : ''} • {editedRows.size} unsaved changes
                             </p>
-                            {marketplaceFilters.length > 0 && (
-                                <div className="mt-1.5 flex items-center gap-1.5 text-xs flex-wrap">
-                                    <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Active Accounts:</span>
+                            <div className="flex items-center flex-wrap gap-x-4 gap-y-2 mt-1.5">
+                                {marketplaceFilters.length > 0 && (
+                                    <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                                        <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Active Accounts:</span>
                                     {marketplaceFilters.length <= 5 ? (
                                         marketplaceFilters.map(id => (
                                             <span key={id} className="px-1.5 sm:px-2 py-0.5 bg-brand-50 text-brand-700 font-bold border border-brand-200/80 rounded-md text-[10px] sm:text-[11px] truncate max-w-[110px] sm:max-w-[160px]" title={marketplaceNamesMap[id] || id}>
@@ -1568,46 +1573,48 @@ const CostSheet = () => {
                                     )}
                                 </div>
                             )}
+
+                            {/* Amazon Refund-Loss Toggle */}
+                            {isAmazonView && (
+                                <div className="flex items-center gap-1.5 mr-1 sm:mr-2">
+                                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
+                                        Refund Loss:
+                                        <Info size={13} className="text-slate-400" />
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
+                                            consider refund-loss quantity in total-cost
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
+                                        </div>
+                                    </span>
+                                    <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
+                                        <button
+                                            onClick={() => handleAmazonRefundLossToggle(false)}
+                                            className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${hasAmazonRefundLossDisabled
+                                                ? 'bg-brand-600 text-white'
+                                                : 'bg-white text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            Off
+                                        </button>
+                                        <button
+                                            onClick={() => handleAmazonRefundLossToggle(true)}
+                                            className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${!hasAmazonRefundLossDisabled
+                                                ? 'bg-brand-600 text-white'
+                                                : 'bg-white text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            On
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
+                </div>
 
-                    <div className="flex items-center gap-1.5 sm:gap-2 relative flex-wrap justify-end w-full sm:w-auto">
-                        {/* Amazon Refund-Loss Toggle */}
-                        {isAmazonView && (
-                            <div className="flex items-center gap-1.5 mr-1 sm:mr-2">
-                                <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
-                                    Refund Loss:
-                                    <Info size={13} className="text-slate-400" />
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
-                                        consider refund-loss quantity in total-cost
-                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
-                                    </div>
-                                </span>
-                                <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
-                                    <button
-                                        onClick={() => handleAmazonRefundLossToggle(false)}
-                                        className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${hasAmazonRefundLossDisabled
-                                            ? 'bg-brand-600 text-white'
-                                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                                            }`}
-                                    >
-                                        Off
-                                    </button>
-                                    <button
-                                        onClick={() => handleAmazonRefundLossToggle(true)}
-                                        className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${!hasAmazonRefundLossDisabled
-                                            ? 'bg-brand-600 text-white'
-                                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                                            }`}
-                                    >
-                                        On
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Filter Dropdown */}
-                        <div data-tour={TOUR.costSheet.accountFilter}>
+                <div className="flex items-center gap-1.5 sm:gap-2 relative flex-wrap justify-end w-full sm:w-auto">
+                    <TourLauncher tourKey={COST_SHEET_TOUR} />
+                    {/* Filter Dropdown */}
+                    <div data-tour={TOUR.costSheet.accountFilter}>
                             <MarketplaceAccountSelector
                                 variant="popover"
                                 selectionMode="single"
@@ -1630,7 +1637,7 @@ const CostSheet = () => {
                         />
                         </div>
 
-                        <div className="relative z-40 flex items-center h-full" ref={columnSelectorRef}>
+                        <div data-tour={TOUR.costSheet.columnsBtn} className="relative z-40 flex items-center h-full" ref={columnSelectorRef}>
                             <button
                                 type="button"
                                 onClick={() => setShowColumnSelector(true)}
@@ -1673,8 +1680,9 @@ const CostSheet = () => {
                             />
                         </div>
 
-                        <ExportButton
-                            exportType="cost_sheet"
+                        <span data-tour={TOUR.costSheet.exportBtn}>
+                            <ExportButton
+                                exportType="cost_sheet"
                             marketplaceId={
                                 marketplaceFilters.length === 1
                                     ? marketplaceFilters[0]
@@ -1700,6 +1708,7 @@ const CostSheet = () => {
                                 }
                             }}
                         />
+                        </span>
 
                         <Tooltip text={saving ? "Saving..." : editedRows.size === 0 ? "No unsaved changes" : `Save ${editedRows.size} unsaved change${editedRows.size !== 1 ? 's' : ''}`}>
                             <button
@@ -1743,6 +1752,7 @@ const CostSheet = () => {
                             return (
                                 <Tooltip text={calculateTooltipText}>
                                     <button
+                                        data-tour={TOUR.costSheet.calculateBtn}
                                         onClick={handleCalculate}
                                         disabled={isCalculateDisabled}
                                         className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-bold text-[11px] sm:text-xs shadow-sm cursor-pointer whitespace-nowrap"
@@ -1819,13 +1829,15 @@ const CostSheet = () => {
                                             <span>SKU</span>
                                         </div>
                                         
-                                        <CostSheetColumnFilterPopover
-                                            columnKey="sku"
-                                            columnLabel="SKU"
-                                            currentSelection={columnFilters['sku'] || []}
-                                            onApply={(val) => handleColumnFilterChange('sku', val)}
-                                            marketplaceFilters={marketplaceFilters}
-                                        />
+                                        <span data-tour={TOUR.costSheet.columnFilter} className="inline-flex">
+                                            <CostSheetColumnFilterPopover
+                                                columnKey="sku"
+                                                columnLabel="SKU"
+                                                currentSelection={columnFilters['sku'] || []}
+                                                onApply={(val) => handleColumnFilterChange('sku', val)}
+                                                marketplaceFilters={marketplaceFilters}
+                                            />
+                                        </span>
                                         <div
                                             className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
                                             onMouseDown={(e) => handleResizeStart(e, 'sku')}

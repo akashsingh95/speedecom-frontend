@@ -164,10 +164,12 @@ const CalculationsHeader = ({
 
                 {/* Right: Eye Toggle Icon + Settings Icon + Verify Bank + Export */}
                 <div className="flex items-center gap-2.5">
+                    {currentView === 'sku-wise' && <TourLauncher tourKey={PAYMENTS_TOUR} />}
 
                     {onOpenCalculator && (
                         <button
                             type="button"
+                            data-tour={TOUR.payments.calculateBtn}
                             onClick={onOpenCalculator}
                             className="flex items-center justify-center p-2 rounded-lg bg-brand-100 hover:bg-brand-200 text-brand-700 border border-brand-200 cursor-pointer transition-colors shadow-sm"
                             title="Open Price Estimate Calculator"
@@ -209,8 +211,6 @@ const CalculationsHeader = ({
                             <ExportButton {...exportProps} />
                         </span>
                     )}
-
-                    {currentView === 'sku-wise' && <TourLauncher tourKey={PAYMENTS_TOUR} label="Tour" />}
                 </div>
             </div>
 

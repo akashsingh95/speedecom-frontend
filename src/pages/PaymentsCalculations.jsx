@@ -1004,7 +1004,7 @@ const PaymentsCalculations = () => {
                             <div className="flex items-center gap-4 flex-wrap">
 
                                 {/* SKU-Wise View Dropdown next to P/L View */}
-                                <div className="relative z-[35] inline-block w-full sm:w-auto" ref={viewDropdownRef}>
+                                <div data-tour={TOUR.payments.viewSwitch} className="relative z-[35] inline-block w-full sm:w-auto" ref={viewDropdownRef}>
                                     <button
                                         type="button"
                                         onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
@@ -1058,7 +1058,7 @@ const PaymentsCalculations = () => {
 
                                 {/* P/L View toggle — no GST-inclusive/exclusive mode exists for Myntra's fixed P&L formula */}
                                 {!isMyntra && (
-                                    <div className="flex items-center gap-2">
+                                    <div data-tour={TOUR.payments.plWithTaxToggle} className="flex items-center gap-2">
                                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">P/L View:</span>
                                         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                             <button
@@ -1083,13 +1083,8 @@ const PaymentsCalculations = () => {
                                     </div>
                                 )}
 
-                                {/* Ads Type toggle — Amazon & Flipkart only. Snapdeal has no
-                                    separate ads report (sku_wise_ads is already folded into
-                                    orders_settlement/profit_loss — see totalAdsOnlyExpr/
-                                    perSkuAdsExpr in paymentsController.js, both hard-coded to 0
-                                    for snapdeal), so this toggle has zero effect on Snapdeal's
-                                    numbers either way. Hiding it instead of leaving a dead control. */}
-                                {(!isMeesho && !isMyntra && !isSnapdeal) && <div className="flex items-center gap-2">
+                                {/* Ads Type toggle — Amazon & Flipkart only */}
+                                {(!isMeesho && !isMyntra && !isSnapdeal) && <div data-tour={TOUR.payments.adsToggle} className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ads:</span>
                                     <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                         <button
@@ -1115,7 +1110,7 @@ const PaymentsCalculations = () => {
 
                                 {/* Shopsy Filter toggle */}
                                 {isFlipkart && (
-                                    <div className="flex items-center gap-2">
+                                    <div data-tour={TOUR.payments.marketplaceFilter} className="flex items-center gap-2">
                                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Platform:</span>
                                         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                             <button
@@ -1252,6 +1247,7 @@ const PaymentsCalculations = () => {
 
                                 <button
                                     type="button"
+                                    data-tour={TOUR.payments.columnsBtn}
                                     onClick={() => filters.setShowAddColumnSidebar && filters.setShowAddColumnSidebar(true)}
                                     className="flex items-center justify-center gap-2 px-4 h-9 rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-md transition-all cursor-pointer font-medium"
                                     title="Add Columns"
@@ -1403,7 +1399,7 @@ const PaymentsCalculations = () => {
                                                                 )}
 
                                                                 {idx === 0 && (
-                                                                    <div className="shrink-0 ml-2 flex items-center gap-1">
+                                                                    <div data-tour={TOUR.payments.skuSearch} className="shrink-0 ml-2 flex items-center gap-1">
                                                                         {appliedSearchItems?.length > 0 && (
                                                                             <button
                                                                                 onClick={(e) => {

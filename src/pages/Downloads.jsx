@@ -4,6 +4,8 @@ import DashboardLayout from '../components/DashboardLayout';
 import api from '../api';
 import { useAuth } from '../AuthContext';
 import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { DOWNLOADS_TOUR } from '../tour/steps';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
 
 const Downloads = () => {
@@ -278,6 +280,10 @@ const Downloads = () => {
                         <h2 className="text-2xl font-heading font-bold text-slate-800 flex items-center gap-3">
                             Downloads Management
                         </h2>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <TourLauncher tourKey={DOWNLOADS_TOUR} />
                     </div>
                 </header>
 

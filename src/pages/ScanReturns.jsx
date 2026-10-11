@@ -13,6 +13,8 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { SCAN_RETURNS_TOUR } from '../tour/steps';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
 import MeeshoReturnHandoverTab from '../components/handover/MeeshoReturnHandoverTab';
@@ -996,6 +998,7 @@ const ScanReturns = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <TourLauncher tourKey={SCAN_RETURNS_TOUR} />
                         <Link
                             to="/dashboard"
                             state={{ activeTab: 'returns' }}
