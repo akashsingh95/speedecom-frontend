@@ -13,6 +13,8 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { SCAN_RETURNS_TOUR } from '../tour/steps';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
 import MeeshoReturnHandoverTab from '../components/handover/MeeshoReturnHandoverTab';
@@ -75,7 +77,7 @@ const TodayPagination = ({ page, totalPages, total, onPageChange }) => {
         if (p < 1 || p > totalPages) return;
         const timer = setTimeout(() => { onPageChangeRef.current(p); }, 600);
         return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [goTo, totalPages]);
 
     if (totalPages <= 1) return null;
@@ -231,7 +233,7 @@ const ScanReturns = () => {
         errorAudioRef.current   = new Audio(errorSoundFile);
         if (inputRef.current) inputRef.current.focus();
         return () => { stopCamera(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, []);
 
     useEffect(() => {
@@ -716,7 +718,7 @@ const ScanReturns = () => {
         }
         if (activeTab === 'unverified') fetchUnverified(1, unverifiedSearchRef.current);
         if (activeTab === 'scan') requestAnimationFrame(() => { if (inputRef.current) inputRef.current.focus(); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [activeTab, fetchAccountSummary, fetchTodayScan, fetchUnverified]);
 
     // ── Camera ───────────────────────────────────────────────────────────────
@@ -905,7 +907,7 @@ const ScanReturns = () => {
     useEffect(() => { cameraActiveRef.current = cameraActive; }, [cameraActive]);
     useEffect(() => {
         if (activeTab !== 'scan' && cameraActiveRef.current) stopCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     }, [activeTab]);
 
     // ── Derived ──────────────────────────────────────────────────────────────
@@ -976,6 +978,7 @@ const ScanReturns = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <TourLauncher tourKey={SCAN_RETURNS_TOUR} />
                         <Link
                             to="/dashboard"
                             state={{ activeTab: 'returns' }}

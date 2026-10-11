@@ -3,6 +3,7 @@ import { Filter, ChevronDown } from 'lucide-react';
 import AdvancedDateRangePicker from '../AdvancedDateRangePicker';
 import CalculationsColumnSelector from './CalculationsColumnSelector';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { TOUR } from '../../tour/targets';
 
 /**
  * Shared filter panel for PaymentsCalculations and MasterSkuCalculations.
@@ -477,7 +478,7 @@ const CalculationsFunnel = ({
         <div className="mb-8 w-full">
 
             {/* Top filter pills: Warehouse, Brand, Compensation, Recovery, Size */}
-            <div ref={pillsRowRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 xl:gap-4 w-full mb-3 xl:mb-4">
+            <div data-tour={TOUR.payments.filterPills} ref={pillsRowRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 xl:gap-4 w-full mb-3 xl:mb-4">
                 {filterPills.map(pill => {
                     const isOpen = openPillFilter === pill.key;
                     const hasData = pill.applicable && pill.totalCount > 0;
@@ -561,7 +562,7 @@ const CalculationsFunnel = ({
             <div className="flex flex-wrap xl:flex-nowrap gap-3 xl:gap-4 items-stretch justify-between w-full overflow-x-auto">
 
                 {/* 1) Financial Funnel */}
-                <div className="w-full lg:w-[48%] xl:w-[37%] flex-shrink flex-grow min-w-0 flex flex-col">
+                <div data-tour={TOUR.payments.financialFunnel} className="w-full lg:w-[48%] xl:w-[37%] flex-shrink flex-grow min-w-0 flex flex-col">
                     <div className="flex-1 flex flex-col items-center justify-start pt-4 pb-4 px-3 bg-white rounded-lg shadow-sm border border-slate-200">
                         <h2 className="text-[18px] font-semibold text-slate-800 w-full text-center px-1 tracking-wide whitespace-nowrap">Financial Funnel</h2>
                         <div className="w-full flex-1 flex flex-col justify-center overflow-x-auto custom-scrollbar">
@@ -814,7 +815,7 @@ const CalculationsFunnel = ({
                 </div>
 
                 {/* 2) Quantity Donut Chart */}
-                <div className="w-full lg:w-[48%] xl:w-[34%] flex-shrink flex-grow min-w-0 flex flex-col">
+                <div data-tour={TOUR.payments.qtyBreakdown} className="w-full lg:w-[48%] xl:w-[34%] flex-shrink flex-grow min-w-0 flex flex-col">
                     <div className="w-full flex-1 bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col items-center justify-start p-4">
                         <div className="w-full flex items-center justify-between mb-3 relative" ref={returnStatusRef}>
                             <h2 className="text-[18px] font-semibold text-slate-800 flex-1 text-center px-1 tracking-wide whitespace-nowrap">Quantity Breakdown</h2>
@@ -952,7 +953,7 @@ const CalculationsFunnel = ({
                 </div>
 
                 {/* Cards section */}
-                <div className="w-full xl:w-[29%] flex-shrink flex-grow min-w-0 flex flex-col justify-start items-center p-4 lg:p-4 bg-white rounded-lg shadow-sm border border-slate-200">
+                <div data-tour={TOUR.payments.plSnapshot} className="w-full xl:w-[29%] flex-shrink flex-grow min-w-0 flex flex-col justify-start items-center p-4 lg:p-4 bg-white rounded-lg shadow-sm border border-slate-200">
                     <h2 className="text-[18px] font-semibold text-slate-800 mb-3 w-full text-center px-1 tracking-wide whitespace-nowrap">P/L &amp; Ad Spend Snapshot</h2>
                     <div className="w-full flex-1 flex flex-col justify-center">
                         <div className="flex flex-col gap-3 lg:gap-4 w-full">

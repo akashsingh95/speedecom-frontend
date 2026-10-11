@@ -263,7 +263,7 @@ const MarketplaceAccountFilter = ({
 
         if (!onChange) return;
         emitFilters();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [selectedMarketplaceKeys, accountSelections]);
 
     // Safety net: if either date gets cleared, reset both to the default range
@@ -889,7 +889,7 @@ const MarketplaceAccountFilter = ({
 
                     {/* Right Side: Date Filter */}
                     {showDateFilter && (
-                        <div data-tour={TOUR.filter.date} className="overflow-visible mt-4 lg:mt-0">
+                        <div className="overflow-visible mt-4 lg:mt-0">
                             <div className="flex items-center justify-between xl:justify-start xl:gap-8 mb-4 min-h-[32px]">
                                 <div className="flex items-center gap-2">
                                     <div className="w-1 h-4 bg-brand-600 rounded-full"></div>
