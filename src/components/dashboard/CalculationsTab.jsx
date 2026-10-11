@@ -869,7 +869,7 @@ const CalculationsTab = ({ viewMode = 'grid', filterData, handleFilterChange }) 
                                             return (
                                                 <Tooltip text={disabledReason || step.title}>
                                                     <button
-                                                        data-tour={step.index === 3 ? TOUR.calc.calculateBtn : step.index === 2 ? TOUR.calc.openCostSheetBtn : undefined}
+                                                        data-tour={step.index === 3 ? TOUR.calc.calculateBtn : step.index === 2 ? TOUR.calc.openCostSheetBtn : step.index === 1 ? TOUR.calc.uploadReportsBtn : undefined}
                                                         onClick={() => {
                                                             if (step.index === 1) {
                                                                 if (hasMarketplaces) {

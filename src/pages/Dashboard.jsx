@@ -7,6 +7,8 @@ import ViewToggle from '../components/ViewToggle';
 import MarketplaceAccountFilter from '../components/MarketplaceAccountFilter';
 import { useDateRangeFilter } from '../hooks/useDateRangeFilter';
 import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { TENANT_ONBOARDING } from '../tour/steps';
 import api from '../api';
 
 // Stable reference — an inline array literal here would recreate on every Dashboard render,
@@ -141,6 +143,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="flex items-center gap-5">
+                    <TourLauncher tourKey={TENANT_ONBOARDING} />
                     {/* User Profile Code ... */}
                     <div className="relative">
                         <button

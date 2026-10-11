@@ -107,7 +107,6 @@ const groups = {
     filter: group('filter', [
         'root',
         'marketplace',
-        'date',
     ]),
 
     // components/dashboard/CalculationsTab.jsx — the product's core screen.
@@ -119,9 +118,8 @@ const groups = {
         'statusMessage',
         'calculateBtn',
         'progress',
-        'showCalculationsBtn',
-        'generateCostSheetBtn',
         'openCostSheetBtn',
+        'uploadReportsBtn',
     ]),
 
     // pages/MarketplaceSettings.jsx — the first screen a new tenant has to
@@ -169,7 +167,10 @@ const groups = {
         'header',
         'accountFilter',
         'saveBtn',
-        'addSku',
+        'calculateBtn',
+        'exportBtn',
+        'columnsBtn',
+        'columnFilter',
         'table',
     ]),
 
@@ -185,6 +186,16 @@ const groups = {
         'exportBtn',
         'funnel',
         'table',
+        'filterPills',
+        'financialFunnel',
+        'qtyBreakdown',
+        'plSnapshot',
+        'skuSearch',
+        'plWithTaxToggle',
+        'adsToggle',
+        'marketplaceFilter',
+        'columnsBtn',
+        'calculateBtn',
     ]),
 
     // pages/ScanReturns.jsx
