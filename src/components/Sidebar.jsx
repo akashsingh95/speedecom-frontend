@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import {
     LayoutDashboard, CheckCircle, Upload, Building, User, ChevronDown,
@@ -143,7 +145,7 @@ const Sidebar = () => {
                 })}
 
                 {/* Speedy Agent — special AI button (Admin, or User with speedAi permission) */}
-                {(user?.role === 'Admin' || isImpersonating || user?.permissions?.speedAi) && (
+                {(user?.role === 'Admin' || isImpersonating || (user?.role !== 'SBM' && user?.permissions?.speedAi)) && (
                     <Link
                         to="/speedy-agent"
                         className="group flex items-center gap-3 px-4 py-3.5 text-sm font-semibold rounded-xl

@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initiateExport, forceCreateExport, pollExportStatus, getDownloadUrl } from '../../utils/exportUtils';
 import { Link } from 'react-router-dom';
@@ -926,7 +928,7 @@ const getReturnsDefaultDates = () => {
                 return parsed;
             }
         }
-    } catch (e) { }
+    } catch { /* missing or corrupt stored range — fall back to defaults */ }
     const end = new Date();
     const start = new Date();
     start.setMonth(start.getMonth() - 3);
@@ -1105,7 +1107,7 @@ const ReturnsTab = () => {
         const diff = Math.floor((e - s) / 86400000);
         if (diff >= MAX_RANGE_DAYS) { toast.error(`Date range too large (max ${MAX_RANGE_DAYS} days)`); return; }
 
-        try { localStorage.setItem('returns_date_range', JSON.stringify({ startDate: start, endDate: end })); } catch (err) { }
+        try { localStorage.setItem('returns_date_range', JSON.stringify({ startDate: start, endDate: end })); } catch { /* storage unavailable — range just won't persist */ }
 
         setPendingPages({ meeshoCompleted: 1, meeshoAll: 1 });
         setPagination(p => ({ ...p, currentPage: 1 }));
@@ -1925,6 +1927,7 @@ const ReturnsTab = () => {
                                     <th className="text-left px-3 py-2 font-semibold">Courier Status</th>
                                     <th className="text-right px-3 py-2 font-semibold">Days</th>
                                     <th className="text-left px-3 py-2 font-semibold">Return Created</th>
+                                    {!['in_transit', 'out_for_delivery'].includes(tableFilters.status) && <th className="text-left px-3 py-2 font-semibold">Delivered Date</th>}
                                     <th className="text-left px-3 py-2 font-semibold">Reason</th>
                                     <th className="text-left px-3 py-2 font-semibold">Status</th>
                                     <th className="text-right px-3 py-2 font-semibold">Action</th>
@@ -1951,6 +1954,7 @@ const ReturnsTab = () => {
                                             <td className="px-3 py-2 whitespace-nowrap">{r.status || '—'}</td>
                                             <td className={`px-3 py-2 text-right tabular-nums ${overdue ? 'text-red-600 font-semibold' : ''}`}>{days}</td>
                                             <td className="px-3 py-2 whitespace-nowrap">{fmtDateCell(r.return_date)}</td>
+                                            {!['in_transit', 'out_for_delivery'].includes(tableFilters.status) && <td className="px-3 py-2 whitespace-nowrap">{r.delivered_date ? fmtDateCell(r.delivered_date) : '—'}</td>}
                                             <td className="px-3 py-2 max-w-[280px] truncate text-xs" title={r.reason}>{r.reason || '—'}</td>
                                             <td className="px-3 py-2 whitespace-nowrap">{r.return_file_type || '—'}</td>
                                             <td className="px-3 py-2 text-right whitespace-nowrap">
