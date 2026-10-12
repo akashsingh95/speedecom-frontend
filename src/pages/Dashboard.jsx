@@ -143,7 +143,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="flex items-center gap-5">
-                    <TourLauncher tourKey={TENANT_ONBOARDING} />
+                    <TourLauncher tourKey={TENANT_ONBOARDING} label="Start Onboarding Tour" />
                     {/* User Profile Code ... */}
                     <div className="relative">
                         <button

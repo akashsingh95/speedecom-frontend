@@ -28,16 +28,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const CLIENT_DIR = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const SRC_DIR = join(CLIENT_DIR, 'src');
-const TARGETS_FILE = join(SRC_DIR, 'tour', 'targets.js');
-const STEPS_FILE = join(SRC_DIR, 'tour', 'steps.js');
+const normalizePath = (p) => p.replace(/[\\/]+/g, '/').toLowerCase();
+const TARGETS_FILE = join(SRC_DIR, 'Tour', 'targets.js');
+const STEPS_FILE = join(SRC_DIR, 'Tour', 'steps.js');
 
 // Files that reference targets without rendering them. The runner and the
 // spotlight take an id as data, so a mention there is not proof of an element.
 const NON_RENDERING = new Set([
-    TARGETS_FILE,
-    STEPS_FILE,
-    join(SRC_DIR, 'tour', 'TourProvider.jsx'),
-    join(SRC_DIR, 'tour', 'TourSpotlight.jsx'),
+    normalizePath(TARGETS_FILE),
+    normalizePath(STEPS_FILE),
+    normalizePath(join(SRC_DIR, 'Tour', 'TourProvider.jsx')),
+    normalizePath(join(SRC_DIR, 'Tour', 'TourSpotlight.jsx')),
 ]);
 
 const SOURCE_EXTENSIONS = /\.(js|jsx)$/;
@@ -78,10 +79,11 @@ const main = async () => {
     const literals = [];           // raw data-tour strings
 
     for (const file of collectFiles(SRC_DIR)) {
-        if (file === TARGETS_FILE) continue;
+        const norm = normalizePath(file);
+        if (norm === normalizePath(TARGETS_FILE)) continue;
         const content = readFileSync(file, 'utf8');
         const where = (index) => `${relative(CLIENT_DIR, file)}:${lineOf(content, index)}`;
-        const isRenderer = !NON_RENDERING.has(file);
+        const isRenderer = !NON_RENDERING.has(norm);
 
         for (const match of content.matchAll(ACCESSOR)) {
             const id = `${match[1]}.${match[2]}`;

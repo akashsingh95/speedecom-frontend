@@ -8,12 +8,12 @@
 // ─────────────────────────────────────────────────────────
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { X, ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { X, ArrowLeft, ArrowRight, Sparkles, Zap, ShieldCheck, Clock, TrendingUp } from 'lucide-react';
 
 const GAP = 14;        // space between the cut-out and the popover
-const EDGE = 16;       // popover never comes closer than this to the viewport edge
+const EDGE = 20;       // popover never comes closer than this to the viewport edge
 const PAD = 8;         // how far the cut-out is inflated past the element
-const POPOVER_W = 360;
+const POPOVER_W = 420;
 
 /** Rects compare by value; this avoids a state update on every animation frame. */
 const sameRect = (a, b) => (
@@ -24,55 +24,121 @@ const sameRect = (a, b) => (
     && Math.abs(a.height - b.height) < 0.5
 );
 
+/** Preserves exact viewport coordinates so scrolling never detaches the cut-out */
 const inflate = (rect) => ({
-    top: Math.max(rect.top - PAD, 0),
-    left: Math.max(rect.left - PAD, 0),
+    top: rect.top - PAD,
+    left: rect.left - PAD,
     width: rect.width + PAD * 2,
     height: rect.height + PAD * 2,
 });
 
 /**
- * Picks a side with room for the popover, preferring the step's own choice.
+ * Picks a side with room for the popover, preferring the step's own choice or
+ * dynamically selecting the most natural adjacent position (beside or below).
  * Returns viewport coordinates plus the side actually used, so the arrow can
- * point back at the element.
+ * point directly back at the element.
  */
-const place = (hole, size, preferred) => {
+const place = (hole, size, preferred, step = null) => {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    if (!hole || preferred === 'center') {
+    // Clamps coordinates strictly inside the viewport with safe margins
+    const clampY = (val, h) => {
+        const minTop = EDGE;
+        const maxTop = Math.max(minTop, vh - h - EDGE);
+        return Math.max(minTop, Math.min(val, maxTop));
+    };
+    const clampX = (val, w) => {
+        const minLeft = EDGE;
+        const maxLeft = Math.max(minLeft, vw - w - EDGE);
+        return Math.max(minLeft, Math.min(val, maxLeft));
+    };
+
+    if (!hole || preferred === 'center' || step?.isBillingIntro) {
         return {
-            top: Math.max((vh - size.height) / 2, EDGE),
-            left: Math.max((vw - size.width) / 2, EDGE),
+            top: clampY(Math.round((vh - size.height) / 2), size.height),
+            left: clampX(Math.round((vw - size.width) / 2), size.width),
             side: 'center',
         };
     }
 
     const room = {
-        bottom: vh - (hole.top + hole.height) - GAP - EDGE >= size.height,
-        top: hole.top - GAP - EDGE >= size.height,
         right: vw - (hole.left + hole.width) - GAP - EDGE >= size.width,
         left: hole.left - GAP - EDGE >= size.width,
+        bottom: vh - (hole.top + hole.height) - GAP - EDGE >= size.height,
+        top: hole.top - GAP - EDGE >= size.height,
     };
-    // Preferred side first, then the remaining sides in a fixed order so the
-    // choice is deterministic for a given viewport.
-    const side = [preferred, 'bottom', 'top', 'right', 'left'].find((s) => room[s]) || 'bottom';
 
-    const clamp = (value, max) => Math.min(Math.max(value, EDGE), Math.max(max - EDGE, EDGE));
+    const isPlanCard = step?.id?.startsWith('bill-plan-') || hole.height > 280;
+    const holeCenterH = hole.left + hole.width / 2;
+    const spaceLeft = hole.left - GAP - EDGE;
+    const spaceRight = vw - (hole.left + hole.width) - GAP - EDGE;
+    const spaceBottom = vh - (hole.top + hole.height) - GAP - EDGE;
+    const spaceTop = hole.top - GAP - EDGE;
+
+    // Dynamically choose adjacent side:
+    // When preferred is 'auto', 'center-bottom', or for plan cards, prioritize placing
+    // immediately beside the card (left or right) so the full card height (price,
+    // Buy Now button, and benefits) remains completely visible and unobstructed.
+    let side = preferred;
+    if (!side || side === 'auto' || side === 'center-bottom' || (isPlanCard && (side === 'bottom' || side === 'top'))) {
+        if (room.right || room.left) {
+            if (room.right && room.left) {
+                // Both sides have room: if card is in left half of viewport, put on right; otherwise put on left
+                side = holeCenterH < vw / 2 ? 'right' : 'left';
+            } else if (room.right) {
+                side = 'right';
+            } else {
+                side = 'left';
+            }
+        } else if (room.bottom) {
+            side = 'bottom';
+        } else if (room.top) {
+            side = 'top';
+        } else {
+            // Constrained screen width: prefer side with more horizontal room for tall cards
+            if (isPlanCard) {
+                side = spaceLeft >= spaceRight ? 'left' : 'right';
+            } else {
+                const spaces = [
+                    { s: 'bottom', val: spaceBottom },
+                    { s: 'right', val: spaceRight },
+                    { s: 'left', val: spaceLeft },
+                    { s: 'top', val: spaceTop },
+                ];
+                spaces.sort((a, b) => b.val - a.val);
+                side = spaces[0].s;
+            }
+        }
+    } else if (!room[side]) {
+        // Fallback if preferred side has insufficient room
+        if (room.right) side = 'right';
+        else if (room.left) side = 'left';
+        else if (room.bottom) side = 'bottom';
+        else if (room.top) side = 'top';
+        else side = isPlanCard ? (spaceLeft >= spaceRight ? 'left' : 'right') : 'bottom';
+    }
 
     if (side === 'bottom' || side === 'top') {
-        const top = side === 'bottom' ? hole.top + hole.height + GAP : hole.top - GAP - size.height;
+        const rawTop = side === 'bottom' ? hole.top + hole.height + GAP : hole.top - GAP - size.height;
         return {
-            top: clamp(top, vh - size.height),
-            left: clamp(hole.left + hole.width / 2 - size.width / 2, vw - size.width),
+            top: clampY(rawTop, size.height),
+            left: clampX(hole.left + hole.width / 2 - size.width / 2, size.width),
             side,
         };
     }
 
     const left = side === 'right' ? hole.left + hole.width + GAP : hole.left - GAP - size.width;
+    // For tall plan cards: align popover with the upper portion of the plan card so the user
+    // can comfortably view the plan title & price right next to the instruction card,
+    // while clampY guarantees top >= EDGE and top + size.height <= vh - EDGE.
+    const targetTop = isPlanCard
+        ? Math.max(hole.top, EDGE)
+        : (hole.top + hole.height / 2 - size.height / 2);
+
     return {
-        top: clamp(hole.top + hole.height / 2 - size.height / 2, vh - size.height),
-        left: clamp(left, vw - size.width),
+        top: clampY(targetTop, size.height),
+        left: clampX(left, size.width),
         side,
     };
 };
@@ -91,13 +157,20 @@ const TourSpotlight = ({
     total,
     isFirst,
     isLast,
+    actionCompleted = false,
+    actionMeta = null,
+    onCompleteAction,
+    onBypassAction,
     onNext,
     onPrev,
     onClose,
 }) => {
     const popoverRef = useRef(null);
     const [hole, setHole] = useState(null);
-    const [size, setSize] = useState({ width: POPOVER_W, height: 200 });
+    const defaultWidth = step?.isBillingIntro
+        ? 580
+        : (step?.id?.startsWith('bill-plan-') ? 350 : POPOVER_W);
+    const [size, setSize] = useState({ width: defaultWidth, height: step?.isBillingIntro ? 420 : 200 });
 
     // Follow the element every frame rather than binding scroll/resize
     // listeners: the target can sit inside any number of scrollable panes, and
@@ -135,35 +208,86 @@ const TourSpotlight = ({
         const observer = new ResizeObserver(measure);
         observer.observe(node);
         return () => observer.disconnect();
-    }, [step?.id]);
+    }, [step?.id, actionCompleted, step?.isBillingIntro]);
+
+    // Lock background scrolling during walkthrough, prevent layout shifts and detached highlights.
+    // Restores scrolling completely when walkthrough ends, is skipped, or closes.
+    useEffect(() => {
+        const preventScroll = (event) => {
+            // Allow scrolling within the popover itself if content exceeds max-height
+            if (popoverRef.current && popoverRef.current.contains(event.target)) {
+                return;
+            }
+            event.preventDefault();
+        };
+
+        const preventScrollKeys = (event) => {
+            if (['Space', 'PageUp', 'PageDown', 'End', 'Home'].includes(event.code)) {
+                if (popoverRef.current && popoverRef.current.contains(event.target)) {
+                    return;
+                }
+                event.preventDefault();
+            }
+        };
+
+        window.addEventListener('wheel', preventScroll, { passive: false });
+        window.addEventListener('touchmove', preventScroll, { passive: false });
+        window.addEventListener('keydown', preventScrollKeys, { passive: false });
+
+        const prevBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        const scrollables = Array.from(document.querySelectorAll('.overflow-y-auto, .overflow-auto, main'));
+        const prevOverflows = scrollables.map((el) => el.style.overflow);
+        scrollables.forEach((el) => {
+            el.style.overflow = 'hidden';
+        });
+
+        return () => {
+            window.removeEventListener('wheel', preventScroll);
+            window.removeEventListener('touchmove', preventScroll);
+            window.removeEventListener('keydown', preventScrollKeys);
+            document.body.style.overflow = prevBodyOverflow;
+            scrollables.forEach((el, idx) => {
+                el.style.overflow = prevOverflows[idx] || '';
+            });
+        };
+    }, []);
 
     useEffect(() => {
         const onKeyDown = (event) => {
             if (event.key === 'Escape') { event.preventDefault(); onClose(); }
-            if (event.key === 'ArrowRight' || event.key === 'Enter') { event.preventDefault(); onNext(); }
+            if (event.key === 'ArrowRight' || event.key === 'Enter') {
+                event.preventDefault();
+                onNext();
+            }
             if (event.key === 'ArrowLeft' && !isFirst) { event.preventDefault(); onPrev(); }
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [onClose, onNext, onPrev, isFirst]);
 
-    const position = place(hole, size, step?.side || 'bottom');
+    const position = place(hole, size, step?.side || 'bottom', step);
     const progress = total > 1 ? ((index + 1) / total) * 100 : 100;
 
-    // Arrow offset along the shared edge — the popover is clamped to the
-    // viewport, so the element's centre is often not the popover's centre.
+    // Arrow offset along the shared edge — suppressed for centered popups
     const arrowOffset = (() => {
-        if (!hole || position.side === 'center') return null;
+        if (!hole || position.side === 'center' || position.side === 'center-bottom') return null;
         if (position.side === 'bottom' || position.side === 'top') {
             const center = hole.left + hole.width / 2 - position.left;
-            return { left: `${Math.min(Math.max(center, 20), size.width - 20)}px` };
+            return { left: `${Math.min(Math.max(center, 24), Math.max(size.width - 24, 24))}px` };
         }
-        const center = hole.top + hole.height / 2 - position.top;
-        return { top: `${Math.min(Math.max(center, 20), size.height - 20)}px` };
+        const isPlanCard = step?.id?.startsWith('bill-plan-') || hole.height > 280;
+        const targetHoleY = isPlanCard ? hole.top + Math.min(80, hole.height / 2) : hole.top + hole.height / 2;
+        const center = targetHoleY - position.top;
+        return { top: `${Math.min(Math.max(center, 24), Math.max(size.height - 24, 24))}px` };
     })();
 
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+
     return (
-        <div className="fixed inset-0 z-[9998]" role="dialog" aria-modal="true" aria-label="Product tour">
+        <div className="fixed inset-0 z-[9990] pointer-events-none" role="dialog" aria-modal="true" aria-label="Product tour">
             {/* Dim everything but the cut-out. A mask keeps the corners rounded;
                 four positioned divs cannot. */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
@@ -176,7 +300,7 @@ const TourSpotlight = ({
                                 y={hole.top}
                                 width={hole.width}
                                 height={hole.height}
-                                rx="12"
+                                rx="16"
                                 fill="black"
                             />
                         )}
@@ -187,7 +311,7 @@ const TourSpotlight = ({
                     y="0"
                     width="100%"
                     height="100%"
-                    fill="rgba(15, 23, 42, 0.6)"
+                    fill="rgba(15, 23, 42, 0.65)"
                     mask="url(#tour-spotlight-mask)"
                 />
                 {hole && (
@@ -196,24 +320,73 @@ const TourSpotlight = ({
                         y={hole.top}
                         width={hole.width}
                         height={hole.height}
-                        rx="12"
+                        rx="16"
                         fill="none"
-                        stroke="rgba(255, 255, 255, 0.9)"
-                        strokeWidth="2"
+                        stroke="#6366f1"
+                        strokeWidth={3}
+                        className="transition-all duration-200"
                     />
                 )}
             </svg>
 
-            {/* Swallows every click outside the popover: the tour drives
-                navigation itself, and a stray click on a highlighted button
-                would desync the step from the page. */}
-            <div className="absolute inset-0" onClick={(event) => event.stopPropagation()} />
+            {/* Swallows clicks OUTSIDE the cutout without detached overflow boxes */}
+            {hole && (
+                <>
+                    {hole.top > 0 && (
+                        <div
+                            className="absolute top-0 left-0 right-0 pointer-events-auto"
+                            style={{ height: `${Math.min(hole.top, vh)}px` }}
+                            onClick={(event) => event.stopPropagation()}
+                        />
+                    )}
+                    {hole.top + hole.height < vh && (
+                        <div
+                            className="absolute left-0 right-0 bottom-0 pointer-events-auto"
+                            style={{ top: `${Math.max(0, hole.top + hole.height)}px` }}
+                            onClick={(event) => event.stopPropagation()}
+                        />
+                    )}
+                    {hole.left > 0 && (
+                        <div
+                            className="absolute pointer-events-auto"
+                            style={{
+                                top: `${Math.max(0, hole.top)}px`,
+                                left: 0,
+                                width: `${Math.min(hole.left, vw)}px`,
+                                height: `${Math.max(0, Math.min(hole.top + hole.height, vh) - Math.max(0, hole.top))}px`,
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                        />
+                    )}
+                    {hole.left + hole.width < vw && (
+                        <div
+                            className="absolute pointer-events-auto"
+                            style={{
+                                top: `${Math.max(0, hole.top)}px`,
+                                left: `${Math.min(hole.left + hole.width, vw)}px`,
+                                right: 0,
+                                height: `${Math.max(0, Math.min(hole.top + hole.height, vh) - Math.max(0, hole.top))}px`,
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                        />
+                    )}
+                </>
+            )}
 
             <div
                 ref={popoverRef}
-                className="absolute w-[360px] max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(15,23,42,0.35)] border border-slate-200/80 font-sans animate-tour-pop"
+                className={`absolute pointer-events-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.35),0_0_0_1px_rgba(255,255,255,0.8)] border border-slate-200/90 font-sans animate-tour-pop overflow-y-auto max-h-[calc(100vh-40px)] custom-scrollbar ${
+                    step?.isBillingIntro
+                        ? 'w-[580px] max-w-[calc(100vw-32px)]'
+                        : (step?.id?.startsWith('bill-plan-')
+                            ? 'w-[350px] max-w-[calc(100vw-32px)]'
+                            : 'w-[410px] max-w-[calc(100vw-32px)]')
+                }`}
                 style={{ top: `${position.top}px`, left: `${position.left}px` }}
             >
+                {/* Gradient Accent Bar */}
+                <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600" />
+
                 {arrowOffset && (
                     <div
                         className={`absolute w-2.5 h-2.5 bg-white border-slate-200/80 rotate-45 ${ARROW_BY_SIDE[position.side]}`}
@@ -222,63 +395,145 @@ const TourSpotlight = ({
                     />
                 )}
 
-                <div className="p-5">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                        <h3 className="font-heading font-bold text-slate-800 text-base leading-snug">
-                            {step?.title}
-                        </h3>
+                <div className="p-5 sm:p-6 pb-3">
+                    {/* Header: Badge & Close */}
+                    <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold tracking-wide uppercase bg-brand-50 text-brand-700 border border-brand-200/80 shadow-xs">
+                                <Sparkles size={11} className="text-amber-500 shrink-0" />
+                                {step?.isBillingIntro ? 'Billing & Credits Overview' : 'Guided Onboarding'}
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-400">
+                                Step {index + 1} of {total}
+                            </span>
+                        </div>
                         <button
                             type="button"
                             onClick={onClose}
-                            title="End tour"
-                            aria-label="End tour"
-                            className="shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg p-1 transition-colors"
+                            title="Dismiss tour"
+                            aria-label="Dismiss tour"
+                            className="w-7 h-7 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-all cursor-pointer"
                         >
-                            <X size={16} />
+                            <X size={15} />
                         </button>
                     </div>
 
-                    <p className="text-sm text-slate-600 leading-relaxed">{step?.body}</p>
+                    {/* Title */}
+                    <h3 className="font-heading font-extrabold text-slate-900 text-lg leading-snug tracking-tight">
+                        {step?.title}
+                    </h3>
+
+                    {/* Body */}
+                    <p className="text-sm text-slate-600 leading-relaxed mt-1.5">
+                        {step?.body}
+                    </p>
+
+                    {/* Rich Platform Benefits for Billing Introduction */}
+                    {step?.isBillingIntro && (
+                        <div className="mt-4 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                                        <Zap size={16} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-xs font-bold text-slate-800 leading-snug">
+                                            Pay-As-You-Go Credits
+                                        </h4>
+                                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                            No locked recurring contracts. 1 credit = 1 order or settlement unit processed.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                                        <ShieldCheck size={16} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-xs font-bold text-slate-800 leading-snug">
+                                            100% Roll-over & Zero Expiry
+                                        </h4>
+                                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                            Unused credits never expire. Recharges automatically roll over your entire balance.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                                        <Clock size={16} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-xs font-bold text-slate-800 leading-snug">
+                                            Fee & Leakage Audits
+                                        </h4>
+                                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                            Audits courier weight overcharges, marketplace commission slips, and returns.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-100 text-purple-600 flex items-center justify-center shrink-0 mt-0.5">
+                                        <Sparkles size={16} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h4 className="text-xs font-bold text-slate-800 leading-snug">
+                                            Choose By Store Volume
+                                        </h4>
+                                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                            Select Basic (₹5k), Value (₹10k), or Premium (₹20k) based on your catalog capacity.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                <div className="px-5 pb-4">
-                    <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden mb-3">
+                {/* Footer Controls */}
+                <div className="px-5 sm:px-6 pb-4 pt-2">
+                    {/* Progress Bar */}
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-3.5">
                         <div
-                            className="h-full bg-brand-600 rounded-full transition-[width] duration-300"
+                            className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600"
                             style={{ width: `${progress}%` }}
                         />
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs font-semibold text-slate-400 tabular-nums">
-                            {index + 1} / {total}
-                        </span>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="text-xs font-semibold text-slate-400 hover:text-slate-700 px-2 py-1.5 transition-colors cursor-pointer"
+                        >
+                            Skip
+                        </button>
 
                         <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-2 py-2 transition-colors"
-                            >
-                                Skip
-                            </button>
                             {!isFirst && (
                                 <button
                                     type="button"
                                     onClick={onPrev}
-                                    className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 transition-colors"
+                                    className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200/80 rounded-xl px-3.5 py-2 transition-all active:scale-95 cursor-pointer"
                                 >
                                     <ArrowLeft size={14} />
                                     Back
                                 </button>
                             )}
+
                             <button
                                 type="button"
                                 onClick={onNext}
-                                className="flex items-center gap-1.5 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl px-3.5 py-2 shadow-sm transition-colors"
+                                className={`flex items-center gap-1.5 text-xs font-extrabold text-white rounded-xl px-4 py-2 shadow-md transition-all duration-200 active:scale-95 cursor-pointer ${
+                                    isLast
+                                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+                                        : 'bg-gradient-to-r from-brand-600 via-brand-700 to-indigo-700 hover:from-brand-500 hover:to-indigo-600 shadow-brand-500/25 hover:scale-[1.02]'
+                                }`}
                             >
-                                {isLast ? 'Done' : 'Next'}
-                                {isLast ? <Check size={14} /> : <ArrowRight size={14} />}
+                                <span>{isLast ? (step?.lastButtonText || 'Finish Tour & Choose Plan ➔') : (step?.nextButtonText || 'Next')}</span>
+                                {!isLast && !step?.nextButtonText?.includes('➔') && <ArrowRight size={14} />}
                             </button>
                         </div>
                     </div>
