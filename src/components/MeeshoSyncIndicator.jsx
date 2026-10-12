@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Loader2, ChevronUp, ChevronDown, CheckCircle, XCircle, Ban, AlertTriangle } from 'lucide-react';
 import api from '../api';
@@ -173,7 +175,7 @@ const MeeshoSyncIndicator = () => {
     const visibleDatasets = DATASETS.filter(t => batchTypes.includes(t));
 
     return (
-        <div className="fixed bottom-5 right-5 z-[70] w-[330px] max-w-[calc(100vw-2.5rem)]">
+        <div className="fixed bottom-5 right-[5.5rem] z-[70] w-[330px] max-w-[calc(100vw-7rem)]">
             <div className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 overflow-hidden">
                 <button
                     type="button"

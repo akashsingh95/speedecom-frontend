@@ -1,18 +1,21 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../AuthContext';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
-import { LifeBuoy, X, Paperclip, CheckCircle2, Clock, Plus, Image as ImageIcon, Send, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown } from 'lucide-react';
+import { LifeBuoy, X, Paperclip, CheckCircle2, Clock, MessageCircle, Image as ImageIcon, Send, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown } from 'lucide-react';
 import StarRating from '../components/StarRating';
 import RatingModal from '../components/RatingModal';
+import { openSupportChat } from '../components/support/SupportChatWidget';
+import { useSocketEvent, useTicketRoom } from '../hooks/useSupportSocket';
 
 const SupportPortal = () => {
     const { user } = useAuth();
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [statusFilters, setStatusFilters] = useState([]);
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -23,12 +26,6 @@ const SupportPortal = () => {
     const [gotoInput, setGotoInput] = useState('');
     const [gotoError, setGotoError] = useState(false);
     const [showRatingModal, setShowRatingModal] = useState(false);
-
-    // Form state
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [files, setFiles] = useState([]);
-    const [uploading, setUploading] = useState(false);
 
     // Reply state
     const [replyMessage, setReplyMessage] = useState('');
@@ -78,26 +75,23 @@ const SupportPortal = () => {
         return () => clearTimeout(delay);
     }, [gotoInput, totalPages]);
 
-    // Real-time polling for messages when a ticket is open.
-    // Uses recursive setTimeout so a slow request can't overlap with the next tick.
-    useEffect(() => {
-        if (!selectedTicket) return;
-        let cancelled = false;
-        let timeoutId;
-        const poll = async () => {
-            await fetchTicketDetails(selectedTicket._id, true);
-            if (!cancelled) timeoutId = setTimeout(poll, 3000);
-        };
-        timeoutId = setTimeout(poll, 3000);
-        return () => {
-            cancelled = true;
-            clearTimeout(timeoutId);
-        };
-    }, [selectedTicket?._id]);
+    // Live updates for the open ticket; reloading (rather than appending) keeps attachment URLs signed.
+    useTicketRoom(selectedTicket?._id, {
+        onMessage: () => fetchTicketDetails(selectedTicket._id, true),
+        onUpdated: () => {
+            fetchTicketDetails(selectedTicket._id, true);
+            fetchTickets(true);
+        },
+        onSync: () => fetchTicketDetails(selectedTicket._id, true),
+    });
 
-    const fetchTickets = async () => {
+    useSocketEvent('support:chat:new', () => fetchTickets(true));
+    useSocketEvent('support:ticket:updated', () => fetchTickets(true));
+
+    // silent: live refreshes keep the current list on screen instead of flashing the spinner.
+    const fetchTickets = async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const params = { page, limit: 20 };
             if (statusFilters.length > 0) params.status = statusFilters.join(',');
             const res = await api.get('/support', { params });
@@ -122,74 +116,6 @@ const SupportPortal = () => {
         } catch (error) {
             if (!silent) toast.error("Failed to load ticket details");
         }
-    };
-
-    const handleCreateSubmit = async (e) => {
-        e.preventDefault();
-        setUploading(true);
-        let uploadedUrls = [];
-
-        try {
-            if (files && files.length > 0) {
-                uploadedUrls = await Promise.all(files.map(async (file) => {
-                    // Get pre-signed URL
-                    const response = await api.post('/support/upload-url', {
-                        fileName: file.name,
-                        contentType: file.type,
-                    });
-                    const responseData = response.data?.data || response.data;
-                    const { uploadUrl, fileUrl } = responseData;
-
-                    // Upload direct to GCS
-                    await fetch(uploadUrl, {
-                        method: 'PUT',
-                        body: file,
-                        headers: { 'Content-Type': file.type }
-                    });
-                    return fileUrl;
-                }));
-            }
-
-            await api.post('/support', {
-                title,
-                description,
-                screenshots: uploadedUrls,
-            });
-
-            toast.success("Support ticket created successfully!");
-            setIsCreateModalOpen(false);
-            setTitle('');
-            setDescription('');
-            setFiles([]);
-            fetchTickets();
-        } catch (error) {
-            toast.error("Failed to create support ticket.");
-            console.error(error);
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const handleFileChange = (e) => {
-        if (e.target.files) {
-            const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-            const selectedFiles = Array.from(e.target.files);
-            
-            const validFiles = selectedFiles.filter(file => allowedTypes.includes(file.type));
-            const invalidFiles = selectedFiles.filter(file => !allowedTypes.includes(file.type));
-            
-            if (invalidFiles.length > 0) {
-                toast.error("Only PNG and JPG files are allowed");
-            }
-            
-            if (validFiles.length > 0) {
-                setFiles(prev => [...prev, ...validFiles]);
-            }
-        }
-    };
-
-    const removeFile = (indexToRemove) => {
-        setFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
     const handleReplySubmit = async (e) => {
@@ -232,17 +158,6 @@ const SupportPortal = () => {
             }
             return null;
         });
-    };
-
-    const handleCreateClick = () => {
-        const unrated = Array.isArray(tickets)
-            ? tickets.filter(t => ['Resolved', 'Closed'].includes(t.status) && !t.rating?.stars)
-            : [];
-        if (unrated.length > 0) {
-            setRatingState({ current: unrated[0], queue: unrated.slice(1) });
-            return;
-        }
-        setIsCreateModalOpen(true);
     };
 
     const getStatusColor = (status) => {
@@ -307,7 +222,8 @@ const SupportPortal = () => {
     const buildConversationGroups = (ticket) => {
         if (!ticket) return [];
         const items = [];
-        if (ticket.description) {
+        // A chat's description is its first message, which is already in `messages`.
+        if (ticket.description && ticket.channel !== 'chat') {
             items.push({
                 _key: 'description',
                 kind: 'description',
@@ -361,15 +277,15 @@ const SupportPortal = () => {
                                 </div>
                                 <div>
                                     <h1 className="text-xl font-bold tracking-tight">Support Portal</h1>
-                                    <p className="mt-1 text-sm text-blue-100">Create and manage your support requests.</p>
+                                    <p className="mt-1 text-sm text-blue-100">Chat with your account manager and see your past requests.</p>
                                 </div>
                             </div>
                             <button
-                                onClick={handleCreateClick}
+                                onClick={openSupportChat}
                                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm rounded-xl font-medium transition-all shadow-sm hover:shadow-md"
                             >
-                                <Plus size={18} />
-                                Create Ticket
+                                <MessageCircle size={18} />
+                                Chat with Support
                             </button>
                         </div>
                     </div>
@@ -594,109 +510,6 @@ const SupportPortal = () => {
                 )}
                 </div>
 
-                {/* Create Modal */}
-                {isCreateModalOpen && createPortal(
-                    <div className="fixed inset-0 z-50 overflow-y-auto">
-                        <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsCreateModalOpen(false)}></div>
-                            <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-                            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full border border-slate-200">
-                                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                                    <div className="sm:flex sm:items-start">
-                                        <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                                            <div className="flex items-center justify-between mb-6">
-                                                <h3 className="text-xl font-bold text-slate-800">Create New Support Ticket</h3>
-                                                <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-colors">
-                                                    <X size={20} />
-                                                </button>
-                                            </div>
-                                            <form onSubmit={handleCreateSubmit} className="space-y-5">
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Issue Title</label>
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        value={title}
-                                                        onChange={(e) => setTitle(e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-shadow text-[15px]"
-                                                        placeholder="Brief summary of the issue"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Detailed Description</label>
-                                                    <textarea
-                                                        required
-                                                        rows={4}
-                                                        value={description}
-                                                        onChange={(e) => setDescription(e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-shadow resize-none text-[15px]"
-                                                        placeholder="Please describe the issue you are facing in detail..."
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Attach Screenshots (Optional)</label>
-                                                    <div className="mt-1 flex justify-center px-6 pt-6 pb-7 border-2 border-slate-300 border-dashed rounded-xl hover:border-brand-400 transition-colors bg-slate-50/50 group">
-                                                        <div className="space-y-2 text-center">
-                                                            <ImageIcon className="mx-auto h-12 w-12 text-slate-400 group-hover:text-brand-500 transition-colors" />
-                                                            <div className="flex text-sm text-slate-600 justify-center">
-                                                                <label className="relative cursor-pointer rounded-md font-semibold text-brand-600 hover:text-brand-500 focus-within:outline-none">
-                                                                    <span>Upload files</span>
-                                                                    <input type="file" multiple className="sr-only" accept="image/png,image/jpeg,image/jpg" onChange={handleFileChange} />
-                                                                </label>
-                                                                <p className="pl-1">or drag and drop</p>
-                                                            </div>
-                                                            <p className="text-xs text-slate-500 font-medium">PNG, JPG up to 10MB</p>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    {files.length > 0 && (
-                                                        <div className="mt-4">
-                                                            <h4 className="text-sm font-semibold text-slate-700 mb-2">Selected files ({files.length}):</h4>
-                                                            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                                {files.map((f, index) => (
-                                                                    <li key={index} className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-square">
-                                                                        <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
-                                                                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                                                                            <button 
-                                                                                type="button" 
-                                                                                onClick={() => removeFile(index)} 
-                                                                                className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 focus:outline-none transform scale-90 group-hover:scale-100 transition-all shadow-lg"
-                                                                            >
-                                                                                <X size={16} strokeWidth={2.5} />
-                                                                            </button>
-                                                                        </div>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="bg-slate-50 px-4 py-4 sm:px-6 sm:flex sm:flex-row-reverse -mx-4 sm:-mx-6 rounded-b-2xl mt-8 border-t border-slate-100">
-                                                    <button
-                                                        type="submit"
-                                                        disabled={uploading}
-                                                        className="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-6 py-2.5 bg-brand-600 text-[15px] font-semibold text-white hover:bg-brand-700 focus:outline-none sm:ml-3 sm:w-auto transition-all disabled:opacity-50 disabled:hover:bg-brand-600"
-                                                    >
-                                                        {uploading ? 'Submitting...' : 'Submit Ticket'}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsCreateModalOpen(false)}
-                                                        className="mt-3 w-full inline-flex justify-center rounded-xl border border-slate-300 shadow-sm px-6 py-2.5 bg-white text-[15px] font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto transition-all"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>,
-                    document.body
-                )}
-
                 {/* Details Drawer */}
                 {selectedTicket && createPortal(
                     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -846,18 +659,18 @@ const SupportPortal = () => {
                                                     </div>
                                                     <div className="text-sm">
                                                         <p className="font-semibold text-slate-800">This ticket is {selectedTicket.status.toLowerCase()}.</p>
-                                                        <p className="text-slate-500">Please create a new ticket if you need further assistance.</p>
+                                                        <p className="text-slate-500">Start a new chat if you need further assistance.</p>
                                                     </div>
                                                 </div>
                                                 <button
                                                     onClick={() => {
-                                                        handleCreateClick();
                                                         setSelectedTicket(null);
+                                                        openSupportChat();
                                                     }}
                                                     className="shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white rounded-xl transition-all font-semibold shadow-md shadow-brand-500/20 text-sm"
                                                 >
-                                                    <Plus size={16} />
-                                                    New Ticket
+                                                    <MessageCircle size={16} />
+                                                    New Chat
                                                 </button>
                                             </div>
                                             <div className="flex items-center justify-between gap-3 p-4 bg-white border border-slate-200 rounded-2xl">
