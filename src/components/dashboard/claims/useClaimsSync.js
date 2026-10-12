@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import api from '../../../api';
 
-const SYNC_POLL_MS = 5000;
-const SYNC_MAX_POLLS = 420; // ~35 min, same window MarketplaceSettings uses for single-file syncs
+const POLL_MS = 5000;
+const MAX_POLLS = 72; // 6 minutes max (background sync usually finishes in <30s)
 
-// Runs the existing claims-only Meesho sync (same endpoint, queue and weekly-cycle
-// rules as Settings → Sync → Claims) and polls it until it settles.
+// Calls POST /returns/claims/sync (per-ticket API sync, 202 fire-and-forget) then
+// polls GET /returns/claims until last_synced_at advances, signalling completion.
 const useClaimsSync = ({ onSynced } = {}) => {
-    const [progress, setProgress] = useState({}); // marketplaceId -> progress text
+    const [progress, setProgress] = useState({}); // marketplaceId → progress text
     const pollers = useRef({});
     const onSyncedRef = useRef(onSynced);
     onSyncedRef.current = onSynced;
@@ -24,47 +24,59 @@ const useClaimsSync = ({ onSynced } = {}) => {
     const startSync = useCallback(async (marketplaceId, accountName = 'Account') => {
         if (pollers.current[marketplaceId] || progress[marketplaceId] !== undefined) return;
         setProgress(prev => ({ ...prev, [marketplaceId]: 'Starting…' }));
+
+        let snapshotSyncedAt = null;
         try {
-            const { data } = await api.post('/meesho-sync/trigger-claims', { marketplaceId }, { skipErrorToast: true });
-            if (data?.skipped) {
+            // Capture current last_synced_at so we know when the sync completes
+            const { data: before } = await api.get('/returns/claims', {
+                params: { marketplaceIds: JSON.stringify([marketplaceId]), page: 1, limit: 1 },
+                skipErrorToast: true,
+            });
+            snapshotSyncedAt = before?.stats?.last_synced_at ?? null;
+        } catch {
+            // proceed without snapshot — we'll just poll a fixed number of times
+        }
+
+        try {
+            const { data } = await api.post('/returns/claims/sync', { marketplaceId }, { skipErrorToast: true });
+            if (data?.synced === 0) {
                 stop(marketplaceId);
-                toast.warning(data.message || data.reason || 'Claims sync skipped', { description: accountName });
+                toast.info('No open claims to sync', { description: accountName });
                 return;
             }
-            toast.info('Claims sync started', { description: `${accountName} — statuses update when it finishes.` });
+            toast.info('Sync started', { description: `${accountName} — statuses will update shortly.` });
+            setProgress(prev => ({ ...prev, [marketplaceId]: 'Syncing…' }));
         } catch (err) {
             stop(marketplaceId);
-            toast.error('Could not start claims sync', { description: err.response?.data?.message || accountName });
+            toast.error('Could not start sync', { description: err.response?.data?.message || accountName });
             return;
         }
 
         let polls = 0;
         pollers.current[marketplaceId] = setInterval(async () => {
             polls += 1;
-            if (polls > SYNC_MAX_POLLS) {
+            if (polls > MAX_POLLS) {
                 stop(marketplaceId);
-                toast.info('Claims sync is still running in the background', { description: accountName });
+                toast.info('Sync is still running in the background', { description: accountName });
                 return;
             }
             try {
-                const { data: prog } = await api.get('/meesho-sync/sync-progress', { params: { marketplaceId }, skipErrorToast: true });
-                const ds = prog?.datasets?.claims;
-                if (ds?.progressMessage || ds?.queued) {
-                    setProgress(prev => ({ ...prev, [marketplaceId]: ds.progressMessage || 'Queued…' }));
-                    return;
-                }
-                if (polls <= 3) return;
+                const { data: after } = await api.get('/returns/claims', {
+                    params: { marketplaceIds: JSON.stringify([marketplaceId]), page: 1, limit: 1 },
+                    skipErrorToast: true,
+                });
+                const newSyncedAt = after?.stats?.last_synced_at ?? null;
+                const done = newSyncedAt && newSyncedAt !== snapshotSyncedAt;
+                if (!done && polls <= 3) return; // give it a few polls before declaring done
+                if (!done) return;
+
                 stop(marketplaceId);
-                if (ds?.status === 'failed' || ds?.status === 'validation_failed') {
-                    toast.error('Claims sync failed', { description: ds.errorMessage || accountName });
-                } else {
-                    toast.success('Claims synced', { description: `${accountName} — latest statuses loaded.` });
-                    onSyncedRef.current?.(marketplaceId);
-                }
+                toast.success('Claims synced', { description: `${accountName} — latest statuses loaded.` });
+                onSyncedRef.current?.(marketplaceId);
             } catch {
-                stop(marketplaceId);
+                if (polls > MAX_POLLS) stop(marketplaceId);
             }
-        }, SYNC_POLL_MS);
+        }, POLL_MS);
     }, [progress]);
 
     return { progress, startSync, isSyncing: (id) => progress[id] !== undefined };
