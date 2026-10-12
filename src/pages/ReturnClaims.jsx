@@ -37,63 +37,77 @@ const BulkBanner = ({ bulk, cancelRef, onStart, onChange, onDismiss }) => {
         const descOk = descLen >= 10;
         const canStart = phoneOk && descOk;
         return (
-            <div className="mb-4 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 p-4 shadow-sm">
-                <div className="mb-3 flex items-center justify-between gap-4">
-                    <div>
-                        <p className="font-semibold text-slate-800">
-                            Raise claims for <span className="text-violet-700">{bulk.rows.length}</span> overdue return{bulk.rows.length !== 1 ? 's' : ''}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">Same description used for each · submitted one at a time</p>
+            <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onDismiss} />
+                <motion.div
+                    role="dialog" aria-modal="true"
+                    initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-2xl"
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between rounded-t-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-4">
+                        <div>
+                            <p className="font-semibold text-white">
+                                Raise claims for <span className="font-bold">{bulk.rows.length}</span> overdue return{bulk.rows.length !== 1 ? 's' : ''}
+                            </p>
+                            <p className="mt-0.5 text-xs text-violet-200">Same description used for each · submitted one at a time</p>
+                        </div>
+                        <button type="button" onClick={onDismiss}
+                            className="rounded-lg p-1.5 text-white/70 hover:bg-white/15 hover:text-white transition-colors">
+                            ✕
+                        </button>
                     </div>
-                    <button type="button" onClick={onDismiss}
-                        className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                        Cancel
-                    </button>
-                </div>
 
-                {/* Description */}
-                <div className="mb-3">
-                    <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                        <AlignLeft size={12} /> Description <span className="text-rose-500">*</span>
-                    </label>
-                    <textarea
-                        rows={3}
-                        value={bulk.description || ''}
-                        onChange={e => onChange('description', e.target.value)}
-                        placeholder="Describe the issue — e.g. RTO / customer returns not received at warehouse…"
-                        maxLength={1000}
-                        className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-4 focus:ring-violet-500/10"
-                    />
-                    <div className="mt-1 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400">{bulk.rows.length > 1 ? 'Applied to all claims' : ''}</span>
-                        <span className={descLen > 900 ? 'font-semibold text-amber-600' : 'text-slate-400'}>{descLen}/1000</span>
-                    </div>
-                </div>
+                    {/* Body */}
+                    <div className="p-5">
+                        {/* Description */}
+                        <div className="mb-4">
+                            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                                <AlignLeft size={12} /> Description <span className="text-rose-500">*</span>
+                            </label>
+                            <textarea
+                                rows={4}
+                                value={bulk.description || ''}
+                                onChange={e => onChange('description', e.target.value)}
+                                placeholder="Describe the issue — e.g. RTO / customer returns not received at warehouse…"
+                                maxLength={1000}
+                                autoFocus
+                                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 shadow-sm focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-500/10"
+                            />
+                            <div className="mt-1 flex items-center justify-between text-[11px]">
+                                <span className="text-slate-400">Applied to all claims</span>
+                                <span className={descLen > 900 ? 'font-semibold text-amber-600' : 'text-slate-400'}>{descLen}/1000</span>
+                            </div>
+                            {!descOk && descLen > 0 && (
+                                <p className="mt-1 text-[11px] text-rose-600">Description must be at least 10 characters</p>
+                            )}
+                        </div>
 
-                {/* Callback + Start */}
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative flex-1 min-w-[160px]">
-                        <Phone size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            value={bulk.callbackNumber}
-                            onChange={e => onChange('callbackNumber', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                            placeholder="Callback number"
-                            inputMode="numeric"
-                            className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 font-mono text-sm text-slate-800 focus:border-violet-400 focus:outline-none focus:ring-4 focus:ring-violet-500/10"
-                            maxLength={10}
-                        />
+                        {/* Callback + Start */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="relative flex-1 min-w-[160px]">
+                                <Phone size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    value={bulk.callbackNumber}
+                                    onChange={e => onChange('callbackNumber', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                    placeholder="Callback number"
+                                    inputMode="numeric"
+                                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 font-mono text-sm text-slate-800 focus:border-violet-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-500/10"
+                                    maxLength={10}
+                                />
+                            </div>
+                            <button type="button" disabled={!canStart} onClick={() => onStart(bulk)}
+                                className="h-10 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-6 text-sm font-bold text-white shadow-sm shadow-violet-200 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all">
+                                Start raising
+                            </button>
+                        </div>
+                        {bulk.callbackNumber.length > 0 && !phoneOk && (
+                            <p className="mt-1.5 text-[11px] text-rose-600">Enter a valid 10-digit Indian mobile number (starts 6–9)</p>
+                        )}
                     </div>
-                    <button type="button" disabled={!canStart} onClick={() => onStart(bulk)}
-                        className="h-9 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-sm font-bold text-white shadow-sm shadow-violet-200 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all">
-                        Start raising
-                    </button>
-                </div>
-                {bulk.callbackNumber.length > 0 && !phoneOk && (
-                    <p className="mt-1.5 text-[11px] text-rose-600">Enter a valid 10-digit Indian mobile number (starts 6–9)</p>
-                )}
-                {!descOk && descLen > 0 && (
-                    <p className="mt-1 text-[11px] text-rose-600">Description must be at least 10 characters</p>
-                )}
+                </motion.div>
             </div>
         );
     }
