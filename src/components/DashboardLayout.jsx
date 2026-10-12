@@ -1,6 +1,10 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React from 'react';
 import Sidebar from './Sidebar';
 import MeeshoSyncIndicator from './MeeshoSyncIndicator';
+import SupportChatWidget from './support/SupportChatWidget';
+import SupportChatDrawer from './support/SupportChatDrawer';
 import { useAuth } from '../AuthContext';
 import { AlertTriangle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -54,6 +58,8 @@ const DashboardLayout = ({ children }) => {
             {/* Tenant listings have no effective tenant, so the status poll must
                 wait until an account is opened or a tenant user is signed in. */}
             {hasTenantContext && <MeeshoSyncIndicator />}
+            <SupportChatWidget />
+            <SupportChatDrawer />
         </div>
     );
 };

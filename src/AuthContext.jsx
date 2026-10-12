@@ -1,6 +1,9 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import api, { encryptPassword } from './api';
 import { clearCampaignStarted } from './components/listingStudio/lastCampaign';
+import { disconnectSocket } from './socket';
 
 const AuthContext = createContext();
 
@@ -252,6 +255,7 @@ export const AuthProvider = ({ children }) => {
             'dashboardSelectedMarketplaces',
             'speedyAgentFilters'
         ]);
+        disconnectSocket();
         setUser(null);
         setIsImpersonating(false);
         setImpersonatedTenant(null);

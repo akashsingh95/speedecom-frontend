@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -9,6 +11,7 @@ import StarRating from '../components/StarRating';
 import TicketTimeline from '../components/TicketTimeline';
 import DateRangePicker from '../components/DateRangePicker';
 import { getClosingTime } from '../utils/formatDuration';
+import { useSocketEvent, useTicketRoom } from '../hooks/useSupportSocket';
 
 const AdminSupport = () => {
     const { user } = useAuth();
@@ -177,22 +180,18 @@ const AdminSupport = () => {
         fetchDevelopers();
     }, [user]);
 
-    // Real-time polling for messages when a ticket is open.
-    // Uses recursive setTimeout so a slow request can't overlap with the next tick.
-    useEffect(() => {
-        if (!selectedTicket) return;
-        let cancelled = false;
-        let timeoutId;
-        const poll = async () => {
-            await fetchTicketDetails(selectedTicket._id, true);
-            if (!cancelled) timeoutId = setTimeout(poll, 3000);
-        };
-        timeoutId = setTimeout(poll, 3000);
-        return () => {
-            cancelled = true;
-            clearTimeout(timeoutId);
-        };
-    }, [selectedTicket?._id]);
+    // Live updates for the open ticket; reloading (rather than appending) keeps attachment URLs signed.
+    useTicketRoom(selectedTicket?._id, {
+        onMessage: () => fetchTicketDetails(selectedTicket._id, true),
+        onUpdated: () => {
+            fetchTicketDetails(selectedTicket._id, true);
+            fetchTickets(true);
+        },
+        onSync: () => fetchTicketDetails(selectedTicket._id, true),
+    });
+
+    useSocketEvent('support:chat:new', () => fetchTickets(true));
+    useSocketEvent('support:ticket:updated', () => fetchTickets(true));
 
     const fetchAdminUsers = async () => {
         try {
@@ -219,11 +218,12 @@ const AdminSupport = () => {
         }
     };
 
-    const fetchTickets = async () => {
+    // silent: live refreshes keep the current list on screen instead of flashing the spinner.
+    const fetchTickets = async (silent = false) => {
         // Don't fetch if filter type is selected but no date range is set
         if (filterType !== 'none' && (!dateRanges[filterType]?.start || !dateRanges[filterType]?.end)) return;
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const params = { page, limit: 20 };
             if (statusFilters.length > 0) params.status = statusFilters.join(',');
             if (rmFilters.length > 0) params.assignedRM = rmFilters.join(',');
@@ -393,7 +393,8 @@ const AdminSupport = () => {
     const buildConversationGroups = (ticket) => {
         if (!ticket) return [];
         const items = [];
-        if (ticket.description) {
+        // A chat's description is its first message, which is already in `messages`.
+        if (ticket.description && ticket.channel !== 'chat') {
             items.push({
                 _key: 'description',
                 kind: 'description',
