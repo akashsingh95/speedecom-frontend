@@ -24,6 +24,7 @@ const PERMISSION_GROUPS = [
             { key: 'downloads', label: 'Downloads', desc: 'Access download reports section', color: 'orange' },
             { key: 'scanReturns', label: 'Scan Returns', desc: 'Access scan returns page', color: 'pink' },
             { key: 'manageOrders', label: 'Manage Orders', desc: 'Access the Meesho order-status tracking page', color: 'lime' },
+            { key: 'raiseClaims', label: 'Raise Claims', desc: 'Raise return/RTO claims on Meesho for overdue shipments', color: 'green' },
         ],
     },
     {
@@ -54,6 +55,7 @@ const COLOR_MAP = {
     purple: { border: 'border-purple-300', bg: 'bg-purple-50/50', ring: 'ring-purple-200/50', text: 'text-purple-600', focus: 'focus:ring-purple-500' },
     sky: { border: 'border-sky-300', bg: 'bg-sky-50/50', ring: 'ring-sky-200/50', text: 'text-sky-600', focus: 'focus:ring-sky-500' },
     lime: { border: 'border-lime-300', bg: 'bg-lime-50/50', ring: 'ring-lime-200/50', text: 'text-lime-600', focus: 'focus:ring-lime-500' },
+    green: { border: 'border-green-300', bg: 'bg-green-50/50', ring: 'ring-green-200/50', text: 'text-green-600', focus: 'focus:ring-green-500' },
 };
 
 const UserManagement = () => {
@@ -79,6 +81,7 @@ const UserManagement = () => {
         downloads: true,
         scanReturns: true,
         manageOrders: true,
+        raiseClaims: true,
         marketplace: true,
         billing: true,
         support: true,
@@ -147,6 +150,7 @@ const UserManagement = () => {
             downloads: perms.downloads ?? true,
             scanReturns: perms.scanReturns ?? true,
             manageOrders: perms.manageOrders ?? true,
+            raiseClaims: perms.raiseClaims ?? true,
             marketplace: perms.marketplace ?? true,
             billing: perms.billing ?? true,
             support: perms.support ?? true,
