@@ -34,185 +34,63 @@ export const USER_MANAGEMENT_TOUR = 'user-management';
 export const BILLING_TOUR = 'billing';
 
 export const TENANT_ONBOARDING_STEPS = [
+    // ── 1. Guide user to Billing from Dashboard ──────────────
     {
-        id: 'welcome',
+        id: 'nav-billing',
+        target: TOUR.nav.settingsBilling,
+        route: '/dashboard',
+        side: 'right',
+        title: 'Step 1: Head to Billing & Credits ⚡',
+        body: 'SpeedEcom operates on processing credits for report parsing, marketplace reconciliations, and SKU profit intelligence. Let\'s begin by funding your credit wallet. Click "Billing" in the sidebar or "Go to Billing ➔" below to view available plans.',
+        nextButtonText: 'Go to Billing ➔',
+    },
+
+    // ── 2. Billing Credits Introduction (Centered on /subscription) ──
+    {
+        id: 'bill-intro',
         target: null,
-        route: '/dashboard',
-        required: true,
+        route: '/subscription',
         side: 'center',
-        title: 'Welcome to SpeedEcom \ud83d\udc4b',
-        body: 'Four things stand between you and your first profit figure: connect a marketplace, upload your reports, fill in your costs, then calculate. This walks you through them in order. You can leave any time and pick it up again from the sidebar.',
+        isBillingIntro: true,
+        title: 'Understanding SpeedEcom Processing Credits ⚡',
+        body: 'SpeedEcom runs on flexible, pay-as-you-go processing credits instead of rigid recurring subscriptions. Here is how your credit wallet works:',
+        nextButtonText: 'Explore Plans ➔',
     },
+
+    // ── 3. Explore Basic Boost Plan ──
     {
-        id: 'nav-dashboard',
-        target: TOUR.nav.dashboard,
-        route: '/dashboard',
+        id: 'bill-plan-basic',
+        target: TOUR.billing.planBasic,
+        route: '/subscription',
         required: true,
-        side: 'right',
-        title: 'This is home',
-        body: 'Everything lands back here — settlements, ads, returns, and the calculations that tie them together. Let us get some data into it.',
+        side: 'auto',
+        title: '1. Basic Boost Plan (₹5,000) ⚡',
+        body: 'Recharge with ₹5,000 to receive 5,000 processing credits. Ideal for light order volume, exploratory reconciliations, and testing with 30 days of Speedy AI access.',
+        nextButtonText: 'Next Plan ➔',
     },
 
-    // ── 1. Connect a marketplace ─────────────────────────────
+    // ── 4. Explore Value Plus Plan ──
     {
-        id: 'connect-nav',
-        target: TOUR.nav.settings,
-        route: '/dashboard',
-        side: 'right',
-        title: 'First: connect a marketplace',
-        body: 'Nothing works until SpeedEcom can see one of your seller accounts. That lives under Settings → Marketplace.',
-    },
-    {
-        id: 'connect-card',
-        target: TOUR.marketplace.card,
-        route: '/settings/marketplace',
-        side: 'right',
-        title: 'One card per marketplace',
-        body: 'Each card shows whether that marketplace is connected and how many of your accounts are attached. You can connect several accounts to the same marketplace.',
-    },
-    {
-        id: 'connect-button',
-        target: TOUR.marketplace.connectBtn,
-        route: '/settings/marketplace',
-        side: 'right',
-        title: 'Connect your seller account',
-        body: 'This opens a form for that marketplace\'s credentials. Which fields you get depends on how the marketplace signs you in — email, phone, or a redirect.',
-    },
-
-    // ── 2. Upload the reports ────────────────────────────────
-    {
-        id: 'calc-upload-reports',
-        target: TOUR.calc.uploadReportsBtn,
-        route: '/dashboard',
-        search: '?tab=calculations',
-        side: 'top',
-        title: 'Next: bring in your reports',
-        body: 'Start by uploading your sales, settlement, and return reports. Clicking this will take you to the uploads page.',
-    },
-    {
-        id: 'uploads-account',
-        target: TOUR.uploads.accountSelect,
-        route: '/uploads',
-        side: 'right',
-        title: 'Step 1 — the account',
-        body: 'Pick the marketplace account the report came from. Getting this wrong is the most common cause of numbers that look off later.',
-    },
-    {
-        id: 'uploads-type',
-        target: TOUR.uploads.typeGrid,
-        route: '/uploads',
-        side: 'right',
-        title: 'Step 2 — the report type',
-        body: 'Orders, settlements, ads and returns are separate uploads. Each marketplace names its exports differently, so every card carries a tutorial link.',
-    },
-    {
-        id: 'uploads-file',
-        target: TOUR.uploads.fileSelector,
-        route: '/uploads',
-        side: 'top',
-        title: 'Step 3 — the file',
-        body: 'Drop the file in exactly as the marketplace exported it — no re-saving or column edits. This adds the file to your queue.',
-    },
-    {
-        id: 'uploads-queue',
-        target: TOUR.uploads.queue,
-        route: '/uploads',
-        side: 'left',
-        title: 'Step 4 — processing',
-        body: 'Your selected files appear here. Click process to start uploading them. Processing continues in the background, so you can leave the page.',
-    },
-    {
-        id: 'uploads-history',
-        target: TOUR.uploads.tabHistory,
-        route: '/uploads',
-        side: 'bottom',
-        title: 'Checking an upload later',
-        body: 'Every upload and its outcome lives here. If a calculation looks wrong, this is the first place to look — a rejected file is usually why.',
-    },
-
-    // ── 3. Choose what to work on ────────────────────────────
-    {
-        id: 'filter-root',
-        target: TOUR.filter.root,
-        route: '/dashboard',
-        search: '?tab=calculations',
-        side: 'bottom',
-        title: 'Back here, start by narrowing the data',
-        body: 'Everything below reacts to this panel. You must pick at least one account to view calculations.',
-    },
-    {
-        id: 'filter-marketplace',
-        target: TOUR.filter.marketplace,
-        route: '/dashboard',
-        search: '?tab=calculations',
-        side: 'bottom',
-        title: 'Switching between accounts',
-        body: 'Every connected account appears here — this is where you switch between them, or select several to compare in one calculation. Until you connect one, an example is shown in its place.',
-    },
-
-    // ── 4. Cost sheet, then calculate ────────────────────────
-    {
-        id: 'calc-workflow',
-        target: TOUR.calc.workflow,
-        route: '/dashboard',
-        search: '?tab=calculations',
-        side: 'bottom',
-        title: 'The workflow',
-        body: 'Cost sheets are generated automatically based on your uploads. You just need to fill them and view your reports.',
-    },
-    {
-        id: 'calc-open-cost-sheet',
-        target: TOUR.calc.openCostSheetBtn,
-        route: '/dashboard',
-        search: '?tab=calculations',
-        side: 'top',
-        title: 'Open it and fill in your costs',
-        body: 'Enter what each SKU costs you — product, packaging, shipping. It edits like a spreadsheet, and you can paste a column straight from Excel. Profit figures are only as honest as what you put here.',
-    },
-    {
-        id: 'calc-calculate',
-        target: TOUR.calc.calculateBtn,
-        route: '/dashboard',
-        search: '?tab=calculations',
-        side: 'top',
-        title: 'View Report',
-        body: 'Once your costs are filled, click this to automatically process the calculations and view the final results.',
-    },
-
-    // ── 5. The rest of the product ───────────────────────────
-    {
-        id: 'dash-tabs',
-        target: TOUR.dash.tabs,
-        route: '/dashboard',
-        search: '?tab=calculations',
-        side: 'bottom',
-        title: 'The other views',
-        body: 'Action Required lists what needs a decision today. Payments, Ads and Returns break down each source behind the calculation you just ran.',
-    },
-    {
-        id: 'nav-speedy-ai',
-        target: TOUR.nav.speedyAi,
-        route: '/dashboard',
-        side: 'right',
-        title: 'Ask instead of clicking',
-        body: 'Speedy AI answers questions about your own data — "which SKUs lost money last month?" — without you building a single filter.',
-    },
-    {
-        id: 'nav-profile',
-        target: TOUR.nav.profile,
-        route: '/dashboard',
+        id: 'bill-plan-value',
+        target: TOUR.billing.planValue,
+        route: '/subscription',
         required: true,
-        side: 'top',
-        title: 'Your account',
-        body: 'Profile, password and business details live here.',
+        side: 'auto',
+        title: '2. Value Plus Plan (₹10,000) 🌟',
+        body: 'Our most popular tier for growing merchants. 10,000 processing credits with 100% rollover, multi-marketplace analytics, advanced FAQ templates, and continuous AI assistance with zero expiry.',
+        nextButtonText: 'Next Plan ➔',
     },
+
+    // ── 5. Explore Premium Power Plan ──
     {
-        id: 'finish',
-        target: null,
+        id: 'bill-plan-premium',
+        target: TOUR.billing.planPremium,
+        route: '/subscription',
         required: true,
-        side: 'center',
-        title: 'That is the tour',
-        body: 'Start at step one: connect a marketplace under Settings. Every page also has its own short tour behind the button in its header, and you can replay this one from the sidebar.',
+        side: 'auto',
+        title: '3. Premium Power Plan (₹20,000) 🚀',
+        body: 'Built for high-volume catalogs. 20,000 credits, unlimited AI queries, 24/7 priority support, deep marketplace intelligence, and advanced SKU exports. Click below to complete plan exploration and choose any tier.',
+        lastButtonText: 'Finish Tour & Choose Plan ➔',
     },
 ];
 
@@ -684,7 +562,7 @@ export const TOURS = {
         // permissions actually render.
         autoStart: {
             roles: ['Admin', 'User'],
-            routes: ['/dashboard', '/uploads'],
+            routes: ['/subscription', '/dashboard', '/uploads'],
             requires: null,
         },
     },

@@ -14,13 +14,13 @@ import { useTour } from './TourProvider';
 import { createPortal } from 'react-dom';
 
 const TourLauncher = ({ tourKey, label = 'Tour this page', className = '' }) => {
-    const { startTour, isAvailable } = useTour() || {};
+    const { startTour, resetTour, isAvailable } = useTour() || {};
 
     // Admin-side roles have no tenant page tours; rendering a dead button for
     // them would be worse than rendering nothing.
     const [tooltipState, setTooltipState] = useState({ show: false, x: 0, y: 0 });
 
-    if (!isAvailable || !startTour) return null;
+    if (!isAvailable || (!startTour && !resetTour)) return null;
 
     const handleMouseMove = (e) => {
         setTooltipState({ show: true, x: e.clientX, y: e.clientY });
@@ -30,12 +30,20 @@ const TourLauncher = ({ tourKey, label = 'Tour this page', className = '' }) => 
         setTooltipState({ show: false, x: 0, y: 0 });
     };
 
+    const handleLaunch = () => {
+        if (tourKey === 'tenant-onboarding' && resetTour) {
+            resetTour(tourKey);
+        } else if (startTour) {
+            startTour(tourKey);
+        }
+    };
+
     return (
         <>
             <button
                 type="button"
                 data-tour={TOUR.common.tourLauncher}
-                onClick={() => startTour(tourKey)}
+                onClick={handleLaunch}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
                 className={`flex items-center justify-center text-slate-500 hover:text-brand-700 bg-white hover:bg-brand-50/60 border border-slate-200 hover:border-brand-100 rounded-xl p-2 sm:p-2.5 shadow-sm transition-all duration-200 shrink-0 ${className}`}

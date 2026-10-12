@@ -115,7 +115,6 @@ const groups = {
     // and the wrapper is the element that survives both.
     calc: group('calc', [
         'workflow',
-        'statusMessage',
         'calculateBtn',
         'progress',
         'openCostSheetBtn',
@@ -157,7 +156,12 @@ const groups = {
     billing: group('billing', [
         'header',
         'plans',
+        'planBasic',
+        'planValue',
+        'planPremium',
         'buyBtn',
+        'modal',
+        'modalPayBtn',
         'history',
     ]),
 

@@ -1,6 +1,7 @@
-﻿/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import {
     CheckCircle, Clock, AlertCircle, Loader2, RotateCcw,
@@ -8,9 +9,11 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import { useAuth } from '../AuthContext';
+import { useTour } from '../tour/tourProvider';
 import { TOUR } from '../tour/targets';
 import TourLauncher from '../tour/TourLauncher';
 import { BILLING_TOUR } from '../tour/steps';
+import BillingOnboardingWidget from '../tour/BillingOnboardingWidget';
 import { toast } from 'sonner';
 import { loadRazorpay } from '../utils/loadRazorpay';
 import { parseGstin } from '../utils/gstinUtils';
@@ -21,8 +24,74 @@ const GST_RATE = Number(import.meta.env.VITE_GST_RATE || 18) / 100;
 
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
+const FALLBACK_PLANS = [
+    {
+        _id: 'fallback-basic-boost',
+        title: 'Basic Boost',
+        price: 5000,
+        credits: 5000,
+        description: 'Recharge your account with ₹5,000 and get the essentials to keep you going. Perfect for light users who need a quick balance top-up.',
+        colorScheme: 'blue',
+        displayOrder: 1,
+        isActive: true,
+        features: [
+            'Unlimited AI-powered queries',
+            'Access to all marketplaces data',
+            'Pre-built FAQ templates',
+            'Standard support',
+            '30 days of Speedy AI access'
+        ]
+    },
+    {
+        _id: 'fallback-value-plus',
+        title: 'Value Plus',
+        price: 10000,
+        credits: 10000,
+        description: 'Top up with ₹10,000 for added flexibility and value. Designed for regular users who want more balance for their growing needs.',
+        colorScheme: 'purple',
+        displayOrder: 2,
+        isActive: true,
+        features: [
+            'Unlimited AI-powered queries',
+            'Multi-marketplace analysis',
+            'Advanced FAQ templates',
+            'Priority support',
+            'Unlimited Speedy AI access',
+            'Export results to CSV'
+        ]
+    },
+    {
+        _id: 'fallback-premium-power',
+        title: 'Premium Power',
+        price: 20000,
+        credits: 20000,
+        description: 'Power up your account with ₹20,000 for maximum flexibility. Ideal for heavy users with top-tier features.',
+        colorScheme: 'orange',
+        displayOrder: 3,
+        isActive: true,
+        features: [
+            'Unlimited AI-powered queries',
+            'Deep multi-marketplace analysis',
+            'All premium FAQ templates',
+            '24/7 Priority support',
+            'Unlimited Speedy AI access',
+            'Advanced exports & reports'
+        ]
+    }
+];
+
 const Subscription = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const {
+        completeTourAction,
+        currentStep,
+        isRunning,
+        billingOnboardingActive,
+        setBillingOnboardingActive,
+        completeBillingOnboarding,
+        startHighlightingPlans,
+    } = useTour() || {};
 
     const [activeProduct, setActiveProduct] = useState('reconciliation'); // 'reconciliation' | 'listing-studio'
     const [plans, setPlans] = useState([]);
@@ -35,7 +104,15 @@ const Subscription = () => {
     // Payment modal
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [paymentLoading, setPaymentLoading] = useState(false);
+    const [paymentStatus, setPaymentStatus] = useState('idle'); // 'idle' | 'checkout' | 'verifying' | 'cancelled' | 'failed'
     const [paymentSuccess, setPaymentSuccess] = useState(null);
+    const [isWidgetDismissed, setIsWidgetDismissed] = useState(false);
+
+    useEffect(() => {
+        if (selectedPlan) {
+            setIsWidgetDismissed(false);
+        }
+    }, [selectedPlan]);
 
     // ── GST smart card state ─────────────────────────────────────────────────
     const [savedGst, setSavedGst] = useState(null);   // loaded from profile
@@ -77,15 +154,16 @@ const Subscription = () => {
             .catch(() => setSavedGst({}));
     }, []);
 
-    // Reset when modal closes
     useEffect(() => {
         if (!selectedPlan) {
             setGstEditing(false);
             setGstinError('');
+            setPaymentStatus((prev) => (prev === 'checkout' ? 'idle' : prev));
+        } else {
+            setPaymentStatus('checkout');
         }
     }, [selectedPlan]);
 
-    useEffect(() => { fetchPlans(); fetchHistory(); }, []);
 
     // GSTIN change handler — auto-fill state/PAN instantly
     const handleGstinChange = (e) => {
@@ -126,9 +204,13 @@ const Subscription = () => {
         setPlansLoading(true);
         try {
             const { data } = await api.get('/credit-plans');
-            setPlans(data.plans || []);
+            if (data?.plans && data.plans.length > 0) {
+                setPlans(data.plans);
+            } else {
+                setPlans(FALLBACK_PLANS);
+            }
         } catch {
-            // toast handled by interceptor
+            setPlans(FALLBACK_PLANS);
         } finally {
             setPlansLoading(false);
         }
@@ -328,6 +410,7 @@ const Subscription = () => {
                 order_id: orderId,
                 handler: async (response) => {
                     setPaymentLoading(true);
+                    setPaymentStatus('verifying');
                     try {
                         const verifyBody = {
                             razorpay_order_id: response.razorpay_order_id,
@@ -376,8 +459,12 @@ const Subscription = () => {
                         };
                         setSelectedPlan(null);
                         setPaymentSuccess(successData);
+                        setPaymentStatus('idle');
+                        completeTourAction?.('billing', successData);
+                        window.dispatchEvent(new CustomEvent('tour:action-completed', { detail: { action: 'billing', meta: successData } }));
                         fetchHistory();
                     } catch {
+                        setPaymentStatus('failed');
                         // toast handled by interceptor
                     } finally {
                         setPaymentLoading(false);
@@ -388,11 +475,18 @@ const Subscription = () => {
                     email: user?.email || '',
                 },
                 theme: { color: '#0284c7' },
-                modal: { ondismiss: () => setPaymentLoading(false) },
+                modal: {
+                    ondismiss: () => {
+                        setPaymentLoading(false);
+                        setPaymentStatus('cancelled');
+                    },
+                },
             };
 
             const rzp = new window.Razorpay(options);
             rzp.on('payment.failed', async (response) => {
+                setPaymentLoading(false);
+                setPaymentStatus('failed');
                 try {
                     await api.post('/subscriptions/razorpay/record-failed', {
                         orderId,
@@ -408,7 +502,6 @@ const Subscription = () => {
                     fetchHistory();
                 } catch { /* best-effort failure record */ }
                 toast.error(`Payment failed: ${response.error.description}`);
-                setPaymentLoading(false);
             });
 
             setPaymentLoading(false);
@@ -487,7 +580,7 @@ const Subscription = () => {
                             <p className="text-amber-600 text-sm mt-1">Please contact support for assistance.</p>
                         </div>
                     ) : (
-                        <section>
+                        <section data-tour={TOUR.billing.plans}>
                             <div className="mb-6">
                                 <h3 className="text-lg font-bold text-slate-800">Available Plans</h3>
                                 <p className="text-sm text-slate-500 mt-0.5">
@@ -497,18 +590,24 @@ const Subscription = () => {
 
                             {/* <div className={`grid grid-cols-1 gap-10 ${plans.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}> */}
                             {/* <div className={`max-w-6xl mx-auto grid grid-cols-1 gap-10 px-10 ${plans.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}> */}
-                            <div data-tour={TOUR.billing.plans} className="flex flex-wrap justify-center gap-3"
+                            <div className="flex flex-wrap justify-center gap-3"
                                 style={{
                                     gridTemplateColumns: "repeat(auto-fit, 350px)",
                                 }}>
                                 {/* {plans.map((plan) => { */}
-                                {[...plans].reverse().map((plan) => {
+                                {[...plans].reverse().map((plan, idx) => {
                                     const c = getColors(plan.colorScheme);
                                     const gstTotal = (plan.price + plan.price * GST_RATE).toFixed(2);
+                                    const planTitleLower = (plan.title || '').toLowerCase();
+                                    const planTourTarget =
+                                        planTitleLower.includes('basic') ? TOUR.billing.planBasic :
+                                        planTitleLower.includes('value') ? TOUR.billing.planValue :
+                                        planTitleLower.includes('premium') ? TOUR.billing.planPremium :
+                                        (idx === 0 ? TOUR.billing.planPremium : idx === 1 ? TOUR.billing.planValue : TOUR.billing.planBasic);
                                     return (
                                         <div
                                             key={plan._id}
-                                            // className={`text-center relative flex flex-col rounded-2xl border-2 p-6 overflow-hidden transition-all duration-200 hover:shadow-card-hover ${c.bg} ${c.border}`}
+                                            data-tour={planTourTarget}
                                             className={`flex-1 min-w-[320px] max-w-[320px] text-center relative flex flex-col rounded-2xl border-2 p-6 overflow-hidden transition-all duration-200 hover:shadow-card-hover ${c.bg} ${c.border}`}
                                         >
                                             <div className={`absolute top-0 inset-x-0 h-1 ${c.accent}`} />
@@ -781,8 +880,8 @@ const Subscription = () => {
 
             {/* ── Payment Modal ────────────────────────────────────────────── */}
             {selectedPlan && !paymentSuccess && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
+                <div data-tour={TOUR.billing.modal} className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="relative z-[9999] bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
 
                         {/* Header */}
                         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
@@ -830,6 +929,8 @@ const Subscription = () => {
                                 <div><div className="text-slate-400 text-xs mb-0.5">GST (18%)</div><div className="font-semibold text-slate-700">₹{taxAmount.toFixed(2)}</div></div>
                                 <div><div className="text-slate-400 text-xs mb-0.5">Total</div><div className="font-bold text-slate-900">₹{totalAmount}</div></div>
                             </div>
+
+
 
                             {/* ── GST Details (Required) ──────────────────── */}
                             <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -928,6 +1029,7 @@ const Subscription = () => {
                             {canUseRazorpay ? (
                                 <>
                                     <button
+                                        data-tour={TOUR.billing.modalPayBtn}
                                         onClick={handleRazorpayPayment}
                                         disabled={paymentLoading || !!gstinError || gstLookupLoading || !gstForm.gstin || gstForm.gstin.length !== 15 || !gstForm.businessName}
                                         className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2.5 shadow-sm hover:shadow-md active:scale-[0.98] text-base"
@@ -949,7 +1051,7 @@ const Subscription = () => {
                                     </div>
                                 </>
                             ) : (
-                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center space-y-2">
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center space-y-3">
                                     <AlertCircle size={28} className="text-amber-500 mx-auto" />
                                     <p className="text-amber-800 font-semibold text-sm">Razorpay payments are currently restricted</p>
                                     <p className="text-amber-600 text-xs">Please contact support to purchase credits or use the manual UPI transfer method.</p>
@@ -960,57 +1062,95 @@ const Subscription = () => {
                 </div>
             )}
 
-            {/* ── Success Modal ────────────────────────────────────────────── */}
+            {/* ── Polished Congratulations Modal (Step 1 Complete) ────────────── */}
             {paymentSuccess && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden text-center">
-                        <div className="px-6 pt-10 pb-8 space-y-5">
+                <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="relative z-[9999] bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden text-center border border-emerald-100 animate-in zoom-in-95 duration-200 font-sans">
+                        {/* Celebratory Gradient Banner */}
+                        <div className="h-2 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600" />
 
-                            <div className="mx-auto w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center">
-                                <CheckCircle size={40} className="text-emerald-500" />
+                        <div className="px-7 pt-8 pb-7 space-y-4">
+                            {/* Confetti / Sparkles Icon with Aura */}
+                            <div className="mx-auto w-16 h-16 bg-gradient-to-tr from-emerald-400 to-teal-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/25">
+                                <Sparkles size={32} />
                             </div>
 
                             <div>
-                                <h3 className="text-2xl font-bold text-slate-800 mb-2">Payment Successful!</h3>
-                                <p className="text-slate-500 text-sm leading-relaxed">
-                                    <span className="font-bold text-emerald-600">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wide uppercase bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
+                                    <Check size={12} className="stroke-[3]" />
+                                    Step 1 Complete: Congratulations!
+                                </span>
+                                <h3 className="text-xl font-heading font-extrabold text-slate-900 mt-2.5">
+                                    Payment Confirmed &amp; Plan Activated!
+                                </h3>
+                                <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                                    <span className="font-extrabold text-emerald-600">
                                         {paymentSuccess.credits.toLocaleString()} credits
                                     </span>{' '}
-                                    have been instantly added to your account.
+                                    are active in your account wallet with zero expiry.
                                 </p>
                             </div>
 
-                            <div className="bg-slate-50 rounded-xl p-4 text-left space-y-2">
-                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Receipt</p>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Plan</span>
-                                    <span className="font-semibold text-slate-700">{paymentSuccess.planName}</span>
+                            {/* Plan Receipt Box */}
+                            <div className="bg-slate-50 rounded-2xl p-4 text-left space-y-2 border border-slate-100">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Activated Plan</span>
+                                    <span className="font-extrabold text-slate-800">{paymentSuccess.planName}</span>
                                 </div>
-                                <div className="flex justify-between items-start text-sm gap-3">
-                                    <span className="text-slate-500 flex-shrink-0">Payment ID</span>
-                                    <span className="font-mono text-xs text-slate-600 text-right break-all">{paymentSuccess.paymentId}</span>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Wallet Added</span>
+                                    <span className="font-extrabold text-emerald-600">+{paymentSuccess.credits.toLocaleString()} Credits</span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Payment ID</span>
+                                    <span className="font-mono text-[11px] text-slate-600 truncate max-w-[180px]">{paymentSuccess.paymentId}</span>
                                 </div>
                                 {paymentSuccess.invoiceNumber && (
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-slate-500">Invoice No.</span>
-                                        <span className="font-semibold text-brand-600">{paymentSuccess.invoiceNumber}</span>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Tax Invoice</span>
+                                        <span className="font-semibold text-brand-600 font-mono text-[11px]">{paymentSuccess.invoiceNumber}</span>
                                     </div>
                                 )}
                             </div>
 
-                            {paymentSuccess.invoiceNumber && (
-                                <p className="text-xs text-slate-400 flex items-center justify-center gap-1.5">
-                                    <FileText size={11} />
-                                    Download your GST invoice from Payment History
+                            {/* Guided Next Step Note */}
+                            <div className="p-3.5 bg-brand-50/80 border border-brand-200/80 rounded-xl text-left text-xs space-y-1">
+                                <div className="font-extrabold text-brand-900 flex items-center gap-1.5 text-xs">
+                                    <Sparkles size={12} className="text-amber-500" />
+                                    Next Onboarding Step:
+                                </div>
+                                <p className="text-slate-600 text-[11px] leading-relaxed">
+                                    Connect your seller marketplace accounts (Flipkart, Amazon, Meesho, etc.) so SpeedEcom can start synchronizing orders and settlements.
                                 </p>
-                            )}
+                            </div>
 
-                            <button
-                                onClick={() => setPaymentSuccess(null)}
-                                className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl transition-colors active:scale-[0.98]"
-                            >
-                                Done
-                            </button>
+                            {/* Actions */}
+                            <div className="space-y-2 pt-1">
+                                <button
+                                    onClick={() => {
+                                        const meta = paymentSuccess;
+                                        setPaymentSuccess(null);
+                                        completeBillingOnboarding?.(meta);
+                                        completeTourAction?.('billing', meta);
+                                        navigate('/settings/marketplace');
+                                    }}
+                                    className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold py-3.5 px-4 rounded-xl transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <span>Continue to Marketplace Setup ➔</span>
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        const meta = paymentSuccess;
+                                        setPaymentSuccess(null);
+                                        completeBillingOnboarding?.(meta);
+                                        completeTourAction?.('billing', meta);
+                                    }}
+                                    className="w-full text-xs text-slate-400 hover:text-slate-600 py-1 transition-colors font-medium"
+                                >
+                                    Stay on Subscription &amp; Billing
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1042,8 +1182,8 @@ const Subscription = () => {
 
             {/* ── Verification overlay ─────────────────────────────────────── */}
             {paymentLoading && !selectedPlan && !paymentSuccess && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex items-center gap-4">
+                <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="relative z-[9999] bg-white rounded-2xl shadow-xl px-8 py-6 flex items-center gap-4 border border-slate-100">
                         <Loader2 size={22} className="animate-spin text-brand-600" />
                         <div>
                             <div className="font-bold text-slate-800">Verifying Payment</div>
@@ -1051,6 +1191,27 @@ const Subscription = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ── Billing Onboarding & Payment Progress Widget ── */}
+            {((billingOnboardingActive || !!selectedPlan || paymentLoading || !!paymentSuccess) && !isRunning && !isWidgetDismissed) && (
+                <BillingOnboardingWidget
+                    selectedPlan={selectedPlan}
+                    paymentLoading={paymentLoading}
+                    paymentStatus={paymentStatus}
+                    paymentSuccess={paymentSuccess}
+                    onReplayTour={() => {
+                        setIsWidgetDismissed(false);
+                        startHighlightingPlans?.();
+                    }}
+                    onDismiss={() => {
+                        setIsWidgetDismissed(true);
+                        setBillingOnboardingActive?.(false);
+                        try {
+                            localStorage.removeItem('tour:billing_onboarding_active');
+                        } catch { /* ignore */ }
+                    }}
+                />
             )}
         </DashboardLayout>
     );

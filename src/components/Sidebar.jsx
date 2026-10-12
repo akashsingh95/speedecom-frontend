@@ -1,6 +1,4 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     LayoutDashboard, CheckCircle, Upload, Building, User, ChevronDown,
     Settings, ShoppingBag, CreditCard, UserPen, Download, PackageOpen, ScanLine, BarChart3, DollarSign, Sparkles, LifeBuoy, FileText
@@ -9,6 +7,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import PresenceToggle from './support/PresenceToggle';
 import { TOUR } from '../tour/targets';
+import { useTour } from '../tour/tourProvider';
 
 const Sidebar = () => {
     const location = useLocation();
