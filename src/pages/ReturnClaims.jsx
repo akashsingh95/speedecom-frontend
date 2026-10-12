@@ -175,6 +175,7 @@ const ReturnClaims = () => {
     const [stats, setStats] = useState(null);
     const [eligibleIds, setEligibleIds] = useState(null);
     const [overdueTotal, setOverdueTotal] = useState(null);
+    const [unclaimedTotal, setUnclaimedTotal] = useState(null);
     const [bulkRaise, setBulkRaise] = useState(null);
 
     const { progress, startSync, isSyncing } = useClaimsSync({ onSynced: () => setRefreshKey(k => k + 1) });
@@ -198,6 +199,7 @@ const ReturnClaims = () => {
         setStats(null);
         setEligibleIds(null);
         setOverdueTotal(null);
+        setUnclaimedTotal(null);
         setBulkRaise(null);
     }, [accountId]);
 
@@ -293,7 +295,7 @@ const ReturnClaims = () => {
     const bulkProgress = bulkRaise?.progress || {};
     const isBulkRunning = bulkRaise?.phase === 'running';
 
-    const showRaiseAll = canManage && tab === 'overdue' && !notEligible && overdueTotal > 0 && !isBulkRunning && !bulkRaise;
+    const showRaiseAll = canManage && tab === 'overdue' && !notEligible && unclaimedTotal > 0 && !isBulkRunning && !bulkRaise;
 
     const TABS = [
         { key: 'overdue', label: 'Overdue returns', icon: Clock, count: overdueTotal },
@@ -317,7 +319,7 @@ const ReturnClaims = () => {
                             <button type="button" onClick={handleRaiseAll}
                                 className="flex items-center gap-2 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-2.5 text-xs font-semibold text-violet-700 shadow-sm transition-all hover:from-violet-100 hover:to-indigo-100">
                                 <Zap size={14} className="text-violet-600" />
-                                Raise All ({overdueTotal})
+                                Raise All ({unclaimedTotal})
                             </button>
                         )}
                         {canManage && (
@@ -397,6 +399,7 @@ const ReturnClaims = () => {
                                     refreshKey={refreshKey}
                                     onRaise={handleRaise}
                                     onTotal={setOverdueTotal}
+                                    onUnclaimedTotal={setUnclaimedTotal}
                                     bulkProgress={bulkProgress}
                                 />
                             </div>

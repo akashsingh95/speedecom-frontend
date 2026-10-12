@@ -947,7 +947,7 @@ const ReturnsTab = () => {
     const MAX_RANGE_DAYS = 190;
     const { user } = useAuth();
     const canTriggerReturnsSync = RETURNS_SYNC_ROLES.includes(user?.role);
-    const canManageClaims = CLAIM_ROLES.includes(user?.role);
+    const canManageClaims = CLAIM_ROLES.includes(user?.role) && (user?.permissions?.raiseClaims ?? true);
     const [claimTarget, setClaimTarget] = useState(null);
 
     // Marketplace state — Meesho only
