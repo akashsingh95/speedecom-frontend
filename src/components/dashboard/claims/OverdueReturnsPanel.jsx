@@ -79,7 +79,7 @@ const ClaimCell = ({ row, canRaise, onRaise, bulkProgress }) => {
     );
 };
 
-const OverdueReturnsPanel = ({ accountId, canRaise, refreshKey = 0, onRaise, onTotal, bulkProgress = {} }) => {
+const OverdueReturnsPanel = ({ accountId, canRaise, refreshKey = 0, onRaise, onTotal, onUnclaimedTotal, bulkProgress = {} }) => {
     const [category, setCategory] = useState('');
     const [searchDraft, setSearchDraft] = useState('');
     const [search, setSearch] = useState('');
@@ -121,7 +121,10 @@ const OverdueReturnsPanel = ({ accountId, canRaise, refreshKey = 0, onRaise, onT
                 const p = data?.pagination || { totalPages: 1, totalItems: 0 };
                 setRows(data?.returns || []);
                 setPagination(p);
-                if (!category && !search) onTotal?.(p.totalItems);
+                if (!category && !search) {
+                    onTotal?.(p.totalItems);
+                    onUnclaimedTotal?.((data?.returns || []).filter(r => !r.claim).length);
+                }
             } catch (err) {
                 if (!cancelled) setError(err.response?.data?.message || 'Could not load overdue returns');
             } finally {
