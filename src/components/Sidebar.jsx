@@ -1,6 +1,4 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     LayoutDashboard, CheckCircle, Upload, Building, User, ChevronDown,
     Settings, ShoppingBag, CreditCard, UserPen, Download, PackageOpen, ScanLine, BarChart3, DollarSign, Sparkles, LifeBuoy, FileText
@@ -8,11 +6,25 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { TOUR } from '../tour/targets';
+import { useTour } from '../tour/tourProvider';
 
 const Sidebar = () => {
     const location = useLocation();
     const { user, isImpersonating, impersonatedTenant, impersonationSyncing } = useAuth();
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const tour = useTour();
+    const currentTarget = tour?.currentStep?.target;
+    const [isSettingsOpen, setIsSettingsOpen] = useState(() => (
+        ['/settings/marketplace', '/users', '/subscription'].includes(location.pathname)
+    ));
+
+    useEffect(() => {
+        if (
+            ['/settings/marketplace', '/users', '/subscription'].includes(location.pathname) ||
+            (currentTarget && [TOUR.nav.settingsBilling, TOUR.nav.settingsMarketplace, TOUR.nav.settingsUsers].includes(currentTarget))
+        ) {
+            setIsSettingsOpen(true);
+        }
+    }, [location.pathname, currentTarget]);
 
     const NAV_TOUR_MAP = {
         '/dashboard': TOUR.nav.dashboard,
