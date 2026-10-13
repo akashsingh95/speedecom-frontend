@@ -487,3 +487,15 @@
 .animate-clock-spin {
   animation: clock-spin 2s linear infinite;
 }
+
+/* ── Tour Scroll Lock ── */
+html.tour-active,
+body.tour-active {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+.tour-active .tour-locked-scroll {
+  overflow-y: hidden !important;
+  overscroll-behavior: none !important;
+}

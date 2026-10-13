@@ -25,6 +25,10 @@ import { TOUR } from './targets';
 
 export const TENANT_ONBOARDING = 'tenant-onboarding';
 export const MARKETPLACE_SETTINGS = 'marketplace-settings';
+export const MARKETPLACE_ONBOARDING_MEESHO = 'mp-onboarding-meesho';
+export const MARKETPLACE_ONBOARDING_AMAZON = 'mp-onboarding-amazon';
+export const MARKETPLACE_ONBOARDING_FLIPKART = 'mp-onboarding-flipkart';
+export const MARKETPLACE_ONBOARDING_MYNTRA = 'mp-onboarding-myntra';
 export const PAYMENTS_TOUR = 'payments-calculations';
 export const COST_SHEET_TOUR = 'cost-sheet';
 export const DOWNLOADS_TOUR = 'downloads';
@@ -33,6 +37,16 @@ export const SUPPORT_TOUR = 'support';
 export const USER_MANAGEMENT_TOUR = 'user-management';
 export const BILLING_TOUR = 'billing';
 
+export const getMarketplaceTourKey = (name) => {
+    if (!name) return null;
+    const norm = name.toLowerCase();
+    if (norm.includes('meesho')) return MARKETPLACE_ONBOARDING_MEESHO;
+    if (norm.includes('amazon')) return MARKETPLACE_ONBOARDING_AMAZON;
+    if (norm.includes('flipkart')) return MARKETPLACE_ONBOARDING_FLIPKART;
+    if (norm.includes('myntra')) return MARKETPLACE_ONBOARDING_MYNTRA;
+    return null;
+};
+
 export const TENANT_ONBOARDING_STEPS = [
     // ── 1. Guide user to Billing from Dashboard ──────────────
     {
@@ -40,7 +54,7 @@ export const TENANT_ONBOARDING_STEPS = [
         target: TOUR.nav.settingsBilling,
         route: '/dashboard',
         side: 'right',
-        title: 'Step 1: Head to Billing & Credits ⚡',
+        title: 'Step 1: Head to Billing & Credits',
         body: 'SpeedEcom operates on processing credits for report parsing, marketplace reconciliations, and SKU profit intelligence. Let\'s begin by funding your credit wallet. Click "Billing" in the sidebar or "Go to Billing ➔" below to view available plans.',
         nextButtonText: 'Go to Billing ➔',
     },
@@ -52,7 +66,7 @@ export const TENANT_ONBOARDING_STEPS = [
         route: '/subscription',
         side: 'center',
         isBillingIntro: true,
-        title: 'Understanding SpeedEcom Processing Credits ⚡',
+        title: 'Understanding SpeedEcom Processing Credits',
         body: 'SpeedEcom runs on flexible, pay-as-you-go processing credits instead of rigid recurring subscriptions. Here is how your credit wallet works:',
         nextButtonText: 'Explore Plans ➔',
     },
@@ -64,7 +78,7 @@ export const TENANT_ONBOARDING_STEPS = [
         route: '/subscription',
         required: true,
         side: 'auto',
-        title: '1. Basic Boost Plan (₹5,000) ⚡',
+        title: '1. Basic Boost Plan (₹5,000)',
         body: 'Recharge with ₹5,000 to receive 5,000 processing credits. Ideal for light order volume, exploratory reconciliations, and testing with 30 days of Speedy AI access.',
         nextButtonText: 'Next Plan ➔',
     },
@@ -76,7 +90,7 @@ export const TENANT_ONBOARDING_STEPS = [
         route: '/subscription',
         required: true,
         side: 'auto',
-        title: '2. Value Plus Plan (₹10,000) 🌟',
+        title: '2. Value Plus Plan (₹10,000)',
         body: 'Our most popular tier for growing merchants. 10,000 processing credits with 100% rollover, multi-marketplace analytics, advanced FAQ templates, and continuous AI assistance with zero expiry.',
         nextButtonText: 'Next Plan ➔',
     },
@@ -88,9 +102,289 @@ export const TENANT_ONBOARDING_STEPS = [
         route: '/subscription',
         required: true,
         side: 'auto',
-        title: '3. Premium Power Plan (₹20,000) 🚀',
+        title: '3. Premium Power Plan (₹20,000)',
         body: 'Built for high-volume catalogs. 20,000 credits, unlimited AI queries, 24/7 priority support, deep marketplace intelligence, and advanced SKU exports. Click below to complete plan exploration and choose any tier.',
-        lastButtonText: 'Finish Tour & Choose Plan ➔',
+        lastButtonText: 'Proceed to Plan Selection ➔',
+    },
+
+    // ── 6. Marketplace Selection Step ──
+    {
+        id: 'mp-select',
+        target: TOUR.marketplace.grid,
+        route: '/settings/marketplace',
+        side: 'center',
+        isMarketplaceSelect: true,
+        title: 'Step 2: Connect Your First Marketplace',
+        body: 'SpeedEcom synchronizes with all major Indian ecommerce marketplaces. Which marketplace do you want to connect first? Choose any platform to begin guided setup:',
+        nextButtonText: 'Select Marketplace ➔',
+    },
+];
+
+// ─────────────────────────────────────────────────────────
+//  Dedicated Onboarding Tours per Marketplace
+// ─────────────────────────────────────────────────────────
+
+export const MEESHO_ONBOARDING_STEPS = [
+    {
+        id: 'mp-meesho-account-name',
+        target: TOUR.marketplace.modalAccountName,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'accountName',
+        title: 'Enter Account Name',
+        body: 'Enter a unique nickname or store name for this Meesho account (e.g. your store or brand name). This helps you identify and manage this connection across reports.',
+        nextButtonText: 'Next: Analysis Date ➔',
+    },
+    {
+        id: 'mp-meesho-analysis-date',
+        target: TOUR.marketplace.modalAnalysisDate,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        title: 'Select Analysis Start Date',
+        body: 'Reports and calculations will be available from the selected month onward, and processing credits will be deducted according to the selected analysis period. Choose this date carefully, as historical synchronization begins from this cutoff.',
+        nextButtonText: 'Next: Size-wise Setting ➔',
+    },
+    {
+        id: 'mp-meesho-sizewise',
+        target: TOUR.marketplace.modalSizeWiseToggle,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        title: 'Size-wise Calculations Setting',
+        body: 'Do your SKUs have different size variants (e.g. S, M, L, XL)? If enabled, SpeedEcom calculates P&L, returns, and courier weight charges separately per size. If you sell single-size items, you can keep this disabled.',
+        nextButtonText: 'Next: File Sync ➔',
+    },
+    {
+        id: 'mp-meesho-autosync',
+        target: TOUR.marketplace.modalAutoSyncToggle,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        title: 'Automatic File Synchronization (Meesho Sync)',
+        body: 'SpeedEcom can automatically log in to your Meesho supplier panel to download and reconcile daily orders, payments, returns, and claims without manual Excel uploads. Toggle Auto-Sync ON to enable automated sync, or keep it off for manual uploads.',
+        nextButtonText: 'Next: Panel Email ➔',
+    },
+    {
+        id: 'mp-meesho-email',
+        target: TOUR.marketplace.modalEmail,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'email',
+        title: 'Enter Meesho Panel Email',
+        body: 'Enter your registered Meesho supplier panel email address. Important: Enter accurate credentials — incorrect credentials will prevent the account from connecting.',
+        nextButtonText: 'Next: Password ➔',
+    },
+    {
+        id: 'mp-meesho-password',
+        target: TOUR.marketplace.modalPassword,
+        route: '/settings/marketplace',
+        required: false,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'password',
+        title: 'Enter Meesho Panel Password',
+        body: 'Enter your Meesho supplier panel password. Security: Passwords are encrypted directly in your browser using RSA-OAEP 2048-bit encryption before transmission and are never stored or logged in plain text.',
+        nextButtonText: 'Next: Connect ➔',
+    },
+    {
+        id: 'mp-meesho-submit',
+        target: TOUR.marketplace.modalSubmitBtn,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        requiresAction: true,
+        actionType: 'connect',
+        title: 'Connect & Verify Account',
+        body: 'Click "Connect Securely" below to verify your credentials with Meesho and activate your connection. We will wait for backend confirmation before completing setup.',
+    },
+    {
+        id: 'mp-meesho-congratulations',
+        target: null,
+        route: '/settings/marketplace',
+        side: 'center',
+        isCelebration: true,
+        title: 'Congratulations!',
+        body: "You've successfully connected Meesho to SpeedEcom!",
+        lastButtonText: 'Finish Onboarding ➔',
+    },
+];
+
+export const AMAZON_ONBOARDING_STEPS = [
+    {
+        id: 'mp-amazon-account-name',
+        target: TOUR.marketplace.modalAccountName,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'accountName',
+        title: 'Enter Account Name',
+        body: 'Enter a unique nickname or storefront name for this Amazon account (e.g. your store or brand name). This helps you distinguish between multiple accounts.',
+        nextButtonText: 'Next: Analysis Date ➔',
+    },
+    {
+        id: 'mp-amazon-analysis-date',
+        target: TOUR.marketplace.modalAnalysisDate,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        title: 'Select Analysis Start Date',
+        body: 'The selected month determines how far back calculations, FBA audits, and reports will run, and which historical period will consume processing credits. Please review and confirm your chosen date carefully before proceeding.',
+        nextButtonText: 'Next: Seller Email ➔',
+    },
+    {
+        id: 'mp-amazon-email',
+        target: TOUR.marketplace.modalEmail,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'email',
+        title: 'Enter Amazon Seller Central Email',
+        body: 'Enter your Amazon India Seller Central registered email address. Important: Enter accurate credentials to ensure authentication succeeds. Passwords and credentials are encrypted securely client-side using RSA-OAEP 2048-bit encryption before transmission.',
+        nextButtonText: 'Next: Connect ➔',
+    },
+    {
+        id: 'mp-amazon-submit',
+        target: TOUR.marketplace.modalSubmitBtn,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        requiresAction: true,
+        actionType: 'connect',
+        title: 'Connect & Verify Account',
+        body: 'Click "Connect Securely" below to verify your credentials with Amazon India and activate your connection. We will wait for backend confirmation before completing setup.',
+    },
+    {
+        id: 'mp-amazon-congratulations',
+        target: null,
+        route: '/settings/marketplace',
+        side: 'center',
+        isCelebration: true,
+        title: 'Congratulations!',
+        body: "You've successfully connected Amazon to SpeedEcom!",
+        lastButtonText: 'Finish Onboarding ➔',
+    },
+];
+
+export const FLIPKART_ONBOARDING_STEPS = [
+    {
+        id: 'mp-flipkart-account-name',
+        target: TOUR.marketplace.modalAccountName,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'accountName',
+        title: 'Enter Account Name',
+        body: 'Enter a unique nickname or seller name for this Flipkart account (e.g. your store or display name). This helps you distinguish between multiple accounts.',
+        nextButtonText: 'Next: Analysis Date ➔',
+    },
+    {
+        id: 'mp-flipkart-analysis-date',
+        target: TOUR.marketplace.modalAnalysisDate,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        title: 'Select Analysis Start Date',
+        body: 'The selected month determines how far back calculations and fee reconciliations will run, and which historical period will consume processing credits. Please review and confirm your chosen date carefully before proceeding.',
+        nextButtonText: 'Next: Seller Email ➔',
+    },
+    {
+        id: 'mp-flipkart-email',
+        target: TOUR.marketplace.modalEmail,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'email',
+        title: 'Enter Flipkart Seller Hub Email',
+        body: 'Enter your Flipkart Seller Hub email address and account credentials. Important: Enter accurate credentials to ensure authentication succeeds. Passwords and credentials are encrypted securely client-side using RSA-OAEP 2048-bit encryption before transmission.',
+        nextButtonText: 'Next: Connect ➔',
+    },
+    {
+        id: 'mp-flipkart-submit',
+        target: TOUR.marketplace.modalSubmitBtn,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        requiresAction: true,
+        actionType: 'connect',
+        title: 'Connect & Verify Account',
+        body: 'Click "Connect Securely" below to verify your credentials with Flipkart and activate your connection. We will wait for backend confirmation before completing setup.',
+    },
+    {
+        id: 'mp-flipkart-congratulations',
+        target: null,
+        route: '/settings/marketplace',
+        side: 'center',
+        isCelebration: true,
+        title: 'Congratulations!',
+        body: "You've successfully connected Flipkart to SpeedEcom!",
+        lastButtonText: 'Finish Onboarding ➔',
+    },
+];
+
+export const MYNTRA_ONBOARDING_STEPS = [
+    {
+        id: 'mp-myntra-account-name',
+        target: TOUR.marketplace.modalAccountName,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'accountName',
+        title: 'Enter Account Name',
+        body: 'Enter a unique nickname or partner name for this Myntra account (e.g. your store or brand name). This helps you distinguish between multiple accounts.',
+        nextButtonText: 'Next: Analysis Date ➔',
+    },
+    {
+        id: 'mp-myntra-analysis-date',
+        target: TOUR.marketplace.modalAnalysisDate,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        title: 'Select Analysis Start Date',
+        body: 'The selected month determines how far back calculations and catalog reconciliations will run, and which historical period will consume processing credits. Please review and confirm your chosen date carefully before proceeding.',
+        nextButtonText: 'Next: Partner Email ➔',
+    },
+    {
+        id: 'mp-myntra-email',
+        target: TOUR.marketplace.modalEmail,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'email',
+        title: 'Enter Myntra Partner Email',
+        body: 'Enter your Myntra partner portal email address and account credentials. Important: Enter accurate credentials to ensure authentication succeeds. Passwords and credentials are encrypted securely client-side using RSA-OAEP 2048-bit encryption before transmission.',
+        nextButtonText: 'Next: Connect ➔',
+    },
+    {
+        id: 'mp-myntra-submit',
+        target: TOUR.marketplace.modalSubmitBtn,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'top',
+        requiresAction: true,
+        actionType: 'connect',
+        title: 'Connect & Verify Account',
+        body: 'Click "Connect Securely" below to verify your credentials with Myntra and activate your connection. We will wait for backend confirmation before completing setup.',
+    },
+    {
+        id: 'mp-myntra-congratulations',
+        target: null,
+        route: '/settings/marketplace',
+        side: 'center',
+        isCelebration: true,
+        title: 'Congratulations!',
+        body: "You've successfully connected Myntra to SpeedEcom!",
+        lastButtonText: 'Finish Onboarding ➔',
     },
 ];
 
@@ -562,7 +856,7 @@ export const TOURS = {
         // permissions actually render.
         autoStart: {
             roles: ['Admin', 'User'],
-            routes: ['/subscription', '/dashboard', '/uploads'],
+            routes: ['/subscription', '/dashboard', '/uploads', '/settings/marketplace'],
             requires: null,
         },
     },
@@ -589,4 +883,8 @@ export const TOURS = {
     [SUPPORT_TOUR]: { key: SUPPORT_TOUR, steps: SUPPORT_STEPS, autoStart: null },
     [USER_MANAGEMENT_TOUR]: { key: USER_MANAGEMENT_TOUR, steps: USER_MANAGEMENT_STEPS, autoStart: null },
     [BILLING_TOUR]: { key: BILLING_TOUR, steps: BILLING_STEPS, autoStart: null },
+    [MARKETPLACE_ONBOARDING_MEESHO]: { key: MARKETPLACE_ONBOARDING_MEESHO, steps: MEESHO_ONBOARDING_STEPS, autoStart: null },
+    [MARKETPLACE_ONBOARDING_AMAZON]: { key: MARKETPLACE_ONBOARDING_AMAZON, steps: AMAZON_ONBOARDING_STEPS, autoStart: null },
+    [MARKETPLACE_ONBOARDING_FLIPKART]: { key: MARKETPLACE_ONBOARDING_FLIPKART, steps: FLIPKART_ONBOARDING_STEPS, autoStart: null },
+    [MARKETPLACE_ONBOARDING_MYNTRA]: { key: MARKETPLACE_ONBOARDING_MYNTRA, steps: MYNTRA_ONBOARDING_STEPS, autoStart: null },
 };

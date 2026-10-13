@@ -8,7 +8,8 @@
 // ─────────────────────────────────────────────────────────
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { X, ArrowLeft, ArrowRight, Sparkles, Zap, ShieldCheck, Clock, TrendingUp } from 'lucide-react';
+import { X, ArrowLeft, ArrowRight, Sparkles, Zap, ShieldCheck, Clock, TrendingUp, Check, Lock, RefreshCw, AlertCircle, Info, Loader2 } from 'lucide-react';
+import { TOUR, tourSelector } from './targets';
 
 const GAP = 14;        // space between the cut-out and the popover
 const EDGE = 20;       // popover never comes closer than this to the viewport edge
@@ -54,12 +55,62 @@ const place = (hole, size, preferred, step = null) => {
         return Math.max(minLeft, Math.min(val, maxLeft));
     };
 
-    if (!hole || preferred === 'center' || step?.isBillingIntro) {
+    if (!hole || preferred === 'center' || step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration) {
         return {
             top: clampY(Math.round((vh - size.height) / 2), size.height),
             left: clampX(Math.round((vw - size.width) / 2), size.width),
             side: 'center',
         };
+    }
+
+    const isModalTarget = !!(
+        step?.target?.startsWith?.('marketplace.modal') ||
+        (step?.id?.startsWith?.('mp-') && step?.id?.includes('-') && !step?.isMarketplaceSelect && !step?.isCelebration)
+    );
+
+    // Modal-aware positioning: keep popover completely outside the modal dialog
+    // so inputs and buttons remain visible, unclipped, and freely editable.
+    if (isModalTarget) {
+        const modalEl = typeof document !== 'undefined'
+            ? (document.querySelector('[data-tour-modal="connect-marketplace"]') ||
+               document.querySelector('[data-tour-modal]') ||
+               document.querySelector('.connect-marketplace-modal') ||
+               document.querySelector('.fixed .rounded-3xl.bg-white') ||
+               document.querySelector('.fixed .bg-white.rounded-3xl'))
+            : null;
+        const modalRect = modalEl?.getBoundingClientRect();
+
+        if (modalRect) {
+            // Check if there is comfortable room to the right of the entire modal
+            if (vw - modalRect.right - GAP - EDGE >= size.width) {
+                return {
+                    top: clampY(hole.top + hole.height / 2 - size.height / 2, size.height),
+                    left: clampX(modalRect.right + GAP, size.width),
+                    side: 'right',
+                };
+            }
+            // Check if there is comfortable room to the left of the entire modal
+            if (modalRect.left - GAP - EDGE >= size.width) {
+                return {
+                    top: clampY(hole.top + hole.height / 2 - size.height / 2, size.height),
+                    left: clampX(modalRect.left - GAP - size.width, size.width),
+                    side: 'left',
+                };
+            }
+            // Screen is too narrow (<840px): dock at top or bottom opposite of the field being edited
+            if (hole.top > vh / 2) {
+                return {
+                    top: EDGE,
+                    left: clampX((vw - size.width) / 2, size.width),
+                    side: 'top',
+                };
+            }
+            return {
+                top: clampY(vh - size.height - EDGE, size.height),
+                left: clampX((vw - size.width) / 2, size.width),
+                side: 'bottom',
+            };
+        }
     }
 
     const room = {
@@ -77,14 +128,10 @@ const place = (hole, size, preferred, step = null) => {
     const spaceTop = hole.top - GAP - EDGE;
 
     // Dynamically choose adjacent side:
-    // When preferred is 'auto', 'center-bottom', or for plan cards, prioritize placing
-    // immediately beside the card (left or right) so the full card height (price,
-    // Buy Now button, and benefits) remains completely visible and unobstructed.
     let side = preferred;
     if (!side || side === 'auto' || side === 'center-bottom' || (isPlanCard && (side === 'bottom' || side === 'top'))) {
         if (room.right || room.left) {
             if (room.right && room.left) {
-                // Both sides have room: if card is in left half of viewport, put on right; otherwise put on left
                 side = holeCenterH < vw / 2 ? 'right' : 'left';
             } else if (room.right) {
                 side = 'right';
@@ -96,7 +143,6 @@ const place = (hole, size, preferred, step = null) => {
         } else if (room.top) {
             side = 'top';
         } else {
-            // Constrained screen width: prefer side with more horizontal room for tall cards
             if (isPlanCard) {
                 side = spaceLeft >= spaceRight ? 'left' : 'right';
             } else {
@@ -111,7 +157,6 @@ const place = (hole, size, preferred, step = null) => {
             }
         }
     } else if (!room[side]) {
-        // Fallback if preferred side has insufficient room
         if (room.right) side = 'right';
         else if (room.left) side = 'left';
         else if (room.bottom) side = 'bottom';
@@ -129,9 +174,6 @@ const place = (hole, size, preferred, step = null) => {
     }
 
     const left = side === 'right' ? hole.left + hole.width + GAP : hole.left - GAP - size.width;
-    // For tall plan cards: align popover with the upper portion of the plan card so the user
-    // can comfortably view the plan title & price right next to the instruction card,
-    // while clampY guarantees top >= EDGE and top + size.height <= vh - EDGE.
     const targetTop = isPlanCard
         ? Math.max(hole.top, EDGE)
         : (hole.top + hole.height / 2 - size.height / 2);
@@ -164,13 +206,177 @@ const TourSpotlight = ({
     onNext,
     onPrev,
     onClose,
+    onGoToDashboard,
 }) => {
     const popoverRef = useRef(null);
     const [hole, setHole] = useState(null);
-    const defaultWidth = step?.isBillingIntro
+
+    const isModalTarget = !!(
+        step?.target?.startsWith?.('marketplace.modal') ||
+        (step?.id?.startsWith?.('mp-') && step?.id?.includes('-') && !step?.isMarketplaceSelect && !step?.isCelebration)
+    );
+
+    const defaultWidth = step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration
         ? 580
-        : (step?.id?.startsWith('bill-plan-') ? 350 : POPOVER_W);
+        : isModalTarget
+            ? 350
+            : (step?.id?.startsWith('bill-plan-') ? 350 : POPOVER_W);
     const [size, setSize] = useState({ width: defaultWidth, height: step?.isBillingIntro ? 420 : 200 });
+
+    // Live form state & synchronization for validation
+    const [formState, setFormState] = useState({
+        accountName: '',
+        email: '',
+        password: '',
+        analysisStartDate: '',
+        enableSizeWiseCalculation: false,
+        showAutoSyncFields: false,
+        loading: false,
+        errorMessage: '',
+    });
+
+    useEffect(() => {
+        const readLiveValues = () => {
+            const accountInput = document.querySelector(`input[name="accountName"], ${tourSelector(TOUR.marketplace.modalAccountName)} input`);
+            const emailInput = document.querySelector(`input[name="email"], ${tourSelector(TOUR.marketplace.modalEmail)} input`);
+            const passwordInput = document.querySelector(`input[name="password"], ${tourSelector(TOUR.marketplace.modalPassword)} input`);
+            setFormState(prev => ({
+                ...prev,
+                accountName: accountInput?.value ?? prev.accountName,
+                email: emailInput?.value ?? prev.email,
+                password: passwordInput?.value ?? prev.password,
+            }));
+        };
+        readLiveValues();
+
+        const handleFormChange = (e) => {
+            if (e.detail) {
+                setFormState(prev => ({
+                    ...prev,
+                    accountName: e.detail.accountName ?? prev.accountName,
+                    email: e.detail.email ?? prev.email,
+                    password: e.detail.password ?? prev.password,
+                    analysisStartDate: e.detail.analysisStartDate ?? prev.analysisStartDate,
+                    enableSizeWiseCalculation: typeof e.detail.enableSizeWiseCalculation === 'boolean'
+                        ? e.detail.enableSizeWiseCalculation
+                        : prev.enableSizeWiseCalculation,
+                    showAutoSyncFields: typeof e.detail.showAutoSyncFields === 'boolean'
+                        ? e.detail.showAutoSyncFields
+                        : prev.showAutoSyncFields,
+                    loading: !!e.detail.loading,
+                }));
+            }
+        };
+
+        const handleSetSizeWise = (e) => {
+            if (typeof e.detail?.value === 'boolean') {
+                setFormState(prev => ({ ...prev, enableSizeWiseCalculation: e.detail.value }));
+            }
+        };
+
+        const handleSetAutoSync = (e) => {
+            if (typeof e.detail?.value === 'boolean') {
+                setFormState(prev => ({ ...prev, showAutoSyncFields: e.detail.value }));
+            }
+        };
+
+        const handleConnError = (e) => {
+            if (e.detail?.message) {
+                setFormState(prev => ({ ...prev, errorMessage: e.detail.message, loading: false }));
+            }
+        };
+
+        const handleLiveInput = (e) => {
+            if (e.target?.name === 'accountName') {
+                setFormState(prev => ({ ...prev, accountName: e.target.value, errorMessage: '' }));
+            }
+            if (e.target?.name === 'email') {
+                setFormState(prev => ({ ...prev, email: e.target.value, errorMessage: '' }));
+            }
+            if (e.target?.name === 'password') {
+                setFormState(prev => ({ ...prev, password: e.target.value, errorMessage: '' }));
+            }
+        };
+
+        window.addEventListener('tour:form_change', handleFormChange);
+        window.addEventListener('tour:set_sizewise', handleSetSizeWise);
+        window.addEventListener('tour:set_autosync', handleSetAutoSync);
+        window.addEventListener('tour:connection_error', handleConnError);
+        document.addEventListener('input', handleLiveInput);
+        document.addEventListener('change', handleLiveInput);
+
+        return () => {
+            window.removeEventListener('tour:form_change', handleFormChange);
+            window.removeEventListener('tour:set_sizewise', handleSetSizeWise);
+            window.removeEventListener('tour:set_autosync', handleSetAutoSync);
+            window.removeEventListener('tour:connection_error', handleConnError);
+            document.removeEventListener('input', handleLiveInput);
+            document.removeEventListener('change', handleLiveInput);
+        };
+    }, [step?.id]);
+
+    const trimmedAccountName = (formState.accountName || '').trim();
+    const isAccountNameValid = trimmedAccountName.length > 0;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const trimmedEmail = (formState.email || '').trim();
+    const isEmailValid = emailRegex.test(trimmedEmail);
+    const trimmedPassword = (formState.password || '').trim();
+    const isPasswordValid = trimmedPassword.length > 0;
+
+    let isNextDisabled = false;
+    let actionStatus = null;
+
+    if (step?.actionType === 'accountName') {
+        if (!isAccountNameValid) {
+            isNextDisabled = true;
+            actionStatus = {
+                type: 'prompt',
+                text: 'Type your account nickname or store name above to proceed',
+            };
+        } else {
+            isNextDisabled = false;
+            actionStatus = {
+                type: 'valid',
+                text: 'Account name entered. Click Next to proceed',
+            };
+        }
+    } else if (step?.actionType === 'email') {
+        if (!trimmedEmail) {
+            isNextDisabled = true;
+            actionStatus = {
+                type: 'prompt',
+                text: 'Type your panel email address above to proceed',
+            };
+        } else if (!isEmailValid) {
+            isNextDisabled = true;
+            actionStatus = {
+                type: 'invalid',
+                text: 'Enter a valid email format (e.g. seller@store.com)',
+            };
+        } else {
+            isNextDisabled = false;
+            actionStatus = {
+                type: 'valid',
+                text: 'Valid email format entered. Click Next to proceed',
+            };
+        }
+    } else if (step?.actionType === 'password') {
+        if (!isPasswordValid) {
+            isNextDisabled = true;
+            actionStatus = {
+                type: 'prompt',
+                text: 'Enter your panel password above to proceed',
+            };
+        } else {
+            isNextDisabled = false;
+            actionStatus = {
+                type: 'valid',
+                text: 'Password completed securely. Click Next to proceed',
+            };
+        }
+    } else if (step?.actionType === 'connect') {
+        isNextDisabled = true;
+    }
 
     // Follow the element every frame rather than binding scroll/resize
     // listeners: the target can sit inside any number of scrollable panes, and
@@ -208,23 +414,37 @@ const TourSpotlight = ({
         const observer = new ResizeObserver(measure);
         observer.observe(node);
         return () => observer.disconnect();
-    }, [step?.id, actionCompleted, step?.isBillingIntro]);
+    }, [step?.id, actionCompleted, step?.isBillingIntro, isNextDisabled, actionStatus?.type]);
 
-    // Lock background scrolling during walkthrough, prevent layout shifts and detached highlights.
-    // Restores scrolling completely when walkthrough ends, is skipped, or closes.
+    // Scrolling lock during guide/highlight:
+    // User requested that neither background nor modal should be scrollable
+    // while highlighting or giving guide.
+    // Typing inside form inputs (Space, Backspace, Arrow keys) is preserved.
     useEffect(() => {
+        const isTypingTarget = (target) => {
+            if (!target) return false;
+            const tag = target.tagName ? target.tagName.toUpperCase() : '';
+            return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
+        };
+
         const preventScroll = (event) => {
-            // Allow scrolling within the popover itself if content exceeds max-height
+            // Allow wheel only if cursor is inside the tour popover itself and popover content overflows
             if (popoverRef.current && popoverRef.current.contains(event.target)) {
-                return;
+                const isScrollable = popoverRef.current.scrollHeight > popoverRef.current.clientHeight;
+                if (isScrollable) return;
             }
+            // Everywhere else: strictly prevent wheel and touchmove from scrolling
             event.preventDefault();
         };
 
         const preventScrollKeys = (event) => {
-            if (['Space', 'PageUp', 'PageDown', 'End', 'Home'].includes(event.code)) {
+            if (isTypingTarget(event.target)) {
+                return; // NEVER block space or navigation keys while typing inside an input!
+            }
+            if (['Space', 'PageUp', 'PageDown', 'End', 'Home', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
                 if (popoverRef.current && popoverRef.current.contains(event.target)) {
-                    return;
+                    const isScrollable = popoverRef.current.scrollHeight > popoverRef.current.clientHeight;
+                    if (isScrollable) return;
                 }
                 event.preventDefault();
             }
@@ -235,44 +455,50 @@ const TourSpotlight = ({
         window.addEventListener('keydown', preventScrollKeys, { passive: false });
 
         const prevBodyOverflow = document.body.style.overflow;
+        const prevHtmlOverflow = document.documentElement.style.overflow;
         document.body.style.overflow = 'hidden';
-
-        const scrollables = Array.from(document.querySelectorAll('.overflow-y-auto, .overflow-auto, main'));
-        const prevOverflows = scrollables.map((el) => el.style.overflow);
-        scrollables.forEach((el) => {
-            el.style.overflow = 'hidden';
-        });
+        document.documentElement.style.overflow = 'hidden';
+        document.body.classList.add('tour-active');
+        document.documentElement.classList.add('tour-active');
 
         return () => {
             window.removeEventListener('wheel', preventScroll);
             window.removeEventListener('touchmove', preventScroll);
             window.removeEventListener('keydown', preventScrollKeys);
             document.body.style.overflow = prevBodyOverflow;
-            scrollables.forEach((el, idx) => {
-                el.style.overflow = prevOverflows[idx] || '';
-            });
+            document.documentElement.style.overflow = prevHtmlOverflow;
+            document.body.classList.remove('tour-active');
+            document.documentElement.classList.remove('tour-active');
         };
     }, []);
 
     useEffect(() => {
         const onKeyDown = (event) => {
-            if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+            if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+
+            const tag = event.target?.tagName ? event.target.tagName.toUpperCase() : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable) {
+                return; // Let user type and use arrow keys without navigating the tour
+            }
+
             if (event.key === 'ArrowRight' || event.key === 'Enter') {
                 event.preventDefault();
-                onNext();
+                if (!isNextDisabled) {
+                    onNext();
+                }
             }
             if (event.key === 'ArrowLeft' && !isFirst) { event.preventDefault(); onPrev(); }
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [onClose, onNext, onPrev, isFirst]);
+    }, [onClose, onNext, onPrev, isFirst, isNextDisabled]);
 
     const position = place(hole, size, step?.side || 'bottom', step);
     const progress = total > 1 ? ((index + 1) / total) * 100 : 100;
 
     // Arrow offset along the shared edge — suppressed for centered popups
     const arrowOffset = (() => {
-        if (!hole || position.side === 'center' || position.side === 'center-bottom') return null;
+        if (!hole || position.side === 'center' || position.side === 'center-bottom' || step?.isMarketplaceSelect) return null;
         if (position.side === 'bottom' || position.side === 'top') {
             const center = hole.left + hole.width / 2 - position.left;
             return { left: `${Math.min(Math.max(center, 24), Math.max(size.width - 24, 24))}px` };
@@ -286,8 +512,14 @@ const TourSpotlight = ({
     const vh = window.innerHeight;
     const vw = window.innerWidth;
 
+    // Safety guard: if the connect marketplace modal is open in the DOM, never show the marketplace selection card
+    const hasConnectModalInDom = typeof document !== 'undefined' && !!document.querySelector('[data-tour-modal="connect-marketplace"]');
+    if (step?.isMarketplaceSelect && hasConnectModalInDom) {
+        return null;
+    }
+
     return (
-        <div className="fixed inset-0 z-[9990] pointer-events-none" role="dialog" aria-modal="true" aria-label="Product tour">
+        <div className="fixed inset-0 z-[9998] pointer-events-none" role="dialog" aria-modal="true" aria-label="Product tour">
             {/* Dim everything but the cut-out. A mask keeps the corners rounded;
                 four positioned divs cannot. */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
@@ -329,8 +561,8 @@ const TourSpotlight = ({
                 )}
             </svg>
 
-            {/* Swallows clicks OUTSIDE the cutout without detached overflow boxes */}
-            {hole && (
+            {/* Swallows clicks OUTSIDE the cutout without detached overflow boxes (suppressed for modal targets to keep form inputs fully interactive) */}
+            {hole && !isModalTarget && (
                 <>
                     {hole.top > 0 && (
                         <div
@@ -376,18 +608,22 @@ const TourSpotlight = ({
             <div
                 ref={popoverRef}
                 className={`absolute pointer-events-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.35),0_0_0_1px_rgba(255,255,255,0.8)] border border-slate-200/90 font-sans animate-tour-pop overflow-y-auto max-h-[calc(100vh-40px)] custom-scrollbar ${
-                    step?.isBillingIntro
+                    step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration
                         ? 'w-[580px] max-w-[calc(100vw-32px)]'
-                        : (step?.id?.startsWith('bill-plan-')
+                        : (isModalTarget || step?.id?.startsWith('bill-plan-'))
                             ? 'w-[350px] max-w-[calc(100vw-32px)]'
-                            : 'w-[410px] max-w-[calc(100vw-32px)]')
+                            : 'w-[420px] max-w-[calc(100vw-32px)]'
                 }`}
                 style={{ top: `${position.top}px`, left: `${position.left}px` }}
             >
                 {/* Gradient Accent Bar */}
-                <div className="h-1.5 w-full bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600" />
+                <div className={`h-1.5 w-full ${
+                    step?.isCelebration
+                        ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600'
+                        : 'bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600'
+                }`} />
 
-                {arrowOffset && (
+                {arrowOffset && !step?.isCelebration && (
                     <div
                         className={`absolute w-2.5 h-2.5 bg-white border-slate-200/80 rotate-45 ${ARROW_BY_SIDE[position.side]}`}
                         style={arrowOffset}
@@ -401,7 +637,7 @@ const TourSpotlight = ({
                         <div className="flex items-center gap-2">
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold tracking-wide uppercase bg-brand-50 text-brand-700 border border-brand-200/80 shadow-xs">
                                 <Sparkles size={11} className="text-amber-500 shrink-0" />
-                                {step?.isBillingIntro ? 'Billing & Credits Overview' : 'Guided Onboarding'}
+                                {step?.isCelebration ? 'Connection Success' : step?.isBillingIntro ? 'Billing & Credits Overview' : step?.isMarketplaceSelect ? 'Marketplace Selection' : 'Guided Onboarding'}
                             </span>
                             <span className="text-[11px] font-bold text-slate-400">
                                 Step {index + 1} of {total}
@@ -427,6 +663,287 @@ const TourSpotlight = ({
                     <p className="text-sm text-slate-600 leading-relaxed mt-1.5">
                         {step?.body}
                     </p>
+
+                    {/* ── Marketplace Selection Cards ────────────────────── */}
+                    {step?.isMarketplaceSelect && (
+                        <div className="mt-4 space-y-2.5">
+                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                Supported Marketplace Integrations
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                {[
+                                    {
+                                        id: 'Meesho',
+                                        title: 'Meesho',
+                                        sub: 'Auto-sync & Size-wise SKU P&L',
+                                        badge: 'Recommended for Fashion',
+                                        border: 'border-pink-200 hover:border-pink-400 bg-pink-50/40',
+                                        accent: 'text-pink-600 bg-pink-100',
+                                    },
+                                    {
+                                        id: 'Amazon India (Seller)',
+                                        title: 'Amazon India',
+                                        sub: 'Seller Central SP-API & Settlements',
+                                        badge: 'FBA & EasyShip Audits',
+                                        border: 'border-amber-200 hover:border-amber-400 bg-amber-50/40',
+                                        accent: 'text-amber-600 bg-amber-100',
+                                    },
+                                    {
+                                        id: 'Flipkart',
+                                        title: 'Flipkart',
+                                        sub: 'Seller Hub fees & order reconciliations',
+                                        badge: 'Commission Slip Audits',
+                                        border: 'border-blue-200 hover:border-blue-400 bg-blue-50/40',
+                                        accent: 'text-blue-600 bg-blue-100',
+                                    },
+                                    {
+                                        id: 'Myntra',
+                                        title: 'Myntra',
+                                        sub: 'Omni-channel catalog & order data',
+                                        badge: 'Catalog & Leakage Intelligence',
+                                        border: 'border-purple-200 hover:border-purple-400 bg-purple-50/40',
+                                        accent: 'text-purple-600 bg-purple-100',
+                                    },
+                                ].map((item) => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => {
+                                            window.dispatchEvent(new CustomEvent('tour:select_marketplace', { detail: { name: item.id } }));
+                                        }}
+                                        className={`p-3 rounded-2xl border text-left transition-all hover:shadow-md hover:scale-[1.02] active:scale-95 cursor-pointer flex flex-col justify-between ${item.border}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                                            <span className="text-xs font-bold text-slate-800">{item.title}</span>
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${item.accent}`}>
+                                                {item.badge}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500 leading-snug mb-2">
+                                            {item.sub}
+                                        </p>
+                                        <span className="text-[10px] font-extrabold text-brand-600 flex items-center gap-1">
+                                            Connect {item.title} ➔
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Meesho: Size-wise calculations helper ──────────── */}
+                    {step?.id === 'mp-meesho-sizewise' && (
+                        <div className="mt-3.5 p-3.5 rounded-2xl bg-brand-50/70 border border-brand-200/80 space-y-2.5">
+                            {/* Live interactive toggle row */}
+                            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-brand-200/80 shadow-xs">
+                                <div className="pr-2">
+                                    <h4 className="text-xs font-bold text-slate-800">Size-wise Calculations</h4>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                        {formState.enableSizeWiseCalculation
+                                            ? 'Enabled — calculates P&L separately per SKU size'
+                                            : 'Disabled — single size SKU calculation'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const nextVal = !formState.enableSizeWiseCalculation;
+                                        window.dispatchEvent(new CustomEvent('tour:set_sizewise', { detail: { value: nextVal } }));
+                                    }}
+                                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${
+                                        formState.enableSizeWiseCalculation ? 'bg-brand-600' : 'bg-slate-300'
+                                    }`}
+                                >
+                                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${
+                                        formState.enableSizeWiseCalculation ? 'left-5.5' : 'left-0.5'
+                                    }`} />
+                                </button>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-700 pt-0.5">
+                                <span>Do your SKUs have different size variants?</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => window.dispatchEvent(new CustomEvent('tour:set_sizewise', { detail: { value: true } }))}
+                                    className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 ${
+                                        formState.enableSizeWiseCalculation
+                                            ? 'bg-brand-600 text-white ring-2 ring-brand-400'
+                                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                >
+                                    <Check size={14} />
+                                    Yes, Multi-Size
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => window.dispatchEvent(new CustomEvent('tour:set_sizewise', { detail: { value: false } }))}
+                                    className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 ${
+                                        !formState.enableSizeWiseCalculation
+                                            ? 'bg-slate-700 text-white ring-2 ring-slate-400'
+                                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                >
+                                    <X size={14} />
+                                    No, Single Size
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Meesho: Auto-Sync helper ──────────────────────── */}
+                    {step?.id === 'mp-meesho-autosync' && (
+                        <div className="mt-3.5 p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-2.5">
+                            {/* Live interactive toggle row */}
+                            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-emerald-200/80 shadow-xs">
+                                <div className="pr-2">
+                                    <h4 className="text-xs font-bold text-slate-800">Auto-Sync (Meesho Sync)</h4>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                        {formState.showAutoSyncFields
+                                            ? 'Enabled — daily orders & returns sync automatically'
+                                            : 'Disabled — upload orders manually via Excel'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const nextVal = !formState.showAutoSyncFields;
+                                        window.dispatchEvent(new CustomEvent('tour:set_autosync', { detail: { value: nextVal } }));
+                                    }}
+                                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${
+                                        formState.showAutoSyncFields ? 'bg-emerald-600' : 'bg-slate-300'
+                                    }`}
+                                >
+                                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${
+                                        formState.showAutoSyncFields ? 'left-5.5' : 'left-0.5'
+                                    }`} />
+                                </button>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => window.dispatchEvent(new CustomEvent('tour:set_autosync', { detail: { value: true } }))}
+                                    className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 ${
+                                        formState.showAutoSyncFields
+                                            ? 'bg-emerald-600 text-white ring-2 ring-emerald-400'
+                                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                >
+                                    <RefreshCw size={13} />
+                                    Enable Auto-Sync
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => window.dispatchEvent(new CustomEvent('tour:set_autosync', { detail: { value: false } }))}
+                                    className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 ${
+                                        !formState.showAutoSyncFields
+                                            ? 'bg-slate-700 text-white ring-2 ring-slate-400'
+                                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                >
+                                    Manual Uploads
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Account Name Helper Notice ─────────────────── */}
+                    {(step?.actionType === 'accountName' || step?.id?.includes('account-name')) && (
+                        <div className="mt-3.5 p-3 rounded-xl bg-indigo-50 border border-indigo-200/80 space-y-1">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-800">
+                                <Sparkles size={12} className="text-indigo-600 shrink-0" />
+                                <span>Unique Store / Brand Nickname</span>
+                            </div>
+                            <p className="text-[11px] text-indigo-700 leading-relaxed">
+                                Enter your store or brand nickname above (e.g. "My Meesho Store"). This ensures you can identify and distinguish this connection in multi-account dashboards.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* ── Credentials Security Callout ──────────────────── */}
+                    {(step?.id?.includes('credentials') || step?.id?.includes('password') || step?.id === 'mp-credentials') && (
+                        <div className="mt-3.5 p-3 rounded-xl bg-amber-50 border border-amber-200/80 space-y-1">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                                <Lock size={12} className="text-amber-600 shrink-0" />
+                                <span>Zero-Knowledge Encryption Notice</span>
+                            </div>
+                            <p className="text-[11px] text-amber-700 leading-relaxed">
+                                Passwords and credentials are encrypted directly in your browser with RSA-OAEP 2048-bit encryption before transmission and are never stored or logged in plain text.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* ── Action Validation & Guidance Feedback ──────────── */}
+                    {actionStatus && (
+                        <div className={`mt-3.5 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                            actionStatus.type === 'valid'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : actionStatus.type === 'invalid'
+                                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                        }`}>
+                            {actionStatus.type === 'valid' ? (
+                                <Check size={15} className="text-emerald-600 shrink-0" />
+                            ) : actionStatus.type === 'invalid' ? (
+                                <AlertCircle size={15} className="text-amber-600 shrink-0" />
+                            ) : (
+                                <Info size={15} className="text-slate-500 shrink-0 animate-pulse" />
+                            )}
+                            <span className="leading-snug">{actionStatus.text}</span>
+                        </div>
+                    )}
+
+                    {/* ── Backend Connection Error Feedback on Connect Step ── */}
+                    {step?.actionType === 'connect' && formState.errorMessage && (
+                        <div className="mt-3.5 p-3 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 flex items-start gap-2 animate-fadeIn">
+                            <AlertCircle size={15} className="text-red-600 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <span className="font-bold">Verification failed:</span> {formState.errorMessage}. Please check your credentials in the form and click "Connect Securely" to retry.
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Analysis Start Date Callout ───────────────────── */}
+                    {(step?.id?.includes('analysis-date') || step?.id === 'mp-analysis-date') && (
+                        <div className="mt-3.5 p-3 rounded-xl bg-blue-50 border border-blue-200/80 space-y-1">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-blue-800">
+                                <Clock size={12} className="text-blue-600 shrink-0" />
+                                <span>Analysis Period &amp; Processing Credits</span>
+                            </div>
+                            <p className="text-[11px] text-blue-700 leading-relaxed">
+                                Processing credits will be deducted based on the historical date selected. Calculations and reconciliations will be generated from this month onward.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* ── Celebratory Appreciation Message ──────────────── */}
+                    {step?.isCelebration && (
+                        <div className="mt-4 p-5 rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200/80 text-center space-y-3">
+                            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                                <Sparkles size={28} className="text-emerald-600 animate-bounce" />
+                            </div>
+                            <div>
+                                <h4 className="text-base font-extrabold text-slate-800">
+                                    Marketplace Successfully Connected!
+                                </h4>
+                                <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto leading-relaxed">
+                                    Your store is now linked with SpeedEcom. We have initialized your order, settlement, and return synchronization pipeline for your selected analysis period.
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left pt-1">
+                                <div className="p-2.5 rounded-lg bg-white/80 border border-emerald-100 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                    <ShieldCheck size={15} className="text-emerald-500 shrink-0" />
+                                    <span>Order Reconciliation Active</span>
+                                </div>
+                                <div className="p-2.5 rounded-lg bg-white/80 border border-emerald-100 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                    <ShieldCheck size={15} className="text-emerald-500 shrink-0" />
+                                    <span>SKU Profit Intelligence</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Rich Platform Benefits for Billing Introduction */}
                     {step?.isBillingIntro && (
@@ -503,39 +1020,82 @@ const TourSpotlight = ({
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="text-xs font-semibold text-slate-400 hover:text-slate-700 px-2 py-1.5 transition-colors cursor-pointer"
-                        >
-                            Skip
-                        </button>
-
-                        <div className="flex items-center gap-2">
-                            {!isFirst && (
+                        {step?.isCelebration ? (
+                            <div className="flex items-center justify-between w-full gap-3 pt-1">
                                 <button
                                     type="button"
-                                    onClick={onPrev}
-                                    className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200/80 rounded-xl px-3.5 py-2 transition-all active:scale-95 cursor-pointer"
+                                    onClick={onClose}
+                                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
                                 >
-                                    <ArrowLeft size={14} />
-                                    Back
+                                    Stay on Marketplace
                                 </button>
-                            )}
+                                <button
+                                    type="button"
+                                    onClick={onGoToDashboard || (() => {
+                                        onClose();
+                                        window.location.href = '/dashboard';
+                                    })}
+                                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white text-xs font-extrabold shadow-md shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <span>Go to Dashboard ➔</span>
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="text-xs font-semibold text-slate-400 hover:text-slate-700 px-2 py-1.5 transition-colors cursor-pointer"
+                                >
+                                    Skip
+                                </button>
 
-                            <button
-                                type="button"
-                                onClick={onNext}
-                                className={`flex items-center gap-1.5 text-xs font-extrabold text-white rounded-xl px-4 py-2 shadow-md transition-all duration-200 active:scale-95 cursor-pointer ${
-                                    isLast
-                                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/25 ring-2 ring-emerald-400/40'
-                                        : 'bg-gradient-to-r from-brand-600 via-brand-700 to-indigo-700 hover:from-brand-500 hover:to-indigo-600 shadow-brand-500/25 hover:scale-[1.02]'
-                                }`}
-                            >
-                                <span>{isLast ? (step?.lastButtonText || 'Finish Tour & Choose Plan ➔') : (step?.nextButtonText || 'Next')}</span>
-                                {!isLast && !step?.nextButtonText?.includes('➔') && <ArrowRight size={14} />}
-                            </button>
-                        </div>
+                                <div className="flex items-center gap-2">
+                                    {!isFirst && (
+                                        <button
+                                            type="button"
+                                            onClick={onPrev}
+                                            className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200/80 rounded-xl px-3.5 py-2 transition-all active:scale-95 cursor-pointer"
+                                        >
+                                            <ArrowLeft size={14} />
+                                            Back
+                                        </button>
+                                    )}
+
+                                    {step?.actionType === 'connect' ? (
+                                        <div className="flex items-center gap-2">
+                                            {formState.loading ? (
+                                                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-xs font-bold shadow-xs">
+                                                    <Loader2 size={14} className="animate-spin text-brand-600 shrink-0" />
+                                                    <span>Connecting &amp; Verifying...</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-brand-50 to-indigo-50 border border-brand-200 text-brand-700 text-xs font-bold shadow-xs animate-pulse">
+                                                    <Sparkles size={13} className="text-amber-500 shrink-0" />
+                                                    <span>Click "Connect Securely" below</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            disabled={isNextDisabled}
+                                            onClick={step?.isMarketplaceSelect ? () => {
+                                                window.dispatchEvent(new CustomEvent('tour:select_marketplace', { detail: { name: 'Meesho' } }));
+                                            } : onNext}
+                                            className={`flex items-center gap-1.5 text-xs font-extrabold text-white rounded-xl px-4 py-2 shadow-md transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none ${
+                                                isLast && !step?.isMarketplaceSelect
+                                                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+                                                    : 'bg-gradient-to-r from-brand-600 via-brand-700 to-indigo-700 hover:from-brand-500 hover:to-indigo-600 shadow-brand-500/25 hover:scale-[1.02]'
+                                            }`}
+                                        >
+                                            <span>{isLast && !step?.isMarketplaceSelect ? (step?.lastButtonText || 'Finish Tour & Choose Plan ➔') : (step?.nextButtonText || 'Next')}</span>
+                                            {(!isLast || step?.isMarketplaceSelect) && !step?.nextButtonText?.includes('➔') && <ArrowRight size={14} />}
+                                        </button>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
