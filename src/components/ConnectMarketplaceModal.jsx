@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Loader2, Save, Eye, EyeOff, AlertCircle, RefreshCw, Pencil, Lock, ShieldCheck, Info } from 'lucide-react';
 import api from '../api';
 import forge from 'node-forge';
@@ -182,6 +182,22 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
         return forge.util.encode64(encrypted);
     };
 
+    const handleAutoSyncToggle = async () => {
+        const next = !autoSyncOn;
+        setAutoSyncSaving(true);
+        setError(null);
+        try {
+            await api.put(`/marketplaces/${accountData._id}/auto-sync`, { enabled: next });
+            setAutoSyncOn(next);
+            setAwaitingFirstSync(next);
+            if (onAutoSyncChange) await onAutoSyncChange();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to change auto-sync');
+        } finally {
+            setAutoSyncSaving(false);
+        }
+    };
+
     const handleSubmit = async (e, forceUpdate = false) => {
         if (e) e.preventDefault();
         setLoading(true);
@@ -318,7 +334,10 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
 
 
 
+    const autoSyncAccount = accountData?.name || accountData?.email;
+
     return (
+        <>
         <div className="fixed inset-0 bg-black/60 z-[9995] flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn" onClick={onClose}>
             <div
                 data-tour-modal="connect-marketplace"
@@ -521,6 +540,45 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                                     </div>
                                     
                                     <div className="space-y-4">
+                                        {accountData?.iv && (() => {
+                                            const state = !autoSyncOn ? 'off' : awaitingFirstSync ? 'pending' : 'on';
+                                            const tone = {
+                                                on: { box: 'bg-emerald-50 border-emerald-200', title: 'text-emerald-700', text: 'text-emerald-600', track: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-600 border-emerald-100', label: 'On' },
+                                                pending: { box: 'bg-amber-50 border-amber-200', title: 'text-amber-800', text: 'text-amber-700', track: 'bg-amber-500', badge: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Waiting' },
+                                                off: { box: 'bg-slate-50 border-slate-200', title: 'text-slate-700', text: 'text-slate-500', track: 'bg-slate-300', badge: 'bg-slate-100 text-slate-500 border-slate-200', label: 'Off' },
+                                            }[state];
+                                            const description = {
+                                                on: 'Enabled — all datas sync automatically',
+                                                pending: 'Enabled — waiting for a manual sync. Use the "Sync All Datas" button on this account (pick the dates since auto-sync was off); auto-sync starts once it completes.',
+                                                off: accountData.autoSyncDisabledReason === 'credentials'
+                                                    ? 'Disabled — Meesho rejected the password. Update it to resume.'
+                                                    : 'Disabled — upload reports manually',
+                                            }[state];
+                                            return (
+                                                <div className={`rounded-xl border p-3.5 flex items-center gap-3 ${tone.box}`}>
+                                                    <div className="flex-1">
+                                                        <p className={`text-xs font-semibold ${tone.title}`}>Auto-Sync</p>
+                                                        <p className={`text-[10px] mt-0.5 leading-relaxed ${tone.text}`}>{description}</p>
+                                                    </div>
+                                                    {canToggleAutoSync ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowAutoSyncConfirm(true)}
+                                                            disabled={autoSyncSaving}
+                                                            aria-pressed={autoSyncOn}
+                                                            title={autoSyncOn ? 'Disable auto-sync' : 'Enable auto-sync'}
+                                                            className={`relative w-10 h-5 rounded-full transition-colors shrink-0 disabled:opacity-50 ${tone.track}`}
+                                                        >
+                                                            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200 ${autoSyncOn ? 'left-5' : 'left-0.5'}`} />
+                                                        </button>
+                                                    ) : (
+                                                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${tone.badge}`}>
+                                                            {tone.label}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between ml-1">
                                                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Meesho Supplier Panel Password</label>
@@ -723,6 +781,19 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                 </form>
             </div>
         </div>
+        <ConfirmModal
+            isOpen={showAutoSyncConfirm}
+            onClose={() => setShowAutoSyncConfirm(false)}
+            onConfirm={handleAutoSyncToggle}
+            title={autoSyncOn ? 'Disable Auto-Sync' : 'Enable Auto-Sync'}
+            message={autoSyncOn
+                ? `Disable auto-sync for ${autoSyncAccount}? Scheduled syncs will stop and its data won't update automatically until auto-sync is enabled again. Manual uploads still work.`
+                : `Enable auto-sync for ${autoSyncAccount}? Run a manual sync first (choose the dates since auto-sync was off). Auto-sync starts automatically after that sync completes.`}
+            confirmText={autoSyncOn ? 'Disable' : 'Enable'}
+            cancelText="Cancel"
+            danger={autoSyncOn}
+        />
+        </>
     );
 };
 

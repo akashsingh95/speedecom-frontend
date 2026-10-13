@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
-import { Loader2, X, CheckCircle, XCircle, ShoppingBag, Plus, Eye as EyeIcon, Trash2, Edit, Mail, Smartphone, Link as LinkIcon, Eye, EyeOff, ShieldCheck, RefreshCw, ArrowLeft, Package, CreditCard, RotateCcw, Shield, History, AlertCircle, Clock, CalendarClock } from 'lucide-react';
+import { Loader2, X, CheckCircle, XCircle, ShoppingBag, Plus, Eye as EyeIcon, Edit, Mail, Smartphone, Link as LinkIcon, Eye, EyeOff, ShieldCheck, RefreshCw, ArrowLeft, Package, CreditCard, RotateCcw, Shield, History, AlertCircle, Clock, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../api';
 import { useAuth } from '../AuthContext';
@@ -99,7 +99,7 @@ const MarketplaceLogo = React.memo(({ name }) => {
     );
 });
 
-const MarketplaceCard = React.memo(({ m, onConnect, onSeeAccounts, isImpersonating }) => {
+const MarketplaceCard = React.memo(({ m, onConnect, onSeeAccounts }) => {
     const activeAccounts = m.accounts ? m.accounts.filter(a => a.status !== 'inactive' && a.authStatus !== 'invalid') : [];
     const accountCount = activeAccounts.length;
     const isConnected = m.status === 'active' && accountCount > 0;
@@ -200,9 +200,6 @@ const MarketplaceSettings = () => {
 
     // UI State
     const [showConnectedOnly, setShowConnectedOnly] = useState(false);
-    const [deletePassword, setDeletePassword] = useState('');
-    const [showDeletePassword, setShowDeletePassword] = useState(false);
-    const [deleteError, setDeleteError] = useState('');
 
     // Update verification state (password gate before opening update modal)
     const [updateVerifyTarget, setUpdateVerifyTarget] = useState(null); // { name, account }
@@ -214,8 +211,6 @@ const MarketplaceSettings = () => {
     // Modal States
     const [connectModalData, setConnectModalData] = useState(null); // { name, existingEmail, mode: 'add'|'update' }
     const [listModalData, setListModalData] = useState(null); // { name, accounts: [] }
-    const [toggleLoading, setToggleLoading] = useState(null); // For disconnect confirmation (specific account)
-    const [disconnectTarget, setDisconnectTarget] = useState(null); // { name, email }
     const [successMessage, setSuccessMessage] = useState(null); // For success toast
     const [changeAnalysisDateTarget, setChangeAnalysisDateTarget] = useState(null); // { _id, name, analysisStartDate }
 
@@ -653,7 +648,7 @@ const MarketplaceSettings = () => {
                         setSyncLogs(((data && data.logs) || []).slice(0, 20));
                         setSyncLogsLastRunAt((data && data.lastSyncRunAt) || null);
                     }
-                } catch (err) {
+                } catch {
                     // Silent fail for polling
                 }
             }, 15000);
@@ -1049,7 +1044,6 @@ const MarketplaceSettings = () => {
                                 onConnect={() => handleConnect(m)}
                                 onSeeAccounts={handleSeeAccounts}
                                 onAddAnother={handleAddAnother}
-                                isImpersonating={isImpersonating}
                             />
                         ))}
                     </div>
@@ -1076,6 +1070,7 @@ const MarketplaceSettings = () => {
                             }
                         }}
                         onSuccess={handleModalSuccess}
+                        onAutoSyncChange={fetchMarketplaces}
                         onBack={connectModalData.returnToList ? handleBackToList : null}
                     />
                 )}
