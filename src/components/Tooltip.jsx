@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-const Tooltip = ({ text, content, children }) => {
+const Tooltip = ({ text, content, children, align = 'center' }) => {
     const [show, setShow] = useState(false);
     const [style, setStyle] = useState({});
     const wrapperRef = useRef(null);
@@ -12,8 +12,8 @@ const Tooltip = ({ text, content, children }) => {
             setStyle({
                 position: 'fixed',
                 top: rect.top - 8,
-                left: rect.left + rect.width / 2,
-                transform: 'translate(-50%, -100%)',
+                left: align === 'end' ? rect.right : rect.left + rect.width / 2,
+                transform: align === 'end' ? 'translate(-100%, -100%)' : 'translate(-50%, -100%)',
                 zIndex: 99999,
             });
         }
@@ -34,7 +34,7 @@ const Tooltip = ({ text, content, children }) => {
             className={`px-2 py-1 text-xs font-semibold text-white bg-slate-800 rounded-md shadow-md pointer-events-none ${content ? 'min-w-[160px]' : 'whitespace-nowrap'}`}
         >
             {content || text}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800" />
+            <div className={`absolute top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800 ${align === 'end' ? 'right-3' : 'left-1/2 -translate-x-1/2'}`} />
         </div>
     );
 
