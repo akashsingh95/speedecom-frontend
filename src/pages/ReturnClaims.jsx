@@ -254,7 +254,7 @@ const ReturnClaims = () => {
                 });
                 callbackNumber = ctx?.defaults?.callbackNumber || '';
             } catch { /* non-fatal */ }
-            setBulkRaise({ phase: 'confirm', rows, callbackNumber, description: '' });
+            setBulkRaise({ phase: 'confirm', rows, callbackNumber, description: 'I have not received my product yet so please give me my payment.' });
         } catch {
             toast.error('Could not load overdue returns');
             setBulkRaise(null);

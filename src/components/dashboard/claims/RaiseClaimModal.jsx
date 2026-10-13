@@ -177,7 +177,7 @@ const RaiseClaimModal = ({ target, onClose, onRaised }) => {
     const open = Boolean(target);
     const [phase, setPhase] = useState('loading'); // loading | form | blocked | success | loadError
     const [ctx, setCtx] = useState(null);
-    const [description, setDescription] = useState('');
+    const [description, setDescription] = useState('I have not received my product yet so please give me my payment.');
     const [callback, setCallback] = useState('');
     const [touched, setTouched] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -192,7 +192,7 @@ const RaiseClaimModal = ({ target, onClose, onRaised }) => {
         setCtx(null);
         setError(null);
         setResult(null);
-        setDescription('');
+        setDescription('I have not received my product yet so please give me my payment.');
         setTouched(false);
         (async () => {
             try {

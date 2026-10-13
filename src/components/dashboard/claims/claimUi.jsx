@@ -84,7 +84,18 @@ export const CopyButton = ({ value, label = 'Copy', className = '' }) => {
     const copy = async (e) => {
         e.stopPropagation();
         try {
-            await navigator.clipboard.writeText(String(value));
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(String(value));
+            } else {
+                // Fallback for HTTP (non-secure) contexts where clipboard API is unavailable
+                const ta = document.createElement('textarea');
+                ta.value = String(value);
+                ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
             setCopied(true);
             setTimeout(() => setCopied(false), 1400);
         } catch {
