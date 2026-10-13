@@ -11,7 +11,16 @@ import SuccessToast from '../components/SuccessToast';
 import DateRangePicker from '../components/DateRangePicker';
 import { TOUR } from '../tour/targets';
 import TourLauncher from '../tour/TourLauncher';
-import { MARKETPLACE_SETTINGS } from '../tour/steps';
+import {
+    MARKETPLACE_SETTINGS,
+    TENANT_ONBOARDING,
+    MARKETPLACE_ONBOARDING_MEESHO,
+    MARKETPLACE_ONBOARDING_AMAZON,
+    MARKETPLACE_ONBOARDING_FLIPKART,
+    MARKETPLACE_ONBOARDING_MYNTRA,
+    getMarketplaceTourKey,
+} from '../tour/steps';
+import { useTour } from '../tour/tourProvider';
 import forge from 'node-forge';
 import { getFriendlySyncErrorMessage } from '../utils/meeshoSyncErrorMessages';
 const base = import.meta.env.BASE_URL;
@@ -96,8 +105,14 @@ const MarketplaceCard = React.memo(({ m, onConnect, onSeeAccounts, isImpersonati
     const isConnected = m.status === 'active' && accountCount > 0;
     const isUpcoming = m.upcoming;
 
+    const cardTourTarget =
+        m.name === 'Meesho' ? TOUR.marketplace.cardMeesho :
+        (m.name.includes('Amazon') ? TOUR.marketplace.cardAmazon :
+        (m.name === 'Flipkart' ? TOUR.marketplace.cardFlipkart :
+        (m.name === 'Myntra' ? TOUR.marketplace.cardMyntra : TOUR.marketplace.card)));
+
     return (
-        <div data-tour={TOUR.marketplace.card} className={`bg-white rounded-2xl border border-slate-200 p-6 flex flex-col items-center text-center transition-all duration-300 relative group ${isUpcoming ? 'opacity-70' : 'hover:shadow-card-hover hover:scale-105'}`}>
+        <div data-tour={cardTourTarget} className={`bg-white rounded-2xl border border-slate-200 p-6 flex flex-col items-center text-center transition-all duration-300 relative group ${isUpcoming ? 'opacity-70' : 'hover:shadow-card-hover hover:scale-105'}`}>
             <MarketplaceLogo name={m.name} />
             <h3 className="font-bold text-slate-800 mb-1">{m.name}</h3>
 
@@ -149,8 +164,33 @@ const MarketplaceCard = React.memo(({ m, onConnect, onSeeAccounts, isImpersonati
 
 const MarketplaceSettings = () => {
     const { isImpersonating, user } = useAuth();
+    const {
+        completeTourAction,
+        onMarketplaceConnected,
+        setSelectedMarketplace,
+        currentStep,
+        startTour,
+        hasSeen,
+        stopTour,
+        runKey,
+    } = useTour() || {};
     const [loading, setLoading] = useState(true);
     const [marketplaces, setMarketplaces] = useState([]);
+
+    const isMarketplaceOnboarded = useCallback((name) => {
+        if (!name) return false;
+        const norm = name.toLowerCase();
+        const key = norm.includes('meesho') ? 'meesho'
+            : norm.includes('amazon') ? 'amazon'
+            : norm.includes('flipkart') ? 'flipkart'
+            : norm.includes('myntra') ? 'myntra'
+            : norm;
+
+        // A marketplace is only considered onboarded if active connected accounts actually exist
+        const mp = (marketplaces || []).find(m => m.name.toLowerCase().includes(key));
+        const activeAccounts = (mp?.accounts || []).filter(a => a.status !== 'inactive' && a.authStatus !== 'invalid');
+        return activeAccounts.length > 0;
+    }, [marketplaces]);
 
     // UI State
     const [showConnectedOnly, setShowConnectedOnly] = useState(false);
@@ -242,13 +282,81 @@ const MarketplaceSettings = () => {
     // --- ACTIONS using useCallback ---
 
     const handleConnect = useCallback((m) => {
+        const mpName = typeof m === 'string' ? m : m?.name;
+        const targetMp = typeof m === 'object' && m !== null ? m : (marketplaces || []).find(x => x.name === mpName) || { name: mpName };
+        const tourKey = getMarketplaceTourKey(mpName);
+        const norm = (mpName || '').toLowerCase();
+        const mpSlug = norm.includes('meesho') ? 'meesho'
+            : norm.includes('amazon') ? 'amazon'
+            : norm.includes('flipkart') ? 'flipkart'
+            : norm.includes('myntra') ? 'myntra' : norm;
+
+        const mpObj = (marketplaces || []).find(x => x.name?.toLowerCase().includes(mpSlug));
+        const accounts = targetMp?.accounts || mpObj?.accounts || [];
+        const hasActiveAccounts = accounts.some(a => a.status !== 'inactive' && a.authStatus !== 'invalid');
+        const isFromOnboarding = runKey === TENANT_ONBOARDING || currentStep?.isMarketplaceSelect;
+
+        setSelectedMarketplace?.(mpName);
         setConnectModalData({
-            name: m.name,
+            name: mpName,
             mode: 'add',
             existingEmail: '',
-            supportedSignInTypes: m.supportedSignInTypes || ['email', 'phone'] // Default fallback
+            supportedSignInTypes: targetMp?.supportedSignInTypes || ['email', 'phone'] // Default fallback
         });
-    }, []);
+
+        // If the marketplace has no active connected accounts yet (first connection), OR user chose from onboarding:
+        if (tourKey && (!hasActiveAccounts || isFromOnboarding)) {
+            try {
+                if (isFromOnboarding) {
+                    localStorage.setItem('tour:tenant-onboarding', 'completed');
+                }
+                localStorage.removeItem(`tour:marketplace_onboarded:${mpSlug}`);
+                localStorage.setItem('tour:active_marketplace_tour', JSON.stringify({ key: tourKey, marketplaceName: mpName, stepIndex: 0 }));
+            } catch { /* ignore */ }
+
+            startTour?.(tourKey, 0);
+        } else if (runKey) {
+            // Dismiss any background page tour so it never overlaps the connect modal
+            stopTour?.();
+        }
+    }, [setSelectedMarketplace, startTour, stopTour, marketplaces, runKey, currentStep]);
+
+    useEffect(() => {
+        const handleSelectMp = (e) => {
+            const mpName = e.detail?.name;
+            if (mpName) {
+                const target = (marketplaces || []).find(m => m.name === mpName || m.name.toLowerCase().includes(mpName.toLowerCase()));
+                const resolvedName = target ? target.name : mpName;
+                const targetM = target || { name: resolvedName };
+                handleConnect(targetM);
+            }
+        };
+        window.addEventListener('tour:select_marketplace', handleSelectMp);
+        return () => window.removeEventListener('tour:select_marketplace', handleSelectMp);
+    }, [marketplaces, handleConnect]);
+
+    // Restore modal and tour on page refresh if an active onboarding tour was in progress
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('tour:active_marketplace_tour');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.marketplaceName && !isMarketplaceOnboarded(parsed.marketplaceName)) {
+                    const target = (marketplaces || []).find(m => m.name === parsed.marketplaceName || m.name.toLowerCase().includes(parsed.marketplaceName.toLowerCase()));
+                    setConnectModalData({
+                        name: parsed.marketplaceName,
+                        mode: 'add',
+                        existingEmail: '',
+                        supportedSignInTypes: target?.supportedSignInTypes || ['email', 'phone']
+                    });
+                    if (parsed.key) {
+                        const resumeIndex = typeof parsed.stepIndex === 'number' ? parsed.stepIndex : 0;
+                        startTour?.(parsed.key, resumeIndex);
+                    }
+                }
+            }
+        } catch { /* ignore */ }
+    }, [marketplaces, isMarketplaceOnboarded, startTour]);
 
     const handleSeeAccounts = useCallback(async (m) => {
         // Open the modal immediately with what we already have so it feels responsive,
@@ -853,9 +961,15 @@ const MarketplaceSettings = () => {
     };
 
     const handleModalSuccess = async () => {
+        const connectedName = connectModalData?.name;
+        const isAddMode = connectModalData?.mode === 'add';
         await fetchMarketplaces();
         setConnectModalData(null);
         setSuccessMessage(connectModalData?.mode === 'update' ? 'Account updated successfully!' : 'Account connected successfully!');
+        if (isAddMode && connectedName) {
+            completeTourAction?.('marketplace_connected', { marketplace: connectedName });
+            onMarketplaceConnected?.(connectedName);
+        }
     };
 
     const handleBackToList = useCallback(() => {
@@ -937,7 +1051,15 @@ const MarketplaceSettings = () => {
                         accountPassword={connectModalData.accountPassword}
                         bypassPassword={connectModalData.bypassPassword}
                         supportedSignInTypes={connectModalData.supportedSignInTypes}
-                        onClose={() => setConnectModalData(null)}
+                        onClose={() => {
+                            setConnectModalData(null);
+                            try {
+                                localStorage.removeItem('tour:active_marketplace_tour');
+                            } catch { /* ignore */ }
+                            if (runKey && runKey.startsWith('mp-onboarding-')) {
+                                stopTour?.();
+                            }
+                        }}
                         onSuccess={handleModalSuccess}
                         onBack={connectModalData.returnToList ? handleBackToList : null}
                     />

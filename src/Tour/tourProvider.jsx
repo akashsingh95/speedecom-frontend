@@ -16,8 +16,8 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import api from '../api';
-import { tourSelector } from './targets';
-import { TOURS, TENANT_ONBOARDING, BILLING_TOUR } from './steps';
+import { TOUR, tourSelector } from './targets';
+import { TOURS, TENANT_ONBOARDING, BILLING_TOUR, getMarketplaceTourKey } from './steps';
 import TourSpotlight from './TourSpotlight';
 import WelcomeModal from './WelcomeModal';
 
@@ -102,6 +102,44 @@ export const TourProvider = ({ children }) => {
     });
 
     const lastLocationPathRef = useRef(location.pathname);
+
+    const [selectedMarketplace, setSelectedMarketplace] = useState(() => {
+        try {
+            return localStorage.getItem('tour:selected_marketplace') || 'Meesho';
+        } catch {
+            return 'Meesho';
+        }
+    });
+
+    const handleSetSelectedMarketplace = useCallback((name) => {
+        if (!name) return;
+        setSelectedMarketplace(name);
+        try {
+            localStorage.setItem('tour:selected_marketplace', name);
+        } catch { /* ignore */ }
+    }, []);
+
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.detail?.name) {
+                handleSetSelectedMarketplace(e.detail.name);
+            }
+        };
+        window.addEventListener('tour:select_marketplace', handler);
+        return () => window.removeEventListener('tour:select_marketplace', handler);
+    }, [handleSetSelectedMarketplace]);
+
+    const isStepApplicable = useCallback((s, mp) => {
+        if (!s) return false;
+        // If Meesho password step is requested but password field is not in DOM (auto-sync is disabled), skip it
+        if (s.id === 'mp-meesho-password') {
+            return !!document.querySelector(tourSelector(TOUR.marketplace.modalPassword));
+        }
+        if (!s.forMarketplaces || s.forMarketplaces.length === 0) return true;
+        if (!mp) return true;
+        const norm = mp.toLowerCase();
+        return s.forMarketplaces.some((m) => norm.includes(m.toLowerCase()));
+    }, []);
 
     // Which way the user is moving. A step whose element is missing is skipped
     // in the direction of travel, so Back never lands on the same dead step.
@@ -205,9 +243,15 @@ export const TourProvider = ({ children }) => {
 
     const startTour = useCallback((key = TENANT_ONBOARDING, initialIndex = 0) => {
         if (!TOURS[key]) return;
+        waitTokenRef.current.cancelled = true;
         directionRef.current = 1;
         navAttemptsRef.current = { index: -1, count: 0 };
         endedOnRouteRef.current = null;
+        if (runKey === TENANT_ONBOARDING && key !== TENANT_ONBOARDING) {
+            persist(TENANT_ONBOARDING, 'completed', 5);
+        }
+        setActionCompleted(false);
+        setActionMeta(null);
         setStepIndex(initialIndex);
         setElement(null);
         setRunKey(key);
@@ -216,18 +260,26 @@ export const TourProvider = ({ children }) => {
         if (targetStep?.route && location.pathname !== targetStep.route) {
             navigate(`${targetStep.route}${targetStep.search || ''}`);
         }
-    }, [location.pathname, navigate]);
+    }, [location.pathname, navigate, runKey, persist]);
 
     const resetTour = useCallback((key = TENANT_ONBOARDING) => {
         try {
             localStorage.removeItem(localKey(key));
             localStorage.removeItem('tour:action:billing_done');
+            localStorage.removeItem('tour:billing_done');
             localStorage.removeItem('tour:billing_onboarding_active');
             localStorage.removeItem('tour:welcome_dismissed');
+            localStorage.removeItem('tour:selected_marketplace');
+            localStorage.removeItem('tour:marketplace_connected');
+            localStorage.removeItem('tour:active_marketplace_tour');
+            ['meesho', 'amazon', 'flipkart', 'myntra'].forEach((mp) => {
+                localStorage.removeItem(`tour:marketplace_onboarded:${mp}`);
+            });
         } catch { /* ignore */ }
         setWelcomeDismissed(false);
         setIsWelcomeOpen(false);
         setBillingOnboardingActive(false);
+        setSelectedMarketplace('Meesho');
         autoStartedRef.current.delete(key);
         setRecords((current) => (current || []).filter((record) => record.key !== key));
         setActionCompleted(false);
@@ -240,30 +292,93 @@ export const TourProvider = ({ children }) => {
         setBillingOnboardingActive(false);
         try {
             localStorage.removeItem('tour:billing_onboarding_active');
+            localStorage.setItem('tour:billing_done', 'true');
         } catch { /* ignore */ }
-        persist(TENANT_ONBOARDING, 'completed', 4);
-    }, [persist]);
+        persist(TENANT_ONBOARDING, 'in_progress', 5);
+        startTour(TENANT_ONBOARDING, 5);
+    }, [persist, startTour]);
+
+    const onMarketplaceConnected = useCallback((connectedName) => {
+        const norm = (connectedName || '').toLowerCase();
+        const mpSlug = norm.includes('meesho') ? 'meesho'
+            : norm.includes('amazon') ? 'amazon'
+            : norm.includes('flipkart') ? 'flipkart'
+            : norm.includes('myntra') ? 'myntra' : norm;
+
+        try {
+            if (mpSlug) {
+                localStorage.setItem(`tour:marketplace_onboarded:${mpSlug}`, 'completed');
+            }
+            localStorage.setItem('tour:marketplace_connected', 'true');
+            localStorage.removeItem('tour:active_marketplace_tour');
+        } catch { /* ignore */ }
+
+        const tourKey = getMarketplaceTourKey(connectedName) || runKey;
+        if (tourKey) {
+            persist(tourKey, 'completed', 99);
+        }
+        persist(TENANT_ONBOARDING, 'completed', 5);
+
+        const tourDef = tourKey ? TOURS[tourKey] : null;
+        const targetSteps = tourDef?.steps || steps;
+        const congratsIdx = targetSteps.findIndex(
+            (s) => s.isCelebration || s.id?.includes('congratulations')
+        );
+
+        if (congratsIdx >= 0 && tourKey) {
+            setRunKey(tourKey);
+            setStepIndex(congratsIdx);
+            setElement(null);
+        }
+    }, [persist, runKey, steps]);
+
+    // Keep stepIndex updated in active_marketplace_tour so refreshes restore the exact step
+    useEffect(() => {
+        if (runKey && runKey.startsWith('mp-onboarding-')) {
+            try {
+                const raw = localStorage.getItem('tour:active_marketplace_tour');
+                const parsed = raw ? JSON.parse(raw) : {};
+                localStorage.setItem('tour:active_marketplace_tour', JSON.stringify({
+                    ...parsed,
+                    key: runKey,
+                    stepIndex,
+                }));
+            } catch { /* ignore */ }
+        }
+    }, [runKey, stepIndex]);
 
     const goTo = useCallback((nextIndex, direction) => {
         directionRef.current = direction;
         if (nextIndex < 0) return;
-        if (nextIndex >= steps.length) {
-            if (runKey === TENANT_ONBOARDING || runKey === BILLING_TOUR) {
-                // The user has explored all plans!
-                // Explicitly exit the guided highlighting phase to completely clear the UI.
-                stop('plans_explored');
-                setBillingOnboardingActive(true);
-                try {
-                    localStorage.setItem('tour:billing_onboarding_active', 'true');
-                } catch { /* ignore */ }
-                return;
-            }
+
+        // When leaving plan exploration on step 4, pause tour to allow plan interaction and purchase
+        if (stepIndex === 4 && runKey === TENANT_ONBOARDING && direction === 1) {
+            stop('plans_explored');
+            setBillingOnboardingActive(true);
+            try {
+                localStorage.setItem('tour:billing_onboarding_active', 'true');
+            } catch { /* ignore */ }
+            return;
+        }
+
+        let targetIndex = nextIndex;
+        while (
+            targetIndex >= 0 &&
+            targetIndex < steps.length &&
+            !isStepApplicable(steps[targetIndex], selectedMarketplace)
+        ) {
+            targetIndex += direction;
+        }
+
+        if (targetIndex >= steps.length) {
             stop('completed');
             return;
         }
+        if (targetIndex < 0) return;
+
         setElement(null);
-        setStepIndex(nextIndex);
-    }, [steps.length, stop, runKey]);
+        setStepIndex(targetIndex);
+    }, [stepIndex, runKey, steps, isStepApplicable, selectedMarketplace, stop]);
 
     const next = useCallback(() => goTo(stepIndex + 1, 1), [goTo, stepIndex]);
     const prev = useCallback(() => goTo(stepIndex - 1, -1), [goTo, stepIndex]);
@@ -272,10 +387,15 @@ export const TourProvider = ({ children }) => {
     // was travelling. This is the normal path for permission-gated and
     // state-dependent steps, so it is silent.
     const skipUnreachable = useCallback(() => {
-        const nextIndex = stepIndex + directionRef.current;
+        let nextIndex = stepIndex + directionRef.current;
+        while (
+            nextIndex >= 0 &&
+            nextIndex < steps.length &&
+            !isStepApplicable(steps[nextIndex], selectedMarketplace)
+        ) {
+            nextIndex += directionRef.current;
+        }
         if (nextIndex < 0) {
-            // Ran off the front while going back — turn around rather than end
-            // a tour the user is still in.
             directionRef.current = 1;
             setStepIndex(stepIndex + 1);
             return;
@@ -285,7 +405,7 @@ export const TourProvider = ({ children }) => {
             return;
         }
         setStepIndex(nextIndex);
-    }, [stepIndex, steps.length, stop]);
+    }, [stepIndex, steps, isStepApplicable, selectedMarketplace, stop]);
 
     // ── Step resolution ──────────────────────────────────────────────────
     // Runs on every step change and every navigation: get to the right URL,
@@ -327,23 +447,38 @@ export const TourProvider = ({ children }) => {
                 skipUnreachable();
                 return;
             }
-            const rect = found.getBoundingClientRect();
-            // Ensure clearance for sticky page headers (e.g. Subscription header is ~80px)
-            const HEADER_CLEARANCE = 85;
-            const BOTTOM_CLEARANCE = 24;
-            const isComfortable = rect.top >= HEADER_CLEARANCE && rect.bottom <= (window.innerHeight - BOTTOM_CLEARANCE);
-            if (!isComfortable) {
-                const scrollContainer = found.closest('.overflow-y-auto, .overflow-auto, main');
-                if (scrollContainer) {
-                    const containerRect = scrollContainer.getBoundingClientRect();
-                    const relativeTop = rect.top - containerRect.top + scrollContainer.scrollTop;
-                    // Position element top cleanly with 16px breathing room below header
-                    scrollContainer.scrollTo({
-                        top: Math.max(0, relativeTop - 16),
-                        behavior: 'auto'
-                    });
-                } else {
-                    found.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
+            const isModal = !!(
+                found.closest('[role="dialog"], .fixed') ||
+                step?.target?.startsWith?.('marketplace.modal') ||
+                (step?.id?.startsWith?.('mp-') && !step?.isMarketplaceSelect && !step?.isCelebration)
+            );
+
+            if (isModal) {
+                // When targeting an element inside a modal dialog, NEVER scroll the modal
+                // or window. Keeps all modal fields stable, pinned, and unclipped.
+                const modalScrollContainer = found.closest('.overflow-y-auto, .overflow-auto');
+                if (modalScrollContainer) {
+                    modalScrollContainer.scrollTop = 0;
+                }
+            } else {
+                const rect = found.getBoundingClientRect();
+                // Ensure clearance for sticky page headers (e.g. Subscription header is ~80px)
+                const HEADER_CLEARANCE = 85;
+                const BOTTOM_CLEARANCE = 24;
+                const isComfortable = rect.top >= HEADER_CLEARANCE && rect.bottom <= (window.innerHeight - BOTTOM_CLEARANCE);
+                if (!isComfortable) {
+                    const scrollContainer = found.closest('.overflow-y-auto, .overflow-auto, main');
+                    if (scrollContainer) {
+                        const containerRect = scrollContainer.getBoundingClientRect();
+                        const relativeTop = rect.top - containerRect.top + scrollContainer.scrollTop;
+                        // Position element top cleanly with 16px breathing room below header
+                        scrollContainer.scrollTo({
+                            top: Math.max(0, relativeTop - 16),
+                            behavior: 'auto'
+                        });
+                    } else {
+                        found.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
+                    }
                 }
             }
             setElement(found);
@@ -356,12 +491,15 @@ export const TourProvider = ({ children }) => {
     // Whether a tour has been seen at all — completed and skipped both count.
     // If the server records are successfully fetched, we use them as authority
     // so clearing user state on the server isn't blocked by stale localStorage.
+    const isTourFinished = (status) => status === 'completed' || status === 'skipped';
+
     const hasSeen = useCallback(
         (key) => {
             if (recordsLoaded) {
-                return (records || []).some((record) => record.key === key);
+                return (records || []).some((record) => record.key === key && isTourFinished(record.status));
             }
-            return !!readLocalStatus(key) || (records || []).some((record) => record.key === key);
+            const local = readLocalStatus(key);
+            return isTourFinished(local) || (records || []).some((record) => record.key === key && isTourFinished(record.status));
         },
         [records, recordsLoaded],
     );
@@ -412,9 +550,29 @@ export const TourProvider = ({ children }) => {
 
         if (!eligible) return;
 
+        const isBillingDone = (() => {
+            try {
+                return localStorage.getItem('tour:billing_done') === 'true';
+            } catch {
+                return false;
+            }
+        })();
+        const onboardingRecord = (records || []).find((r) => r.key === TENANT_ONBOARDING);
+
         // If this is the main onboarding tour and user hasn't seen the welcome screen yet, show it first on dashboard
-        if (eligible.key === TENANT_ONBOARDING && !welcomeDismissed && location.pathname === '/dashboard') {
-            setIsWelcomeOpen(true);
+        if (eligible.key === TENANT_ONBOARDING) {
+            if (!welcomeDismissed && location.pathname === '/dashboard') {
+                setIsWelcomeOpen(true);
+                return;
+            }
+
+            autoStartedRef.current.add(eligible.key);
+            if (location.pathname === '/settings/marketplace' || isBillingDone) {
+                const resumeStep = Math.max(5, onboardingRecord?.lastStep || 5);
+                startTour(eligible.key, resumeStep);
+            } else {
+                startTour(eligible.key, onboardingRecord?.lastStep || 0);
+            }
             return;
         }
 
@@ -505,14 +663,23 @@ export const TourProvider = ({ children }) => {
         return () => window.removeEventListener('tour:action-completed', handler);
     }, [step, completeTourAction]);
 
+    const applicableSteps = steps.filter((s) => isStepApplicable(s, selectedMarketplace));
+    const currentApplicableIndex = applicableSteps.findIndex((s) => s.id === step?.id);
+    const displayIndex = currentApplicableIndex >= 0 ? currentApplicableIndex : stepIndex;
+    const displayTotal = applicableSteps.length > 0 ? applicableSteps.length : steps.length;
+
     const value = {
         isRunning: !!runKey,
+        runKey,
         // The sidebar entry point only makes sense for tenant-side users.
         isAvailable: isTenantAudience,
         currentStep: step,
         billingOnboardingActive,
         setBillingOnboardingActive,
         completeBillingOnboarding,
+        onMarketplaceConnected,
+        selectedMarketplace,
+        setSelectedMarketplace: handleSetSelectedMarketplace,
         startHighlightingPlans: () => {
             setBillingOnboardingActive(false);
             const targetIndex = location.pathname === '/subscription' ? 1 : 0;
@@ -541,17 +708,21 @@ export const TourProvider = ({ children }) => {
                 <TourSpotlight
                     element={element}
                     step={step}
-                    index={stepIndex}
-                    total={steps.length}
-                    isFirst={stepIndex === 0}
-                    isLast={stepIndex === steps.length - 1}
+                    index={displayIndex}
+                    total={displayTotal}
+                    isFirst={displayIndex === 0}
+                    isLast={displayIndex === displayTotal - 1 || step?.isCelebration}
                     actionCompleted={actionCompleted}
                     actionMeta={actionMeta}
                     onCompleteAction={completeTourAction}
                     onBypassAction={bypassTourAction}
                     onNext={next}
                     onPrev={prev}
-                    onClose={() => stop('skipped')}
+                    onClose={() => stop(step?.isCelebration ? 'completed' : 'skipped')}
+                    onGoToDashboard={() => {
+                        stop('completed');
+                        navigate('/dashboard');
+                    }}
                 />
             )}
         </TourContext.Provider>

@@ -256,7 +256,7 @@ const BillingOnboardingWidget = ({
 
                 {/* Footer Freedom Note */}
                 <div className="text-[10px] text-slate-400 flex items-center justify-between px-0.5">
-                    <span>✨ Any plan can be chosen</span>
+                    <span>Any plan can be chosen</span>
                     {onReplayTour && (
                         <button
                             type="button"

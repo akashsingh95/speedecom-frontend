@@ -132,6 +132,17 @@ const groups = {
         'card',
         'connectBtn',
         'seeConnectedBtn',
+        'cardMeesho',
+        'cardAmazon',
+        'cardFlipkart',
+        'cardMyntra',
+        'modalEmail',
+        'modalPassword',
+        'modalAccountName',
+        'modalSizeWiseToggle',
+        'modalAutoSyncToggle',
+        'modalAnalysisDate',
+        'modalSubmitBtn',
     ]),
 
     // pages/Downloads.jsx — `downloadBtn` renders once per completed export and

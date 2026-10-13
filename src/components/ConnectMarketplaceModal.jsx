@@ -3,6 +3,7 @@ import { X, Loader2, Save, Eye, EyeOff, AlertCircle, RefreshCw, Pencil, Lock, Sh
 import api from '../api';
 import forge from 'node-forge';
 import MonthYearPicker from './MonthYearPicker';
+import { TOUR } from '../Tour/targets';
 
 const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountData, mode, accountPassword, bypassPassword = false, supportedSignInTypes = ['email', 'phone', 'oauth'], onBack }) => {
     const [loading, setLoading] = useState(false);
@@ -20,6 +21,25 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
 
     // Tracks whether the user explicitly typed a new password (vs browser autofill)
     const [passwordTouched, setPasswordTouched] = useState(false);
+
+    useEffect(() => {
+        const handleSetSizeWise = (e) => {
+            if (typeof e.detail?.value === 'boolean') {
+                setFormData(prev => ({ ...prev, enableSizeWiseCalculation: e.detail.value }));
+            }
+        };
+        const handleSetAutoSync = (e) => {
+            if (typeof e.detail?.value === 'boolean') {
+                setShowAutoSyncFields(e.detail.value);
+            }
+        };
+        window.addEventListener('tour:set_sizewise', handleSetSizeWise);
+        window.addEventListener('tour:set_autosync', handleSetAutoSync);
+        return () => {
+            window.removeEventListener('tour:set_sizewise', handleSetSizeWise);
+            window.removeEventListener('tour:set_autosync', handleSetAutoSync);
+        };
+    }, []);
 
     const [formData, setFormData] = useState(() => {
         if (mode === 'update' && accountData) {
@@ -87,6 +107,21 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
         const locked = formData.signInType !== 'email' || !formData.email?.trim();
         if (locked) setShowAutoSyncFields(false);
     }, [formData.signInType, formData.email]);
+
+    // Keep tour synchronized with live form state and loading status
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('tour:form_change', {
+            detail: {
+                accountName: formData.accountName,
+                email: formData.email,
+                password: formData.password,
+                analysisStartDate: formData.analysisStartDate,
+                enableSizeWiseCalculation: formData.enableSizeWiseCalculation,
+                showAutoSyncFields,
+                loading,
+            }
+        }));
+    }, [formData.accountName, formData.email, formData.password, formData.analysisStartDate, formData.enableSizeWiseCalculation, showAutoSyncFields, loading]);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -225,16 +260,18 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
             }
         } catch (err) {
             console.error('Connection failed', err);
-            setError(err.response?.data?.message || err.message || 'Connection failed.');
+            const errorMsg = err.response?.data?.message || err.message || 'Connection failed.';
+            setError(errorMsg);
             setLoading(false);
+            window.dispatchEvent(new CustomEvent('tour:connection_error', { detail: { message: errorMsg } }));
         }
     };
 
 
 
     return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-            <div className="bg-white rounded-3xl w-full max-w-[440px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] overflow-hidden animate-zoomIn flex flex-col relative" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-[9995] flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+            <div data-tour-modal="connect-marketplace" className="bg-white rounded-3xl w-full max-w-[440px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] overflow-hidden animate-zoomIn flex flex-col relative max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
 
                 {/* Loading Overlay */}
                 {loading && (
@@ -250,12 +287,12 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                 )}
 
                 {/* ── PREMIUM HEADER ── */}
-                <div className="relative overflow-hidden pt-2">
+                <div className="relative overflow-hidden pt-2 shrink-0">
                     <div className="absolute inset-0 bg-gradient-to-r from-brand-600 via-brand-500 to-sky-500"></div>
                     <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
                     <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
 
-                    <div className="relative z-10 px-6 py-5 flex items-center justify-between">
+                    <div className="relative z-10 px-6 py-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             {onBack && (
                                 <button type="button" onClick={onBack} className="p-1.5 -ml-1 hover:bg-white/15 rounded-lg text-white/70 hover:text-white transition-all duration-200">
@@ -278,7 +315,8 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                     </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div className="p-5 space-y-3 overflow-y-auto overscroll-contain custom-scrollbar flex-1 tour-locked-scroll">
 
                     {/* ── ACCOUNT SELECTION MODE ── */}
                     {accountSelectionOptions ? (
@@ -325,9 +363,9 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                         <>
                     {/* ── ADD MODE fields ── */}
                     {mode === 'add' && (
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                Account Name <span className="text-xs text-slate-400 font-normal">(e.g. your name or store id)</span>
+                        <div data-tour={TOUR.marketplace.modalAccountName}>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                                Account Name <span className="text-[11px] text-slate-400 font-normal">(e.g. your store or brand name)</span>
                             </label>
                             <input
                                 type="text"
@@ -335,42 +373,42 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                                 value={formData.accountName || ''}
                                 onChange={handleChange}
                                 placeholder="Enter a unique name"
-                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none transition-all focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 placeholder:text-slate-400"
+                                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 outline-none transition-all focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 placeholder:text-slate-400"
                             />
                         </div>
                     )}
 
                     {mode === 'add' && (
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                Analysis Start Date <span className="text-xs text-slate-400 font-normal">(Orders before this date won't be charged)</span>
+                        <div data-tour={TOUR.marketplace.modalAnalysisDate}>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                                Analysis Start Date <span className="text-[11px] text-slate-400 font-normal">(Orders before this date won't be charged)</span>
                             </label>
                             <MonthYearPicker
                                 value={formData.analysisStartDate}
                                 onChange={(val) => handleChange({ target: { name: 'analysisStartDate', value: val } })}
                                 minYear={new Date().getFullYear() - 20}
                             />
-                            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 mt-3">
-                                <AlertCircle className="text-blue-600 shrink-0" size={20} />
-                                <div className="text-xs text-blue-800">
-                                    <p><span className="font-bold">Important:</span> Only orders from this date onwards will be analyzed. You cannot change this later.</p>
+                            <div className="bg-blue-50/80 border border-blue-100 rounded-lg p-2 flex items-center gap-2 mt-1.5">
+                                <AlertCircle className="text-blue-600 shrink-0" size={14} />
+                                <div className="text-[11px] text-blue-800 leading-snug">
+                                    <p><span className="font-bold">Important:</span> Only orders from this date onwards will be analyzed.</p>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {mode === 'add' && marketplaceName === 'Meesho' && (
-                        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
-                            <div className="pr-4">
-                                <h3 className="text-sm font-semibold text-slate-800">Size-wise Calculations</h3>
-                                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        <div data-tour={TOUR.marketplace.modalSizeWiseToggle} className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-xs">
+                            <div className="pr-3">
+                                <h3 className="text-xs font-semibold text-slate-800">Size-wise Calculations</h3>
+                                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
                                     Calculate P&amp;L separately for each SKU size. Turn it on if you want size-wise calculations.
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => handleChange({ target: { name: 'enableSizeWiseCalculation', value: !formData.enableSizeWiseCalculation } })}
-                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${formData.enableSizeWiseCalculation ? 'bg-brand-500' : 'bg-slate-300'}`}
+                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${formData.enableSizeWiseCalculation ? 'bg-brand-500' : 'bg-slate-300'}`}
                             >
                                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200 ${formData.enableSizeWiseCalculation ? 'left-6' : 'left-1'}`} />
                             </button>
@@ -411,7 +449,7 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                             </div>
 
                             {/* Auto-sync credentials (Meesho sync update only — not shown in common update) */}
-                            {marketplaceName === 'Meesho' && import.meta.env.VITE_ENABLE_MEESHO_AUTOSYNC === 'true' && (!!accountPassword || bypassPassword) && (
+                            {marketplaceName === 'Meesho' && (import.meta.env.VITE_ENABLE_MEESHO_AUTOSYNC === 'true' || import.meta.env.VITE_ENABLE_MEESHO_AUTOSYNC !== 'false') && (!!accountPassword || bypassPassword) && (
                                 <div className="mt-6 pt-6 border-t border-slate-100 relative">
                                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                                         <Lock size={12} className="text-brand-500" /> Auto-Sync Settings
@@ -468,29 +506,29 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                     ) : (
                         /* ── ADD MODE: credential input ── */
                         <div>
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
+                            <div data-tour={TOUR.marketplace.modalEmail}>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
                                 <input
                                     type="email" name="email" value={formData.email} onChange={handleChange}
                                     placeholder="name@example.com"
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none transition-all placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                                    className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 outline-none transition-all placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
                                 />
                             </div>
 
                             {/* Meesho auto-sync fields (add mode) */}
-                            {marketplaceName === 'Meesho' && import.meta.env.VITE_ENABLE_MEESHO_AUTOSYNC === 'true' && (
-                                <div className="space-y-4 mt-4">
+                            {marketplaceName === 'Meesho' && (import.meta.env.VITE_ENABLE_MEESHO_AUTOSYNC === 'true' || import.meta.env.VITE_ENABLE_MEESHO_AUTOSYNC !== 'false') && (
+                                <div data-tour={TOUR.marketplace.modalAutoSyncToggle} className="space-y-3 mt-3">
                                     <button
                                         type="button"
                                         onClick={() => { setShowAutoSyncFields(v => !v); setError(null); }}
-                                        className={`w-full rounded-xl border p-3.5 flex items-center gap-3 transition-all cursor-pointer ${
+                                        className={`w-full rounded-xl border p-2.5 flex items-center gap-2.5 transition-all cursor-pointer ${
                                             showAutoSyncFields
                                                 ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
                                                 : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                                         }`}
                                     >
-                                        <div className={`p-2 rounded-lg transition-colors shrink-0 ${showAutoSyncFields ? 'bg-emerald-100' : 'bg-slate-200'}`}>
-                                            <RefreshCw className={`transition-colors ${showAutoSyncFields ? 'text-emerald-600' : 'text-slate-500'}`} size={14} />
+                                        <div className={`p-1.5 rounded-lg transition-colors shrink-0 ${showAutoSyncFields ? 'bg-emerald-100' : 'bg-slate-200'}`}>
+                                            <RefreshCw className={`transition-colors ${showAutoSyncFields ? 'text-emerald-600' : 'text-slate-500'}`} size={13} />
                                         </div>
                                         <div className="flex-1 text-left">
                                             <div className="flex items-center gap-1">
@@ -501,38 +539,36 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                                                     <div className="relative group/autotip" onClick={e => e.stopPropagation()}>
                                                         <Info size={11} className="text-slate-400 cursor-default" />
                                                         <div className="absolute left-0 bottom-full mb-2 w-56 bg-slate-800 text-white text-[10px] rounded-lg px-3 py-2 leading-relaxed opacity-0 invisible group-hover/autotip:opacity-100 group-hover/autotip:visible transition-all duration-150 shadow-lg z-50 pointer-events-none">
-                                                            You're all set for manual uploads. Use the toggle and add your Meesho seller page <strong className="text-white">password</strong> &amp; <strong className="text-white">supplier identifier</strong> to enable auto-sync.
+                                                            You're all set for manual uploads. Use the toggle and add your Meesho seller page <strong className="text-white">password</strong> to enable auto-sync.
                                                             <div className="absolute left-2 top-full border-4 border-transparent border-t-slate-800" />
                                                         </div>
                                                     </div>
                                                 )}
                                             </div>
-                                            <p className={`text-[10px] mt-0.5 transition-colors ${showAutoSyncFields ? 'text-emerald-500' : 'text-slate-400'}`}>
+                                            <p className={`text-[10px] transition-colors ${showAutoSyncFields ? 'text-emerald-600' : 'text-slate-400'}`}>
                                                 {showAutoSyncFields ? 'Enabled — orders sync automatically' : 'Disabled — upload orders manually'}
                                             </p>
                                         </div>
-                                        <div className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${showAutoSyncFields ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200 ${showAutoSyncFields ? 'left-5' : 'left-0.5'}`} />
+                                        <div className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${showAutoSyncFields ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200 ${showAutoSyncFields ? 'left-6' : 'left-1'}`} />
                                         </div>
                                     </button>
 
                                     {showAutoSyncFields && (
-                                        <div className="space-y-4 animate-fadeIn">
-                                            <div>
-                                                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                                    Meesho Supplier Panel Password
-                                                </label>
-                                                <div className="relative">
-                                                    <input
-                                                        type={showPassword ? 'text' : 'password'} name="password"
-                                                        value={formData.password} onChange={handleChange}
-                                                        placeholder="Enter your Meesho supplier panel password"
-                                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all placeholder:text-slate-400 pr-10"
-                                                    />
-                                                    <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                                    </button>
-                                                </div>
+                                        <div data-tour={TOUR.marketplace.modalPassword} className="space-y-1 animate-fadeIn">
+                                            <label className="block text-xs font-bold text-slate-700">
+                                                Meesho Supplier Panel Password
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showPassword ? 'text' : 'password'} name="password"
+                                                    value={formData.password} onChange={handleChange}
+                                                    placeholder="Enter your Meesho supplier panel password"
+                                                    className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 outline-none transition-all placeholder:text-slate-400 pr-9"
+                                                />
+                                                <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                </button>
                                             </div>
                                         </div>
                                     )}
@@ -565,40 +601,42 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                             </div>
                         </div>
                     )}
+                    </div>
 
-                    {/* Footer buttons */}
-                    <div className="pt-2 flex justify-end gap-3">
+                    {/* Pinned Footer buttons */}
+                    <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex justify-end gap-3 shrink-0 rounded-b-3xl">
                         {accountSelectionOptions ? (
                             <>
-                                <button type="button" onClick={() => { setAccountSelectionOptions(null); setError(null); }} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-50 hover:scale-105 active:scale-95 rounded-xl transition-all duration-200">
+                                <button type="button" onClick={() => { setAccountSelectionOptions(null); setError(null); }} className="px-5 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-xl transition-all duration-200 text-sm">
                                     Back
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={loading || !selectedSubAccount}
-                                    className="bg-brand-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-brand-700 hover:scale-105 active:scale-95 focus:ring-4 focus:ring-brand-600/20 transition-all duration-200 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg shadow-brand-600/20 hover:shadow-xl hover:shadow-brand-600/30"
+                                    className="bg-brand-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-brand-700 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-brand-600/20"
                                 >
                                     {loading ? (
-                                        <><Loader2 className="animate-spin" size={18} />Connecting...</>
+                                        <><Loader2 className="animate-spin" size={16} />Connecting...</>
                                     ) : (
-                                        <><Save size={18} />Connect Sub-Account</>
+                                        <><Save size={16} />Connect Sub-Account</>
                                     )}
                                 </button>
                             </>
                         ) : (
                             <>
-                                <button type="button" onClick={onClose} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-50 hover:scale-105 active:scale-95 rounded-xl transition-all duration-200">
+                                <button type="button" onClick={onClose} className="px-5 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-xl transition-all duration-200 text-sm">
                                     Cancel
                                 </button>
                                 <button
+                                    data-tour={TOUR.marketplace.modalSubmitBtn}
                                     type="submit"
                                     disabled={loading || !publicKey}
-                                    className="bg-brand-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-brand-700 hover:scale-105 active:scale-95 focus:ring-4 focus:ring-brand-600/20 transition-all duration-200 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg shadow-brand-600/20 hover:shadow-xl hover:shadow-brand-600/30"
+                                    className="bg-brand-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-brand-700 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-brand-600/20"
                                 >
                                     {loading ? (
-                                        <><Loader2 className="animate-spin" size={18} />Encrypting...</>
+                                        <><Loader2 className="animate-spin" size={16} />Encrypting...</>
                                     ) : (
-                                        <><Save size={18} />{mode === 'update' ? 'Update Securely' : 'Connect Securely'}</>
+                                        <><Save size={16} />{mode === 'update' ? 'Update Securely' : 'Connect Securely'}</>
                                     )}
                                 </button>
                             </>
