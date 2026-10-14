@@ -1,7 +1,9 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
-const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, details, confirmText = 'Confirm', cancelText, secondaryText, onSecondary, danger = false }) => {
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, details, confirmText = 'Confirm', cancelText, secondaryText, onSecondary, danger = false, zClass = 'z-50' }) => {
     if (!isOpen) return null;
 
     const handleConfirm = () => {
@@ -15,7 +17,7 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, details, con
     };
 
     return (
-        <div className="fixed bg-black/40 backdrop-blur-sm inset-0 bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className={`fixed bg-black/40 backdrop-blur-sm inset-0 bg-opacity-50 flex items-center justify-center ${zClass} p-4`}>
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
                 <div className={`p-5 border-b rounded-t-2xl ${danger ? 'bg-red-50' : 'bg-amber-50'}`}>
                     <div className="flex items-center justify-between">

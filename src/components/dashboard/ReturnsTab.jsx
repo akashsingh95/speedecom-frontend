@@ -1235,6 +1235,7 @@ const ReturnsTab = () => {
             setSyncingReturns(false);
             const data = err?.response?.data;
             if (data && ('remaining' in data)) setReturnsSyncQuota({ remaining: data.remaining, limit: data.limit });
+            if (data?.creditBlocked) setReturnsSyncQuota(q => (q ? { ...q, creditBlocked: true, creditBalance: data.creditBalance } : q));
             toast.error(data?.message || 'Failed to start returns sync.');
             return;
         }
@@ -1481,17 +1482,19 @@ const ReturnsTab = () => {
                         {/* Refresh Returns — Admin/SBM/SuperAdmin only */}
                         {canTriggerReturnsSync && (
                             <div className="flex items-center gap-1.5 shrink-0">
-                                <InfoTooltip text={returnsSyncQuota?.remaining === 0
-                                    ? 'Limit reached, try tomorrow'
-                                    : 'Sync returns (2/day)'}>
+                                <InfoTooltip align="end" text={returnsSyncQuota?.creditBlocked
+                                    ? (returnsSyncQuota.creditBalance < 0 ? `Paused — negative credit balance (${returnsSyncQuota.creditBalance})` : 'Paused — credit balance is 0')
+                                    : returnsSyncQuota?.remaining === 0
+                                        ? 'Limit reached, try tomorrow'
+                                        : 'Sync returns (2/day)'}>
                                     <button type="button"
-                                        disabled={!canQuery || syncingReturns || returnsSyncQuota?.remaining === 0}
+                                        disabled={!canQuery || syncingReturns || returnsSyncQuota?.remaining === 0 || returnsSyncQuota?.creditBlocked}
                                         onClick={handleRefreshReturns}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 active:scale-95 disabled:opacity-50 transition-all shadow-sm">
                                         {syncingReturns ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}
                                     </button>
                                 </InfoTooltip>
-                                {returnsSyncQuota && (
+                                {returnsSyncQuota && !returnsSyncQuota.creditBlocked && (
                                     <span className={`text-[10px] font-semibold ${returnsSyncQuota.remaining === 0 ? 'text-red-500' : 'text-slate-400'}`}>
                                         {returnsSyncQuota.remaining}/{returnsSyncQuota.limit} left today
                                     </span>
