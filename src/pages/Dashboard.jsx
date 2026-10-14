@@ -285,6 +285,7 @@ const Dashboard = () => {
                                         buttonLabel="Select Account"
                                         storagePrefix="actions"
                                         hideInactiveAccounts={true}
+                                        maxDays={92}
                                     />
                                 </div>
                             )}

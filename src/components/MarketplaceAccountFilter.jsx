@@ -13,6 +13,7 @@ const MarketplaceAccountFilter = ({
     onChange,
     dateLabel = 'Filter by Date',
     maxMonths = 3,
+    maxDays = null, // explicit day-count override; takes precedence over maxMonths * 30 when set
     defaultRangeType = '90days',
     storagePrefix = 'dashboard',
     showDateFilter = true,
@@ -25,6 +26,10 @@ const MarketplaceAccountFilter = ({
     // Get marketplace context to update global filter state
     const { updateFilters: updateMarketplaceContext, refreshTrigger } = useMarketplace();
     const isMultiAccount = accountSelection === 'multiple';
+    // Day-count cap used everywhere (validation, picker clamp, label): an
+    // explicit maxDays wins over the maxMonths*30 approximation so callers that
+    // need an exact day count (e.g. 92) aren't forced into a fractional "months".
+    const effectiveMaxDays = maxDays != null ? maxDays : (maxMonths ? maxMonths * 30 : 92);
 
     const isMarketplaceDisabled = useCallback((mpKey) => {
         if (!disabledMarketplaces || disabledMarketplaces.length === 0) return false;
@@ -402,16 +407,15 @@ const MarketplaceAccountFilter = ({
         }
 
         // Max range check (converted to days for accuracy)
-        if (maxMonths) {
+        if (effectiveMaxDays) {
             const start = new Date(finalStart);
             const end = new Date(finalEnd);
             const diffInDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-            const maxDays = maxMonths * 30;
 
-            if (diffInDays > maxDays) {
-                setDateError(`Date range cannot exceed ${maxMonths} months (${maxDays} days)`);
+            if (diffInDays > effectiveMaxDays) {
+                setDateError(`Date range cannot exceed ${effectiveMaxDays} days`);
                 toast.error('Date Range Too Large', {
-                    description: `Selected range is ${diffInDays} days. Please select a date range within ${maxDays} days.`,
+                    description: `Selected range is ${diffInDays} days. Please select a date range within ${effectiveMaxDays} days.`,
                     duration: 4000,
                 });
                 return;
@@ -896,8 +900,10 @@ const MarketplaceAccountFilter = ({
                                         ) : (
                                             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Filter by Date</h4>
                                         )}
-                                        {maxMonths && (
-                                            <span className="text-xs text-slate-400">(Max {maxMonths} months)</span>
+                                        {effectiveMaxDays && (
+                                            <span className="text-xs text-slate-400">
+                                                {maxDays != null ? `(Max ${effectiveMaxDays} days)` : `(Max ${maxMonths} months)`}
+                                            </span>
                                         )}
                                     </div>
                                 </div>
@@ -925,7 +931,7 @@ const MarketplaceAccountFilter = ({
                                         setEndDate(end);
                                         handleApplyDateFilter(start, end);
                                     }}
-                                    maxDays={maxMonths ? maxMonths * 30 : 92}
+                                    maxDays={effectiveMaxDays}
                                     colorTheme="brand"
                                 />
                             </div>
