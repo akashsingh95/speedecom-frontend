@@ -333,7 +333,7 @@ const ReturnClaims = () => {
                             <button type="button" onClick={handleRaiseAll}
                                 className="flex items-center gap-2 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-2.5 text-xs font-semibold text-violet-700 shadow-sm transition-all hover:from-violet-100 hover:to-indigo-100">
                                 <Zap size={14} className="text-violet-600" />
-                                Raise All ({unclaimedTotal})
+                                Raise All ({overdueTotal ?? unclaimedTotal})
                             </button>
                         )}
                         {canManage && (
@@ -378,7 +378,7 @@ const ReturnClaims = () => {
                         </div>
                     ) : (
                         <>
-                            <div className="mb-4 flex gap-2 overflow-x-auto">
+                            <div className="sticky top-0 z-[5] -mx-4 mb-4 flex gap-2 overflow-x-auto bg-slate-50 px-4 pb-2 pt-1 md:-mx-8 md:px-8">
                                 {TABS.map(t => {
                                     const active = tab === t.key;
                                     const Icon = t.icon;
