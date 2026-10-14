@@ -167,12 +167,14 @@ const Uploads = () => {
     const isMeeshoMarketplace = marketplaceKey === 'meesho';
     const isMyntraMarketplace = marketplaceKey === 'myntra';
     const isAmazonMarketplace = marketplaceKey.includes('amazon');
+    const isSnapdealMarketplace = marketplaceKey === 'snapdeal';
 
     const deriveUploadType = (key) => {
         const lowerKey = key?.toLowerCase() || '';
         if (lowerKey === 'meesho') return 'meesho_payments';
         if (lowerKey.includes('amazon')) return 'amazon_payments';
         if (lowerKey === 'myntra') return 'myntra_payments';
+        if (lowerKey === 'snapdeal') return 'snapdeal_orders';
         return 'orders';
     };
 
@@ -411,7 +413,8 @@ const Uploads = () => {
             amazon_orders: 'Amazon Orders', amazon_ads: 'Amazon Ads',
             amazon_returns: 'Amazon Returns', amazon_b2b_b2c: 'Amazon B2B/B2C',
             myntra_payments: 'Myntra Payments', myntra_orders: 'Myntra Orders',
-            myntra_returns_seller: 'Myntra Returns (Seller)', myntra_returns_delivery: 'Myntra Returns (Delivery)'
+            myntra_returns_seller: 'Myntra Returns (Seller)', myntra_returns_delivery: 'Myntra Returns (Delivery)',
+            snapdeal_orders: 'Snapdeal Orders', snapdeal_payments: 'Snapdeal Payments'
         };
         return typeLabels[type] || type;
     };
@@ -593,6 +596,14 @@ const Uploads = () => {
                                                             <UploadTypeCard id="myntra_orders" currentId={uploadType} onClick={setUploadType} onOpenVideo={(url, title) => setTutorialVideo({ url, title })} icon={Package} title="Orders" subtitle="Order data" />
                                                             <UploadTypeCard id="myntra_returns_seller" currentId={uploadType} onClick={setUploadType} onOpenVideo={(url, title) => setTutorialVideo({ url, title })} icon={RotateCcw} title="Seller Returns" subtitle="Returns data" />
                                                             <UploadTypeCard id="myntra_returns_delivery" currentId={uploadType} onClick={setUploadType} onOpenVideo={(url, title) => setTutorialVideo({ url, title })} icon={RefreshCw} title="Delivery Returns" subtitle="Returns data" />
+                                                            {costSheetUploadEnabled && (
+                                                                <UploadTypeCard id="costsheet" currentId={uploadType} onClick={setUploadType} onOpenVideo={(url, title) => setTutorialVideo({ url, title })} icon={FileText} title="Cost Sheet" subtitle="Cost sheet data" />
+                                                            )}
+                                                        </div>
+                                                    ) : isSnapdealMarketplace ? (
+                                                        <div className={`grid gap-3 ${costSheetUploadEnabled ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
+                                                            <UploadTypeCard id="snapdeal_orders" currentId={uploadType} onClick={setUploadType} onOpenVideo={(url, title) => setTutorialVideo({ url, title })} icon={Package} title="Orders" subtitle="Order data" />
+                                                            <UploadTypeCard id="snapdeal_payments" currentId={uploadType} onClick={setUploadType} onOpenVideo={(url, title) => setTutorialVideo({ url, title })} icon={DollarSign} title="Payments" subtitle="Transactions report" />
                                                             {costSheetUploadEnabled && (
                                                                 <UploadTypeCard id="costsheet" currentId={uploadType} onClick={setUploadType} onOpenVideo={(url, title) => setTutorialVideo({ url, title })} icon={FileText} title="Cost Sheet" subtitle="Cost sheet data" />
                                                             )}

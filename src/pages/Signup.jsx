@@ -9,7 +9,7 @@ const MARKETPLACES_DATA = [
     { "name": "Flipkart", "status": "active" },
     { "name": "Meesho", "status": "active" },
     { "name": "Myntra", "status": "active" },
-    { "name": "Snapdeal", "status": "inactive" }
+    { "name": "Snapdeal", "status": "active" }
 ];
 
 const platformOptions = [
