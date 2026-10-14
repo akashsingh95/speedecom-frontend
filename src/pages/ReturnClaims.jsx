@@ -190,6 +190,8 @@ const ReturnClaims = () => {
     const [eligibleIds, setEligibleIds] = useState(null);
     const [overdueTotal, setOverdueTotal] = useState(null);
     const [unclaimedTotal, setUnclaimedTotal] = useState(null);
+    const [category, setCategory] = useState('');
+    const [categoryTotal, setCategoryTotal] = useState(null);
     const [bulkRaise, setBulkRaise] = useState(null);
 
     const { progress, startSync, isSyncing } = useClaimsSync({ onSynced: () => setRefreshKey(k => k + 1) });
@@ -214,6 +216,8 @@ const ReturnClaims = () => {
         setEligibleIds(null);
         setOverdueTotal(null);
         setUnclaimedTotal(null);
+        setCategory('');
+        setCategoryTotal(null);
         setBulkRaise(null);
     }, [accountId]);
 
@@ -235,6 +239,7 @@ const ReturnClaims = () => {
                     sortOrder: 'desc',
                     page: 1,
                     limit: 500,
+                    ...(category ? { returnCategory: category } : {}),
                 },
                 skipErrorToast: true,
             });
@@ -309,7 +314,9 @@ const ReturnClaims = () => {
     const bulkProgress = bulkRaise?.progress || {};
     const isBulkRunning = bulkRaise?.phase === 'running';
 
-    const showRaiseAll = canManage && tab === 'overdue' && !notEligible && unclaimedTotal > 0 && !isBulkRunning && !bulkRaise;
+    const showRaiseAll = canManage && tab === 'overdue' && !notEligible && (overdueTotal ?? unclaimedTotal) > 0 && !isBulkRunning && !bulkRaise;
+    const raiseAllLabel = category === 'rto' ? 'Raise RTO' : category === 'customer' ? 'Raise Customer' : 'Raise All';
+    const raiseAllCount = categoryTotal ?? overdueTotal ?? unclaimedTotal;
 
     const TABS = [
         { key: 'overdue', label: 'Overdue returns', icon: Clock, count: overdueTotal },
@@ -319,37 +326,36 @@ const ReturnClaims = () => {
     return (
         <DashboardLayout>
             <div className="flex h-full w-full flex-col overflow-hidden bg-slate-50">
-                <header className="sticky top-0 z-10 flex flex-col gap-3 bg-slate-50 px-4 py-3 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between md:px-8">
-                    <div>
-                        <h2 className="font-heading text-2xl font-bold text-slate-800">Return Claims</h2>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                            {stats?.last_synced_at
-                                ? <span>Statuses synced <span className="font-medium text-slate-700">{timeAgo(stats.last_synced_at)}</span> · raise claims for lost returns and track what Meesho pays back</span>
-                                : 'Raise claims on Meesho for returns that never reached you, and track what they recover'}
-                        </p>
+                <header className="sticky top-0 z-10 flex flex-col gap-2 bg-slate-50 px-4 py-3 backdrop-blur-md md:px-8">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="font-heading text-2xl font-bold text-slate-800">Return Claims</h2>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                                {stats?.last_synced_at
+                                    ? <span>Statuses synced <span className="font-medium text-slate-700">{timeAgo(stats.last_synced_at)}</span> · raise claims for lost returns and track what Meesho pays back</span>
+                                    : 'Raise claims on Meesho for returns that never reached you, and track what they recover'}
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {showRaiseAll && (
+                                <button type="button" onClick={handleRaiseAll}
+                                    className="flex items-center gap-2 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-2.5 text-xs font-semibold text-violet-700 shadow-sm transition-all hover:from-violet-100 hover:to-indigo-100">
+                                    <Zap size={14} className="text-violet-600" />
+                                    {raiseAllLabel} ({raiseAllCount})
+                                </button>
+                            )}
+                            {canManage && (
+                                <button type="button" onClick={() => startSync(accountId, account?.name)}
+                                    disabled={!accountId || syncing || notEligible}
+                                    title={notEligible ? 'Claims sync needs an Auto Sync account' : 'Download the latest claims from Meesho to update statuses and amounts'}
+                                    className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                    {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                                    {syncing ? (progress[accountId] || 'Syncing…') : 'Sync Claims'}
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {showRaiseAll && (
-                            <button type="button" onClick={handleRaiseAll}
-                                className="flex items-center gap-2 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-2.5 text-xs font-semibold text-violet-700 shadow-sm transition-all hover:from-violet-100 hover:to-indigo-100">
-                                <Zap size={14} className="text-violet-600" />
-                                Raise All ({overdueTotal ?? unclaimedTotal})
-                            </button>
-                        )}
-                        {canManage && (
-                            <button type="button" onClick={() => startSync(accountId, account?.name)}
-                                disabled={!accountId || syncing || notEligible}
-                                title={notEligible ? 'Claims sync needs an Auto Sync account' : 'Download the latest claims from Meesho to update statuses and amounts'}
-                                className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50">
-                                {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                                {syncing ? (progress[accountId] || 'Syncing…') : 'Sync Claims'}
-                            </button>
-                        )}
-                    </div>
-                </header>
-
-                <main className="relative flex w-full flex-1 flex-col overflow-y-auto px-4 pb-8 md:px-8">
-                    <div className="mb-4 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                    <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
                         <MarketplaceAccountSelector
                             marketplaces={marketplaces}
                             selectedMarketplaceKey="Meesho"
@@ -365,7 +371,30 @@ const ReturnClaims = () => {
                             </span>
                         )}
                     </div>
+                    {accountId && (
+                        <div className="flex gap-2 overflow-x-auto border-t border-slate-100 pt-2">
+                            {TABS.map(t => {
+                                const active = tab === t.key;
+                                const Icon = t.icon;
+                                return (
+                                    <button key={t.key} type="button" onClick={() => setTab(t.key)}
+                                        className={`relative flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${active ? 'text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+                                        {active && <motion.span layoutId="claims-page-tab" className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md shadow-violet-200" transition={{ type: 'spring', stiffness: 380, damping: 30 }} />}
+                                        <Icon size={15} className="relative" />
+                                        <span className="relative">{t.label}</span>
+                                        {t.count !== null && t.count !== undefined && (
+                                            <span className={`relative rounded-full px-2 py-0.5 text-[11px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                                {Number(t.count).toLocaleString('en-IN')}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </header>
 
+                <main className="relative flex w-full flex-1 flex-col overflow-y-auto px-4 pb-8 md:px-8">
                     {!accountsLoaded ? (
                         <div className="flex items-center justify-center gap-2 py-20 text-sm text-slate-500">
                             <Loader2 size={16} className="animate-spin" /> Loading accounts…
@@ -378,26 +407,6 @@ const ReturnClaims = () => {
                         </div>
                     ) : (
                         <>
-                            <div className="sticky top-0 z-[5] -mx-4 mb-4 flex gap-2 overflow-x-auto bg-slate-50 px-4 pb-2 pt-1 md:-mx-8 md:px-8">
-                                {TABS.map(t => {
-                                    const active = tab === t.key;
-                                    const Icon = t.icon;
-                                    return (
-                                        <button key={t.key} type="button" onClick={() => setTab(t.key)}
-                                            className={`relative flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${active ? 'text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
-                                            {active && <motion.span layoutId="claims-page-tab" className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md shadow-violet-200" transition={{ type: 'spring', stiffness: 380, damping: 30 }} />}
-                                            <Icon size={15} className="relative" />
-                                            <span className="relative">{t.label}</span>
-                                            {t.count !== null && t.count !== undefined && (
-                                                <span className={`relative rounded-full px-2 py-0.5 text-[11px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                                                    {Number(t.count).toLocaleString('en-IN')}
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
                             <BulkBanner
                                 bulk={bulkRaise}
                                 cancelRef={cancelRef}
@@ -412,8 +421,13 @@ const ReturnClaims = () => {
                                     canRaise={canManage && !isBulkRunning}
                                     refreshKey={refreshKey}
                                     onRaise={handleRaise}
-                                    onTotal={setOverdueTotal}
+                                    onTotal={(total) => {
+                                        setCategoryTotal(total);
+                                        if (!category) setOverdueTotal(total);
+                                    }}
                                     onUnclaimedTotal={setUnclaimedTotal}
+                                    category={category}
+                                    onCategoryChange={(cat) => { setCategory(cat); setCategoryTotal(null); }}
                                     bulkProgress={bulkProgress}
                                 />
                             </div>

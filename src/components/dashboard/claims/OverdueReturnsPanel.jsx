@@ -79,8 +79,7 @@ const ClaimCell = ({ row, canRaise, onRaise, bulkProgress }) => {
     );
 };
 
-const OverdueReturnsPanel = ({ accountId, canRaise, refreshKey = 0, onRaise, onTotal, onUnclaimedTotal, bulkProgress = {} }) => {
-    const [category, setCategory] = useState('');
+const OverdueReturnsPanel = ({ accountId, canRaise, refreshKey = 0, onRaise, onTotal, onUnclaimedTotal, bulkProgress = {}, category = '', onCategoryChange }) => {
     const [searchDraft, setSearchDraft] = useState('');
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -121,8 +120,8 @@ const OverdueReturnsPanel = ({ accountId, canRaise, refreshKey = 0, onRaise, onT
                 const p = data?.pagination || { totalPages: 1, totalItems: 0 };
                 setRows(data?.returns || []);
                 setPagination(p);
+                onTotal?.(p.totalItems);
                 if (!category && !search) {
-                    onTotal?.(p.totalItems);
                     onUnclaimedTotal?.((data?.returns || []).filter(r => !r.claim).length);
                 }
             } catch (err) {
@@ -151,7 +150,7 @@ const OverdueReturnsPanel = ({ accountId, canRaise, refreshKey = 0, onRaise, onT
                     {CATEGORY_FILTERS.map(f => {
                         const active = category === f.key;
                         return (
-                            <button key={f.key || 'all'} type="button" onClick={() => setCategory(f.key)}
+                            <button key={f.key || 'all'} type="button" onClick={() => onCategoryChange?.(f.key)}
                                 className={`relative rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
                                 {active && <motion.span layoutId="overdue-cat" className="absolute inset-0 rounded-lg bg-white shadow-sm" transition={{ type: 'spring', stiffness: 400, damping: 32 }} />}
                                 <span className="relative">{f.label}</span>
