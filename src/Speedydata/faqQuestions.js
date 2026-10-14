@@ -683,9 +683,10 @@ export const FAQ_QUESTIONS = [
         },
         type: 'dynamic',
         requiresMarketplace: true,
-        excludedPlatforms: ['myntra'],
         // Pulls from the same per-platform order tables as the "Action Required"
         // screen (payment_status = 'pending'), NOT the calculations table.
+        // Myntra is supported (template 83 has a myn_orders branch, scoped to
+        // just Delivered/Shipped statuses) — no longer excluded.
         params: [
             { key: 'startDate', label: 'Start Date', type: 'date', placeholder: 'Start date', required: true },
             { key: 'endDate',   label: 'End Date',   type: 'date', placeholder: 'End date',   required: true },
