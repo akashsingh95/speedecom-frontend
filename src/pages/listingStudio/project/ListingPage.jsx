@@ -132,9 +132,14 @@ export default function ListingPage({ startInPreview = false }) {
     }
   };
 
+  // A move, not a swap: the dragged image is lifted out and re-inserted at the drop
+  // position, so every image in between shifts by one and the rest of the sequence
+  // (including which image ends up first, i.e. the Main Image) stays as the user sees it.
   const reorderImages = async (from, to) => {
     const ids = sortedGeneratedImages(project).map((img) => img.id);
-    [ids[from], ids[to]] = [ids[to], ids[from]];
+    if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) return;
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
     try {
       await listingStudioApi.reorderGeneratedImages(project.id, ids);
       await refresh();
