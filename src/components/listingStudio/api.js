@@ -77,6 +77,14 @@ export const listingStudioApi = {
 
   startAlexaReadiness: (id) => api.post(`${BASE}/projects/${id}/alexa-readiness`).then((r) => r.data),
 
+  startVideoConcepts: (id, angles, aspectRatio) =>
+    api.post(`${BASE}/projects/${id}/videos`, { angles, aspectRatio }).then((r) => r.data),
+  generateCategoryVideo: (id, kind, sourceImageIds, aspectRatio) =>
+    api.post(`${BASE}/projects/${id}/videos/category`, { kind, sourceImageIds, aspectRatio }).then((r) => r.data),
+  generateVideo: (id, conceptId) => api.post(`${BASE}/projects/${id}/videos/${conceptId}/generate`).then((r) => r.data),
+  getVideoStatus: (id, conceptId) => api.get(`${BASE}/projects/${id}/videos/${conceptId}/status`).then((r) => r.data),
+  deleteVideoConcept: (id, conceptId) => api.delete(`${BASE}/projects/${id}/videos/${conceptId}`).then((r) => r.data),
+
   // A file download, not JSON — fetched as a blob through the shared axios instance (so the
   // Bearer token interceptor actually applies) and then saved via a synthetic <a download>
   // click. A plain <a href="/api/...true URL"> would 401: browsers don't attach a custom

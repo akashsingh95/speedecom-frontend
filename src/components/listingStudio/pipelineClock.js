@@ -20,6 +20,9 @@ const GRACE_SECONDS = 3 * 60;
 const SLOT_ETA_SECONDS = 120;
 const SLOT_GRACE_SECONDS = 30;
 
+const VIDEO_ETA_SECONDS = 3 * 60;
+const VIDEO_GRACE_SECONDS = 30;
+
 export function formatClock(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
@@ -32,6 +35,10 @@ function clockKey(projectId) {
 
 function slotClockKey(projectId) {
   return `listingStudio:slotClockStart:${projectId}`;
+}
+
+function videoClockKey(projectId) {
+  return `listingStudio:videoClockStart:${projectId}`;
 }
 
 function useClock({ ticking, ready = true, etaSeconds, graceSeconds, persistKey }) {
@@ -139,6 +146,23 @@ export function useSlotGenerationClock(active, projectId) {
 export function clearSlotGenerationClock(projectId) {
   try {
     window.localStorage.removeItem(slotClockKey(projectId));
+  } catch {
+    // ignore
+  }
+}
+
+export function useVideoGenerationClock(active, projectId) {
+  return useClock({
+    ticking: active,
+    etaSeconds: VIDEO_ETA_SECONDS,
+    graceSeconds: VIDEO_GRACE_SECONDS,
+    persistKey: projectId ? videoClockKey(projectId) : null,
+  });
+}
+
+export function clearVideoGenerationClock(projectId) {
+  try {
+    window.localStorage.removeItem(videoClockKey(projectId));
   } catch {
     // ignore
   }
