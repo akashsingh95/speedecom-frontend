@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { toast } from 'sonner';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
-import { Search, Building, User, LayoutDashboard, ShieldCheck, Gift, LayoutGrid, List, ArrowUp, ArrowDown, ArrowUpDown, Mail, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Tags, Building2, Users, Loader2, ArrowUpRight, CreditCard, AlertTriangle, TrendingUp, MinusCircle, CalendarCheck, Pencil, X, UserPlus, ShoppingBag, Store, PackageOpen } from 'lucide-react';
+import { Search, Building, User, LayoutDashboard, ShieldCheck, Gift, LayoutGrid, List, ArrowUp, ArrowDown, ArrowUpDown, Mail, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Tags, Building2, Users, Loader2, ArrowUpRight, CreditCard, AlertTriangle, TrendingUp, MinusCircle, CalendarCheck, Pencil, X, UserPlus, ShoppingBag, Store, PackageOpen, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import GiftCreditsModal from '../components/GiftCreditsModal';
 import TenantRatesModal from '../components/TenantRatesModal';
@@ -246,20 +246,6 @@ const ListingStudioPlansTooltip = ({ plans }) => (
     </div>
 );
 
-const getSortValue = (tenant, key) => {
-    switch (key) {
-        case 'tenantNumericId': return getTenantNumericId(tenant) || 0;
-        case 'tenantName': return getTenantNumericId(tenant) || 0;
-        case 'adminName': return (tenant.fullName || '').toLowerCase();
-        case 'rmName': return (tenant.tenantId?.assignedToRM?.fullName || '').toLowerCase();
-        case 'email': return (tenant.email || '').toLowerCase();
-        case 'status': return tenant.tenantId?.status === 'inactive' ? 1 : 0;
-        case 'balance': return getDisplayCredits(tenant);
-        case 'approvedAt': return tenant.tenantId?.approvedAt ? new Date(tenant.tenantId.approvedAt).getTime() : 0;
-        default: return '';
-    }
-};
-
 const SuperAdminTenants = () => {
     const { startImpersonating, user } = useAuth();
     const canEditTenantDetails = user?.role === 'SuperAdmin' || user?.role === 'SBM';
@@ -279,6 +265,7 @@ const SuperAdminTenants = () => {
 
     // Drag-to-Fill: Edit Mode toggles the RM column into editable cells with a fill handle.
     const [isEditMode, setIsEditMode] = useState(false);
+    const [showStats, setShowStats] = useState(false);
     const [allRMs, setAllRMs] = useState([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -456,7 +443,6 @@ const SuperAdminTenants = () => {
     };
 
     const handleOpenRenameModal = (tenant) => {
-        const numericId = getTenantNumericId(tenant);
         setRenameTenant(tenant);
         setRenameTenantName(getTenantCompanyName(tenant));
         const num = getTenantNumericId(tenant);
@@ -717,6 +703,17 @@ const SuperAdminTenants = () => {
                                 </div>
                                 <h1 className="text-xl font-bold tracking-tight">Tenant Management</h1>
                             </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setShowStats(v => !v)}
+                                aria-pressed={showStats}
+                                aria-label={showStats ? 'Hide stats' : 'Show stats'}
+                                title={showStats ? 'Hide stats' : 'Show stats'}
+                                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/15 text-white border border-white/20 hover:bg-white/25 transition-all duration-200 active:scale-95"
+                            >
+                                {showStats ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
                             {(user?.role === 'SuperAdmin' || (user?.role === 'SBM' && user?.permissions?.manageRM)) && (
                                 <button
                                     type="button"
@@ -730,10 +727,11 @@ const SuperAdminTenants = () => {
                                     {isEditMode ? 'Exit Edit Mode' : 'Edit Mode'}
                                 </button>
                             )}
+                            </div>
                         </div>
                     </div>
 
-                    {globalStats ? (
+                    {showStats && (globalStats ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* Total Organizations */}
                             <div
@@ -872,7 +870,7 @@ const SuperAdminTenants = () => {
                                 <p className="text-3xl font-bold text-slate-800">{totalTenants || tenants.length}</p>
                             </div>
                         </div>
-                    )}
+                    ))}
 
                     <div className="mb-6">
                         <TenantToolbar
