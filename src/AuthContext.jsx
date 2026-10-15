@@ -6,6 +6,22 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
+const cleanStaleTourKeys = (activeUserId = null) => {
+    try {
+        const prefix = activeUserId ? `tour:${activeUserId}:` : null;
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('tour:')) {
+                if (!prefix || !k.startsWith(prefix)) {
+                    keysToRemove.push(k);
+                }
+            }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+};
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -30,6 +46,9 @@ export const AuthProvider = ({ children }) => {
             try {
                 parsedUser = JSON.parse(storedUser);
                 setUser(parsedUser);
+                if (parsedUser?._id) {
+                    cleanStaleTourKeys(parsedUser._id);
+                }
             } catch (e) {
                 console.error('Failed to parse stored user', e);
                 localStorage.removeItem('user');
@@ -175,6 +194,7 @@ export const AuthProvider = ({ children }) => {
 
             localStorage.setItem('user', JSON.stringify(userData));
             localStorage.removeItem('impersonatedTenant');
+            cleanStaleTourKeys(userData._id);
             setUser(userData);
             setIsImpersonating(false);
             setImpersonatedTenant(null);
@@ -252,6 +272,7 @@ export const AuthProvider = ({ children }) => {
             'dashboardSelectedMarketplaces',
             'speedyAgentFilters'
         ]);
+        cleanStaleTourKeys(null);
         setUser(null);
         setIsImpersonating(false);
         setImpersonatedTenant(null);

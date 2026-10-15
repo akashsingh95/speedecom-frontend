@@ -17,7 +17,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import api from '../api';
 import { TOUR, tourSelector } from './targets';
-import { TOURS, TENANT_ONBOARDING, BILLING_TOUR, getMarketplaceTourKey } from './steps';
+import { TOURS, TENANT_ONBOARDING, BILLING_TOUR, MARKETPLACE_SETTINGS, getMarketplaceTourKey } from './steps';
 import TourSpotlight from './TourSpotlight';
 import WelcomeModal from './WelcomeModal';
 
@@ -31,16 +31,8 @@ export const useTour = () => useContext(TourContext);
 const WAIT_REQUIRED_MS = 6000;
 const WAIT_OPTIONAL_MS = 1200;
 
-/** Mirrors the server record so a failed POST cannot cause a replay loop. */
-const localKey = (key) => `tour:${key}`;
-
-const readLocalStatus = (key) => {
-    try {
-        return localStorage.getItem(localKey(key));
-    } catch {
-        return null;
-    }
-};
+/** Scopes localStorage keys per user to guarantee zero cross-account state bleed. */
+export const getTourKey = (key, userId) => (userId ? `tour:${userId}:${key}` : `tour:${key}`);
 
 /** Resolves once the element is in the DOM and laid out, or null on timeout. */
 const waitForElement = (selector, timeout, token) => new Promise((resolve) => {
@@ -75,6 +67,38 @@ export const TourProvider = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
+    const localKey = useCallback((key) => getTourKey(key, user?._id), [user?._id]);
+
+    const readLocalStatus = useCallback((key) => {
+        try {
+            return localStorage.getItem(localKey(key));
+        } catch {
+            return null;
+        }
+    }, [localKey]);
+
+    // Which way the user is moving. A step whose element is missing is skipped
+    // in the direction of travel, so Back never lands on the same dead step.
+    const directionRef = useRef(1);
+    // Cancels an in-flight element wait when the step changes underneath it.
+    const waitTokenRef = useRef({ cancelled: false });
+    // Tours already auto-started this mount. A Set rather than a boolean because
+    // there is now more than one auto-starting tour: finishing onboarding on
+    // /dashboard must not stop the marketplace tour from firing later.
+    const autoStartedRef = useRef(new Set());
+    // Tracks in-flight and persisted tour events to prevent redundant network calls and loops
+    const persistedStateRef = useRef(new Map());
+    // Navigation attempts made for the current step. A route guard can bounce us
+    // straight back (a User without upload permission is redirected off
+    // /uploads), and without this the effect would navigate on every bounce.
+    const navAttemptsRef = useRef({ index: -1, count: 0 });
+    // Route the last tour ended on. Onboarding now walks through
+    // /settings/marketplace, so ending it there would otherwise satisfy the
+    // marketplace tour's `requires` and start a second overlay on the spot.
+    // Cleared by navigating anywhere else.
+    const endedOnRouteRef = useRef(null);
+    const lastLocationPathRef = useRef(location.pathname);
+
     const [runKey, setRunKey] = useState(null);
     const [stepIndex, setStepIndex] = useState(0);
     const [element, setElement] = useState(null);
@@ -85,7 +109,7 @@ export const TourProvider = ({ children }) => {
     const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
     const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
         try {
-            return localStorage.getItem('tour:welcome_dismissed') === 'true';
+            return user?._id ? localStorage.getItem(getTourKey('welcome_dismissed', user._id)) === 'true' : false;
         } catch {
             return false;
         }
@@ -93,19 +117,18 @@ export const TourProvider = ({ children }) => {
 
     const [billingOnboardingActive, setBillingOnboardingActive] = useState(() => {
         try {
-            const isCompleted = localStorage.getItem(localKey(TENANT_ONBOARDING)) === 'completed';
-            const isActive = localStorage.getItem('tour:billing_onboarding_active') === 'true';
+            if (!user?._id) return false;
+            const isCompleted = localStorage.getItem(getTourKey(TENANT_ONBOARDING, user._id)) === 'completed';
+            const isActive = localStorage.getItem(getTourKey('billing_onboarding_active', user._id)) === 'true';
             return !isCompleted && isActive;
         } catch {
             return false;
         }
     });
 
-    const lastLocationPathRef = useRef(location.pathname);
-
     const [selectedMarketplace, setSelectedMarketplace] = useState(() => {
         try {
-            return localStorage.getItem('tour:selected_marketplace') || 'Meesho';
+            return (user?._id && localStorage.getItem(getTourKey('selected_marketplace', user._id))) || 'Meesho';
         } catch {
             return 'Meesho';
         }
@@ -115,9 +138,37 @@ export const TourProvider = ({ children }) => {
         if (!name) return;
         setSelectedMarketplace(name);
         try {
-            localStorage.setItem('tour:selected_marketplace', name);
+            localStorage.setItem(localKey('selected_marketplace'), name);
         } catch { /* ignore */ }
-    }, []);
+    }, [localKey]);
+
+    // Reset and re-sync all tour state and caches whenever active user changes
+    useEffect(() => {
+        autoStartedRef.current.clear();
+        persistedStateRef.current.clear();
+        endedOnRouteRef.current = null;
+        setRunKey(null);
+        setStepIndex(0);
+        setElement(null);
+        try {
+            if (user?._id) {
+                setWelcomeDismissed(localStorage.getItem(localKey('welcome_dismissed')) === 'true');
+                const isCompleted = localStorage.getItem(localKey(TENANT_ONBOARDING)) === 'completed';
+                const isActive = localStorage.getItem(localKey('billing_onboarding_active')) === 'true';
+                setBillingOnboardingActive(!isCompleted && isActive);
+                const savedMp = localStorage.getItem(localKey('selected_marketplace'));
+                if (savedMp) setSelectedMarketplace(savedMp);
+            } else {
+                setWelcomeDismissed(false);
+                setBillingOnboardingActive(false);
+                setSelectedMarketplace('Meesho');
+            }
+        } catch {
+            setWelcomeDismissed(false);
+            setBillingOnboardingActive(false);
+            setSelectedMarketplace('Meesho');
+        }
+    }, [user?._id, localKey]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -140,25 +191,6 @@ export const TourProvider = ({ children }) => {
         const norm = mp.toLowerCase();
         return s.forMarketplaces.some((m) => norm.includes(m.toLowerCase()));
     }, []);
-
-    // Which way the user is moving. A step whose element is missing is skipped
-    // in the direction of travel, so Back never lands on the same dead step.
-    const directionRef = useRef(1);
-    // Cancels an in-flight element wait when the step changes underneath it.
-    const waitTokenRef = useRef({ cancelled: false });
-    // Tours already auto-started this mount. A Set rather than a boolean because
-    // there is now more than one auto-starting tour: finishing onboarding on
-    // /dashboard must not stop the marketplace tour from firing later.
-    const autoStartedRef = useRef(new Set());
-    // Navigation attempts made for the current step. A route guard can bounce us
-    // straight back (a User without upload permission is redirected off
-    // /uploads), and without this the effect would navigate on every bounce.
-    const navAttemptsRef = useRef({ index: -1, count: 0 });
-    // Route the last tour ended on. Onboarding now walks through
-    // /settings/marketplace, so ending it there would otherwise satisfy the
-    // marketplace tour's `requires` and start a second overlay on the spot.
-    // Cleared by navigating anywhere else.
-    const endedOnRouteRef = useRef(null);
 
     const run = runKey ? TOURS[runKey] : null;
     const steps = run?.steps || [];
@@ -194,12 +226,15 @@ export const TourProvider = ({ children }) => {
             .then((res) => {
                 if (active) {
                     const fetchedRecords = res.data?.tours || [];
+                    fetchedRecords.forEach((r) => {
+                        persistedStateRef.current.set(r.key, `${r.key}:${r.status}:${r.lastStep}`);
+                    });
                     setRecords(fetchedRecords);
                     setRecordsLoaded(true);
                     if (fetchedRecords.some((r) => r.key === TENANT_ONBOARDING && r.status === 'completed')) {
                         setBillingOnboardingActive(false);
                         try {
-                            localStorage.removeItem('tour:billing_onboarding_active');
+                            localStorage.removeItem(localKey('billing_onboarding_active'));
                         } catch { /* ignore */ }
                     }
                 }
@@ -215,31 +250,73 @@ export const TourProvider = ({ children }) => {
                 }
             });
         return () => { active = false; };
-    }, [user?._id, isTenantAudience]);
+    }, [user?._id, isTenantAudience, localKey]);
 
     const persist = useCallback((key, status, lastStep) => {
+        if (!key) return;
         try {
             localStorage.setItem(localKey(key), status);
         } catch { /* private mode — the server record still covers it */ }
+
+        // Deduplicate in state: avoid creating new array reference if record didn't change
         setRecords((current) => {
-            const others = (current || []).filter((record) => record.key !== key);
+            if (!current) return current;
+            const existing = current.find((record) => record.key === key);
+            if (existing && existing.status === status && existing.lastStep === lastStep) {
+                return current;
+            }
+            const others = current.filter((record) => record.key !== key);
             return [...others, { key, status, lastStep }];
         });
+
+        // Deduplicate network requests: skip POST if already persisted with this exact state
+        const payloadKey = `${key}:${status}:${lastStep}`;
+        if (persistedStateRef.current.get(key) === payloadKey) {
+            return;
+        }
+        persistedStateRef.current.set(key, payloadKey);
+
         api.post('/tours/state', { key, status, lastStep }, { skipErrorToast: true })
             .catch(() => { /* localStorage already prevents a replay */ });
-    }, []);
+    }, [localKey]);
 
     // ── Controls ─────────────────────────────────────────────────────────
-    const stop = useCallback((status) => {
+    const stop = useCallback((status = 'skipped') => {
         const key = runKey;
         const index = stepIndex;
         waitTokenRef.current.cancelled = true;
         endedOnRouteRef.current = location.pathname;
+
         setRunKey(null);
         setStepIndex(0);
         setElement(null);
-        if (key && status !== 'plans_explored') persist(key, status, index);
-    }, [runKey, stepIndex, persist, location.pathname]);
+        setBillingOnboardingActive(false);
+
+        try {
+            localStorage.removeItem(localKey('billing_onboarding_active'));
+            localStorage.removeItem(localKey('active_marketplace_tour'));
+            if (key) {
+                localStorage.setItem(localKey(key), status);
+            }
+            if (key?.startsWith('mp-onboarding-')) {
+                const mpSlug = key.replace('mp-onboarding-', '');
+                localStorage.setItem(localKey(`marketplace_onboarded:${mpSlug}`), status);
+            }
+        } catch { /* ignore */ }
+
+        if (typeof document !== 'undefined') {
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+            document.body.classList.remove('tour-active');
+            document.documentElement.classList.remove('tour-active');
+        }
+
+        if (key && status !== 'plans_explored') {
+            persist(key, status, index);
+        }
+
+        window.dispatchEvent(new CustomEvent('tour:stopped', { detail: { key, status } }));
+    }, [runKey, stepIndex, persist, location.pathname, localKey]);
 
     const startTour = useCallback((key = TENANT_ONBOARDING, initialIndex = 0) => {
         if (!TOURS[key]) return;
@@ -265,38 +342,53 @@ export const TourProvider = ({ children }) => {
     const resetTour = useCallback((key = TENANT_ONBOARDING) => {
         try {
             localStorage.removeItem(localKey(key));
-            localStorage.removeItem('tour:action:billing_done');
+            localStorage.removeItem(localKey('action:billing_done'));
+            localStorage.removeItem(localKey('billing_done'));
+            localStorage.removeItem(localKey('billing_onboarding_completed'));
+            localStorage.removeItem(localKey('billing_onboarding_active'));
+            localStorage.removeItem(localKey('welcome_dismissed'));
+            localStorage.removeItem(localKey('selected_marketplace'));
+            localStorage.removeItem(localKey('marketplace_connected'));
+            localStorage.removeItem(localKey('active_marketplace_tour'));
+            ['meesho', 'amazon', 'flipkart', 'myntra'].forEach((mp) => {
+                localStorage.removeItem(localKey(`marketplace_onboarded:${mp}`));
+            });
+            // Legacy unscoped cleanup
+            localStorage.removeItem(`tour:${key}`);
             localStorage.removeItem('tour:billing_done');
+            localStorage.removeItem('tour:billing_onboarding_completed');
             localStorage.removeItem('tour:billing_onboarding_active');
             localStorage.removeItem('tour:welcome_dismissed');
             localStorage.removeItem('tour:selected_marketplace');
             localStorage.removeItem('tour:marketplace_connected');
             localStorage.removeItem('tour:active_marketplace_tour');
-            ['meesho', 'amazon', 'flipkart', 'myntra'].forEach((mp) => {
-                localStorage.removeItem(`tour:marketplace_onboarded:${mp}`);
-            });
         } catch { /* ignore */ }
         setWelcomeDismissed(false);
         setIsWelcomeOpen(false);
         setBillingOnboardingActive(false);
         setSelectedMarketplace('Meesho');
         autoStartedRef.current.delete(key);
+        persistedStateRef.current.delete(key);
+        persistedStateRef.current.delete('billing_onboarding');
         setRecords((current) => (current || []).filter((record) => record.key !== key));
         setActionCompleted(false);
         setActionMeta(null);
         api.post('/tours/reset', { key }, { skipErrorToast: true }).catch(() => {});
+        api.post('/tours/reset', { key: 'billing_onboarding' }, { skipErrorToast: true }).catch(() => {});
         startTour(key);
-    }, [startTour]);
+    }, [startTour, localKey]);
 
     const completeBillingOnboarding = useCallback((meta) => {
         setBillingOnboardingActive(false);
         try {
-            localStorage.removeItem('tour:billing_onboarding_active');
-            localStorage.setItem('tour:billing_done', 'true');
+            localStorage.removeItem(localKey('billing_onboarding_active'));
+            localStorage.setItem(localKey('billing_done'), 'true');
+            localStorage.setItem(localKey('billing_onboarding_completed'), 'true');
         } catch { /* ignore */ }
+        persist('billing_onboarding', 'completed', 1);
         persist(TENANT_ONBOARDING, 'in_progress', 5);
         startTour(TENANT_ONBOARDING, 5);
-    }, [persist, startTour]);
+    }, [persist, startTour, localKey]);
 
     const onMarketplaceConnected = useCallback((connectedName) => {
         const norm = (connectedName || '').toLowerCase();
@@ -307,10 +399,10 @@ export const TourProvider = ({ children }) => {
 
         try {
             if (mpSlug) {
-                localStorage.setItem(`tour:marketplace_onboarded:${mpSlug}`, 'completed');
+                localStorage.setItem(localKey(`marketplace_onboarded:${mpSlug}`), 'completed');
             }
-            localStorage.setItem('tour:marketplace_connected', 'true');
-            localStorage.removeItem('tour:active_marketplace_tour');
+            localStorage.setItem(localKey('marketplace_connected'), 'true');
+            localStorage.removeItem(localKey('active_marketplace_tour'));
         } catch { /* ignore */ }
 
         const tourKey = getMarketplaceTourKey(connectedName) || runKey;
@@ -330,22 +422,22 @@ export const TourProvider = ({ children }) => {
             setStepIndex(congratsIdx);
             setElement(null);
         }
-    }, [persist, runKey, steps]);
+    }, [persist, runKey, steps, localKey]);
 
     // Keep stepIndex updated in active_marketplace_tour so refreshes restore the exact step
     useEffect(() => {
         if (runKey && runKey.startsWith('mp-onboarding-')) {
             try {
-                const raw = localStorage.getItem('tour:active_marketplace_tour');
+                const raw = localStorage.getItem(localKey('active_marketplace_tour'));
                 const parsed = raw ? JSON.parse(raw) : {};
-                localStorage.setItem('tour:active_marketplace_tour', JSON.stringify({
+                localStorage.setItem(localKey('active_marketplace_tour'), JSON.stringify({
                     ...parsed,
                     key: runKey,
                     stepIndex,
                 }));
             } catch { /* ignore */ }
         }
-    }, [runKey, stepIndex]);
+    }, [runKey, stepIndex, localKey]);
 
     const goTo = useCallback((nextIndex, direction) => {
         directionRef.current = direction;
@@ -356,7 +448,7 @@ export const TourProvider = ({ children }) => {
             stop('plans_explored');
             setBillingOnboardingActive(true);
             try {
-                localStorage.setItem('tour:billing_onboarding_active', 'true');
+                localStorage.setItem(localKey('billing_onboarding_active'), 'true');
             } catch { /* ignore */ }
             return;
         }
@@ -454,11 +546,15 @@ export const TourProvider = ({ children }) => {
             );
 
             if (isModal) {
-                // When targeting an element inside a modal dialog, NEVER scroll the modal
-                // or window. Keeps all modal fields stable, pinned, and unclipped.
+                // When targeting an element inside a modal dialog, keep modal stable
+                // and only adjust scroll if the field is actually outside the viewport.
                 const modalScrollContainer = found.closest('.overflow-y-auto, .overflow-auto');
                 if (modalScrollContainer) {
-                    modalScrollContainer.scrollTop = 0;
+                    const cRect = modalScrollContainer.getBoundingClientRect();
+                    const fRect = found.getBoundingClientRect();
+                    if (fRect.top < cRect.top || fRect.bottom > cRect.bottom) {
+                        found.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
                 }
             } else {
                 const rect = found.getBoundingClientRect();
@@ -486,6 +582,36 @@ export const TourProvider = ({ children }) => {
 
         return () => { token.cancelled = true; };
     }, [step, stepIndex, location, navigate, skipUnreachable]);
+
+    // Re-verify and refresh target element when window regains focus, visibility changes, or resizes
+    useEffect(() => {
+        const handleRefresh = () => {
+            if (document.visibilityState === 'visible' && step?.target) {
+                const sel = tourSelector(step.target);
+                if (sel) {
+                    const el = document.querySelector(sel);
+                    if (el && el.isConnected) {
+                        const r = el.getBoundingClientRect();
+                        if (r.width > 0 && r.height > 0) {
+                            setElement(el);
+                        }
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('focus', handleRefresh);
+        window.addEventListener('resize', handleRefresh);
+        window.addEventListener('pageshow', handleRefresh);
+        document.addEventListener('visibilitychange', handleRefresh);
+
+        return () => {
+            window.removeEventListener('focus', handleRefresh);
+            window.removeEventListener('resize', handleRefresh);
+            window.removeEventListener('pageshow', handleRefresh);
+            document.removeEventListener('visibilitychange', handleRefresh);
+        };
+    }, [step]);
 
     // ── Auto-start ───────────────────────────────────────────────────────
     // Whether a tour has been seen at all — completed and skipped both count.
@@ -550,23 +676,39 @@ export const TourProvider = ({ children }) => {
 
         if (!eligible) return;
 
-        const isBillingDone = (() => {
-            try {
-                return localStorage.getItem('tour:billing_done') === 'true';
-            } catch {
-                return false;
-            }
-        })();
-        const onboardingRecord = (records || []).find((r) => r.key === TENANT_ONBOARDING);
-
-        // If this is the main onboarding tour and user hasn't seen the welcome screen yet, show it first on dashboard
+        // ── Main Tenant Onboarding Tour ──
         if (eligible.key === TENANT_ONBOARDING) {
+            autoStartedRef.current.add(eligible.key);
+
+            const isBillingDone = (() => {
+                try {
+                    return localStorage.getItem(localKey('billing_done')) === 'true' ||
+                        localStorage.getItem(localKey('billing_onboarding_completed')) === 'true';
+                } catch {
+                    return false;
+                }
+            })();
+            const isMarketplaceConnected = (() => {
+                try {
+                    return localStorage.getItem(localKey('marketplace_connected')) === 'true';
+                } catch {
+                    return false;
+                }
+            })();
+
+            // If user has already finished both billing and marketplace setup, onboarding is done
+            if (isBillingDone && isMarketplaceConnected) {
+                persist(TENANT_ONBOARDING, 'completed', 5);
+                return;
+            }
+
+            // If this is the main onboarding tour and user hasn't seen the welcome screen yet, show it first on dashboard
             if (!welcomeDismissed && location.pathname === '/dashboard') {
                 setIsWelcomeOpen(true);
                 return;
             }
 
-            autoStartedRef.current.add(eligible.key);
+            const onboardingRecord = (records || []).find((r) => r.key === TENANT_ONBOARDING);
             if (location.pathname === '/settings/marketplace' || isBillingDone) {
                 const resumeStep = Math.max(5, onboardingRecord?.lastStep || 5);
                 startTour(eligible.key, resumeStep);
@@ -576,9 +718,38 @@ export const TourProvider = ({ children }) => {
             return;
         }
 
+        // ── Other Auto-Starting Tours (e.g. MARKETPLACE_SETTINGS) ──
+        // Do not auto-start if user is actively in a marketplace connection modal or has an active onboarding tour
+        if (typeof document !== 'undefined' && document.querySelector('[data-tour-modal="connect-marketplace"]')) {
+            return;
+        }
+        try {
+            if (localStorage.getItem(localKey('active_marketplace_tour'))) {
+                return;
+            }
+        } catch { /* ignore */ }
+
+        // If user already connected a marketplace, skip the generic marketplace-settings tour
+        if (eligible.key === MARKETPLACE_SETTINGS) {
+            autoStartedRef.current.add(eligible.key);
+            const isMpConnected = (() => {
+                try {
+                    return localStorage.getItem(localKey('marketplace_connected')) === 'true';
+                } catch {
+                    return false;
+                }
+            })();
+            if (isMpConnected) {
+                persist(eligible.key, 'completed', 0);
+                return;
+            }
+            startTour(eligible.key);
+            return;
+        }
+
         autoStartedRef.current.add(eligible.key);
         startTour(eligible.key);
-    }, [records, runKey, user, isTenantAudience, isImpersonating, location.pathname, startTour, hasSeen, welcomeDismissed]);
+    }, [records, runKey, user, isTenantAudience, isImpersonating, location.pathname, startTour, hasSeen, welcomeDismissed, persist, localKey]);
 
     const handleStartFromWelcome = useCallback(() => {
         setIsWelcomeOpen(false);
@@ -590,9 +761,10 @@ export const TourProvider = ({ children }) => {
         setIsWelcomeOpen(false);
         setWelcomeDismissed(true);
         try {
-            localStorage.setItem('tour:welcome_dismissed', 'true');
+            localStorage.setItem(localKey('welcome_dismissed'), 'true');
         } catch { /* ignore */ }
-    }, []);
+        stop('skipped');
+    }, [stop, localKey]);
 
     // Signing out mid-tour must not leave the overlay on the login screen.
     useEffect(() => {
@@ -610,7 +782,7 @@ export const TourProvider = ({ children }) => {
             setActionCompleted(true);
             if (meta) setActionMeta(meta);
             try {
-                if (actionType) localStorage.setItem(`tour:action:${actionType}_done`, 'true');
+                if (actionType) localStorage.setItem(localKey(`action:${actionType}_done`), 'true');
             } catch { /* ignore */ }
             if (step.autoAdvance) {
                 setTimeout(() => {
@@ -618,7 +790,7 @@ export const TourProvider = ({ children }) => {
                 }, 1200);
             }
         }
-    }, [step, next]);
+    }, [step, next, localKey]);
 
     // Auto-advance forward ONLY if user was on /dashboard and actively navigated forward to /subscription
     useEffect(() => {
@@ -688,7 +860,18 @@ export const TourProvider = ({ children }) => {
         actionCompleted,
         actionMeta,
         completeTourAction,
-        bypassTourAction,
+        records,
+        recordsLoaded,
+        hasSeen,
+        localKey,
+        hasSeenBillingOnboarding: (
+            hasSeen('billing_onboarding') ||
+            hasSeen('billing') ||
+            (records || []).some((r) => (r.key === 'billing_onboarding' || r.key === 'billing') && (r.status === 'completed' || r.status === 'skipped')) ||
+            readLocalStatus('billing_onboarding') === 'completed' ||
+            readLocalStatus('billing_done') === 'true' ||
+            readLocalStatus('billing_onboarding_completed') === 'true'
+        ),
         startTour,
         stopTour: () => stop('skipped'),
         restartTour: () => resetTour(TENANT_ONBOARDING),

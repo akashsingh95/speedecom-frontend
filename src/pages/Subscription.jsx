@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import {
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import { useAuth } from '../AuthContext';
-import { useTour } from '../tour/tourProvider';
+import { useTour } from '../tour/TourProvider';
 import { TOUR } from '../tour/targets';
 import TourLauncher from '../tour/TourLauncher';
 import { BILLING_TOUR } from '../tour/steps';
@@ -87,11 +87,27 @@ const Subscription = () => {
         completeTourAction,
         currentStep,
         isRunning,
+        runKey,
         billingOnboardingActive,
         setBillingOnboardingActive,
         completeBillingOnboarding,
         startHighlightingPlans,
+        hasSeenBillingOnboarding,
+        localKey,
     } = useTour() || {};
+
+    const isTourActiveOnBilling = Boolean(
+        isRunning && (
+            runKey === 'tenant-onboarding' ||
+            runKey === 'billing' ||
+            currentStep?.route === '/subscription' ||
+            currentStep?.id?.startsWith('bill-')
+        )
+    );
+
+    const getTourStorageKey = useCallback((k) => {
+        return localKey ? localKey(k) : (user?._id ? `tour:${user._id}:${k}` : `tour:${k}`);
+    }, [localKey, user?._id]);
 
     const [activeProduct, setActiveProduct] = useState('reconciliation'); // 'reconciliation' | 'listing-studio'
     const [plans, setPlans] = useState([]);
@@ -107,6 +123,43 @@ const Subscription = () => {
     const [paymentStatus, setPaymentStatus] = useState('idle'); // 'idle' | 'checkout' | 'verifying' | 'cancelled' | 'failed'
     const [paymentSuccess, setPaymentSuccess] = useState(null);
     const [isWidgetDismissed, setIsWidgetDismissed] = useState(false);
+
+    useEffect(() => {
+        if (isTourActiveOnBilling && selectedPlan) {
+            setSelectedPlan(null);
+        }
+    }, [isTourActiveOnBilling, selectedPlan]);
+
+    // Persisted billing onboarding state check
+    const isBillingOnboardingDone = useMemo(() => {
+        // 1. Check verified payment history (approved subscriptions or active invoices)
+        const hasApprovedSub = (history || []).some((sub) => sub.status === 'approved' || sub.status === 'active');
+        const hasActiveInvoice = (manualInvoices || []).some((inv) => inv.status === 'active');
+        if (hasApprovedSub || hasActiveInvoice) return true;
+
+        // 2. Tour state from provider
+        if (hasSeenBillingOnboarding) return true;
+
+        // 3. LocalStorage persistence
+        try {
+            if (
+                localStorage.getItem(getTourStorageKey('billing_done')) === 'true' ||
+                localStorage.getItem(getTourStorageKey('billing_onboarding_completed')) === 'true' ||
+                localStorage.getItem(getTourStorageKey('tenant-onboarding')) === 'completed'
+            ) {
+                return true;
+            }
+        } catch { /* ignore */ }
+
+        return false;
+    }, [history, manualInvoices, hasSeenBillingOnboarding, getTourStorageKey]);
+
+    // Clean up payment success modal on unmount to avoid stale popups
+    useEffect(() => {
+        return () => {
+            setPaymentSuccess(null);
+        };
+    }, []);
 
     useEffect(() => {
         if (selectedPlan) {
@@ -457,12 +510,28 @@ const Subscription = () => {
                             credits: selectedPlan.credits,
                             invoiceNumber: verifyRes?.data?.invoiceNumber || null,
                         };
+                        const isFirstPayment = verifyRes?.data?.isFirstPayment ?? !isBillingOnboardingDone;
+
                         setSelectedPlan(null);
-                        setPaymentSuccess(successData);
                         setPaymentStatus('idle');
-                        completeTourAction?.('billing', successData);
-                        window.dispatchEvent(new CustomEvent('tour:action-completed', { detail: { action: 'billing', meta: successData } }));
                         fetchHistory();
+
+                        if (isFirstPayment) {
+                            try {
+                                document.querySelectorAll('.razorpay-container').forEach(el => el.remove());
+                            } catch { /* ignore */ }
+                            try {
+                                localStorage.setItem(getTourStorageKey('billing_done'), 'true');
+                                localStorage.setItem(getTourStorageKey('billing_onboarding_completed'), 'true');
+                                localStorage.removeItem(getTourStorageKey('billing_onboarding_active'));
+                            } catch { /* ignore */ }
+                            setPaymentSuccess(successData);
+                            completeTourAction?.('billing', successData);
+                            window.dispatchEvent(new CustomEvent('tour:action-completed', { detail: { action: 'billing', meta: successData } }));
+                        } else {
+                            setPaymentSuccess(null);
+                            toast.success(`Payment verified! ${selectedPlan.credits.toLocaleString()} credits added to your account.`);
+                        }
                     } catch {
                         setPaymentStatus('failed');
                         // toast handled by interceptor
@@ -669,8 +738,17 @@ const Subscription = () => {
 
                                                             <button
                                                                 data-tour={TOUR.billing.buyBtn}
-                                                                onClick={() => setSelectedPlan(plan)}
-                                                                className={`w-full py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 ${c.btn}`}
+                                                                disabled={isTourActiveOnBilling}
+                                                                onClick={() => {
+                                                                    if (isTourActiveOnBilling) return;
+                                                                    setSelectedPlan(plan);
+                                                                }}
+                                                                className={`w-full py-2.5 rounded-xl text-white text-sm font-bold transition-all duration-200 shadow-sm ${
+                                                                    isTourActiveOnBilling
+                                                                        ? 'opacity-40 cursor-not-allowed pointer-events-none'
+                                                                        : `hover:shadow-md active:scale-95 ${c.btn}`
+                                                                }`}
+                                                                title={isTourActiveOnBilling ? 'Explore all plans in the tour first' : 'Buy Now'}
                                                             >
                                                                 Buy Now
                                                             </button>
@@ -879,9 +957,14 @@ const Subscription = () => {
             </div>
 
             {/* ── Payment Modal ────────────────────────────────────────────── */}
-            {selectedPlan && !paymentSuccess && (
-                <div data-tour={TOUR.billing.modal} className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="relative z-[9999] bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
+            {selectedPlan && !isTourActiveOnBilling && !paymentSuccess && (
+                <div data-tour={TOUR.billing.modal} className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+                    <div
+                        data-tour-modal="checkout"
+                        className={`relative z-[9999] bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden transition-transform duration-300 ${
+                            isRunning ? 'md:-translate-x-[180px] lg:-translate-x-[200px]' : ''
+                        }`}
+                    >
 
                         {/* Header */}
                         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
@@ -1066,6 +1149,27 @@ const Subscription = () => {
             {paymentSuccess && (
                 <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="relative z-[9999] bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden text-center border border-emerald-100 animate-in zoom-in-95 duration-200 font-sans">
+                        {/* Close button */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const meta = paymentSuccess;
+                                setPaymentSuccess(null);
+                                try {
+                                    localStorage.setItem(getTourStorageKey('billing_done'), 'true');
+                                    localStorage.setItem(getTourStorageKey('billing_onboarding_completed'), 'true');
+                                    localStorage.removeItem(getTourStorageKey('billing_onboarding_active'));
+                                } catch { /* ignore */ }
+                                completeBillingOnboarding?.(meta);
+                                completeTourAction?.('billing', meta);
+                            }}
+                            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer z-10"
+                            title="Close"
+                            aria-label="Close confirmation"
+                        >
+                            <X size={18} />
+                        </button>
+
                         {/* Celebratory Gradient Banner */}
                         <div className="h-2 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600" />
 
@@ -1130,6 +1234,14 @@ const Subscription = () => {
                                     onClick={() => {
                                         const meta = paymentSuccess;
                                         setPaymentSuccess(null);
+                                        try {
+                                            document.querySelectorAll('.razorpay-container').forEach(el => el.remove());
+                                        } catch { /* ignore */ }
+                                        try {
+                                            localStorage.setItem(getTourStorageKey('billing_done'), 'true');
+                                            localStorage.setItem(getTourStorageKey('billing_onboarding_completed'), 'true');
+                                            localStorage.removeItem(getTourStorageKey('billing_onboarding_active'));
+                                        } catch { /* ignore */ }
                                         completeBillingOnboarding?.(meta);
                                         completeTourAction?.('billing', meta);
                                         navigate('/settings/marketplace');
@@ -1143,6 +1255,11 @@ const Subscription = () => {
                                     onClick={() => {
                                         const meta = paymentSuccess;
                                         setPaymentSuccess(null);
+                                        try {
+                                            localStorage.setItem(getTourStorageKey('billing_done'), 'true');
+                                            localStorage.setItem(getTourStorageKey('billing_onboarding_completed'), 'true');
+                                            localStorage.removeItem(getTourStorageKey('billing_onboarding_active'));
+                                        } catch { /* ignore */ }
                                         completeBillingOnboarding?.(meta);
                                         completeTourAction?.('billing', meta);
                                     }}
@@ -1194,7 +1311,7 @@ const Subscription = () => {
             )}
 
             {/* ── Billing Onboarding & Payment Progress Widget ── */}
-            {((billingOnboardingActive || !!selectedPlan || paymentLoading || !!paymentSuccess) && !isRunning && !isWidgetDismissed) && (
+            {(!isBillingOnboardingDone && (billingOnboardingActive || !!paymentSuccess) && !isRunning && !isWidgetDismissed) && (
                 <BillingOnboardingWidget
                     selectedPlan={selectedPlan}
                     paymentLoading={paymentLoading}
@@ -1208,7 +1325,7 @@ const Subscription = () => {
                         setIsWidgetDismissed(true);
                         setBillingOnboardingActive?.(false);
                         try {
-                            localStorage.removeItem('tour:billing_onboarding_active');
+                            localStorage.removeItem(getTourStorageKey('billing_onboarding_active'));
                         } catch { /* ignore */ }
                     }}
                 />

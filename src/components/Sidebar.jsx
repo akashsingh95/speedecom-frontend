@@ -6,7 +6,7 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { TOUR } from '../tour/targets';
-import { useTour } from '../tour/tourProvider';
+import { useTour } from '../tour/TourProvider';
 
 const Sidebar = () => {
     const location = useLocation();
