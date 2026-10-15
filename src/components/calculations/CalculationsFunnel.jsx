@@ -53,7 +53,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
  */
 const CalculationsFunnel = ({
     // Marketplace
-    isMeesho, isFlipkart, isAmazon, isMyntra,
+    isMeesho, isFlipkart, isAmazon, isMyntra, isSnapdeal,
     // Funnel data
     funnelData, adsMode, gstMode,
     // Return status
@@ -274,6 +274,14 @@ const CalculationsFunnel = ({
             ...(aspfVal    !== 0 ? [{ name: 'Auto SPF Amount', value: aspfVal, includeInSum: false, alreadyDeducted: true }]    : []),
             ...(royaltyVal !== 0 ? [{ name: 'Royalty Charges', value: royaltyVal, includeInSum: false, alreadyDeducted: true }] : []),
         ];
+    } else if (isSnapdeal) {
+        // Compensation/TCS/TDS are already inside orders_settlement (one unified
+        // settlement stream, no separate reports like Flipkart/Meesho have) — shown here
+        // purely as an informational breakdown of what derivedMpFee is made of, not summed
+        // again (includeInSum: false), same convention as Myntra's NOD/Auto-SPF items above.
+        otherSettlements = funnelSettlements
+            .filter(s => !['orders settlement', 'sku wise ads'].includes(s.name.toLowerCase()) && s.value !== 0)
+            .map(s => ({ ...s, includeInSum: false, alreadyDeducted: true }));
     } else {
         otherSettlements = funnelSettlements.filter(s => {
             const n = s.name.toLowerCase();
@@ -311,7 +319,13 @@ const CalculationsFunnel = ({
     const tcsFunnel = isAmazon ? (parseFloat(funnelTotalRow?.tcs_value) || 0) : 0;
     const tdsFunnel = isAmazon ? (parseFloat(funnelTotalRow?.tds_value) || 0) : 0;
 
-    const finalNetSettlement = netSales + (!isAmazon ? derivedMpFee : 0) + otherSettlementsSum + derivedAds + tcsFunnel + tdsFunnel;
+    // Snapdeal has no separate ads/TCS/TDS/compensation report — they're already settlement
+    // lines inside sd_payments, so `orders_settlement` (and derivedMpFee, which is just
+    // orderSettlementTotal - netSales) already nets them in. otherSettlementsSum is
+    // structurally 0 for Snapdeal (every item above is includeInSum: false); derivedAds
+    // still needs an explicit skip here since it's a separate variable, not part of that
+    // array — otherwise both would double-count.
+    const finalNetSettlement = netSales + (!isAmazon ? derivedMpFee : 0) + otherSettlementsSum + (isSnapdeal ? 0 : derivedAds) + tcsFunnel + tdsFunnel;
 
     const pcAbs = parseFloat(funnelTotalRow?.total_cost) || 0;
     const rlAbs = parseFloat(funnelTotalRow?.return_loss) || 0;

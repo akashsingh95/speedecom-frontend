@@ -89,7 +89,7 @@ const PaymentsCalculations = () => {
         currentPage, setCurrentPage, pageSize,
         sortColumn, setSortColumn, sortOrder, setSortOrder,
         isMobile,
-        isMeesho, isFlipkart, isAmazon, isMyntra, isPlatformLoaded, platformType,
+        isMeesho, isFlipkart, isAmazon, isMyntra, isSnapdeal, isPlatformLoaded, platformType,
         resolvedMarketplaceNames, isMeeshoSizeDisabled,
         visibleColumns, columnOrder, setColumnOrder, columnWidths,
         showColumnSelector,
@@ -651,7 +651,7 @@ const PaymentsCalculations = () => {
         'avg_settlement_per_delivered',
         'avg_purchase_per_qty',
         'meesho_return_charges',
-    ]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isMeeshoSizeDisabled }));
+    ]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isSnapdeal, isMeeshoSizeDisabled }));
 
     // Sync columnOrder whenever allColumns changes (marketplace switch, initial load)
     // Merges the saved localStorage order with the current valid columns
@@ -838,6 +838,7 @@ const PaymentsCalculations = () => {
                         isFlipkart={isFlipkart}
                         isAmazon={isAmazon}
                         isMyntra={isMyntra}
+                        isSnapdeal={isSnapdeal}
                         isMeeshoSizeDisabled={isMeeshoSizeDisabled}
                         funnelData={funnelData}
                         adsMode={adsMode}
@@ -1049,8 +1050,8 @@ const PaymentsCalculations = () => {
                                     )}
                                 </div>
 
-                                {/* P/L View toggle */}
-                                {!isMyntra && (
+                                {/* P/L View toggle — no GST-inclusive/exclusive mode exists for Myntra or Snapdeal's fixed P&L formula */}
+                                {!isMyntra && !isSnapdeal && (
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">P/L View:</span>
                                         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
@@ -1076,8 +1077,8 @@ const PaymentsCalculations = () => {
                                     </div>
                                 )}
 
-                                {/* Ads Type toggle — Amazon & Flipkart only */}
-                                {(!isMeesho && !isMyntra) && <div className="flex items-center gap-2">
+                                {/* Ads Type toggle — Amazon & Flipkart only (the only 2 platforms with a separate "payment ads" breakdown) */}
+                                {(isAmazon || isFlipkart) && <div className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ads:</span>
                                     <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                         <button
