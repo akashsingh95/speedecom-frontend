@@ -390,9 +390,10 @@ export const FAQ_QUESTIONS = [
         },
         type: 'dynamic',
         requiresMarketplace: true,
-        excludedPlatforms: ['myntra'],
         // Bar chart of P/L per month; the response carries a deterministic
-        // driver-breakdown note (see template 84's insight()).
+        // driver-breakdown note (see template 84's insight()). Myntra is
+        // supported — the gainers/losers breakdown excludes non-product
+        // sentinel values for Myntra-only selections.
         params: [
             { key: 'startDate', label: 'Start Date', type: 'date', placeholder: 'Start date', required: true },
             { key: 'endDate',   label: 'End Date',   type: 'date', placeholder: 'End date',   required: true },
