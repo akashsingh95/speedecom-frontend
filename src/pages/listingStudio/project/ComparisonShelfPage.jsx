@@ -52,7 +52,12 @@ function bestByPosition(images) {
       paths.push(undefined);
       continue;
     }
-    const finals = group.filter((g) => g.quality === 'final');
+    // A raw upload (type 'photo') is stored as quality 'final' from the moment it's added —
+    // that's just "this isn't a draft render," not "this was picked as the campaign's image."
+    // Letting it win a tied slot over an actual AI draft/final would show the seller's own
+    // before-photo as the campaign's "after" image, so it's excluded from the final-over-draft
+    // preference here; among non-photo entries the usual final-over-draft, newest-wins rule applies.
+    const finals = group.filter((g) => g.quality === 'final' && g.type !== 'photo');
     const pool = finals.length > 0 ? finals : group;
     paths.push(pool.reduce((a, b) => (a.createdAt > b.createdAt ? a : b)).path);
   }
