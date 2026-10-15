@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     Ticket, Clock, CheckCircle2, XCircle, IndianRupee, Search, X,
-    ChevronRight, ArrowRight, Sparkles, AlertTriangle, Send, TrendingUp,
+    ChevronRight, ArrowRight, Sparkles, AlertTriangle, Send, TrendingUp, Banknote,
 } from 'lucide-react';
 import api from '../../../api';
-import { ClaimStatusBadge, CopyButton, fmtINR, fmtShortDate, timeAgo } from './claimUi';
+import { ClaimStatusBadge, CopyButton, fmtINR, fmtShortDate, fmtDateOnly, timeAgo } from './claimUi';
 
 const PAGE_SIZE = 10;
 
@@ -16,7 +16,7 @@ const STATUS_TABS = [
     { key: 'rejected', label: 'Rejected' },
 ];
 
-const KpiTile = ({ label, value, sub, icon: Icon, tone, active, onClick, index, featured }) => {
+const KpiTile = ({ label, value, sub, icon: Icon, tone, active, onClick, index, featured, featuredGreen }) => {
     const tones = {
         violet: 'bg-violet-50 text-violet-600',
         amber: 'bg-amber-50 text-amber-600',
@@ -34,6 +34,20 @@ const KpiTile = ({ label, value, sub, icon: Icon, tone, active, onClick, index, 
                 </div>
                 <p className="relative mt-2 font-heading text-2xl font-bold tabular-nums">{value}</p>
                 {sub && <p className="relative mt-0.5 text-[11px] font-medium text-emerald-50">{sub}</p>}
+            </motion.div>
+        );
+    }
+    if (featuredGreen) {
+        return (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
+                className="relative col-span-2 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 p-4 text-white shadow-md shadow-indigo-100 sm:col-span-1">
+                <div className="pointer-events-none absolute -right-6 -top-8 h-28 w-28 rounded-full bg-white/15 blur-xl" />
+                <div className="relative flex items-center justify-between">
+                    <span className="text-xs font-semibold text-blue-50">{label}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20"><Icon size={16} /></span>
+                </div>
+                <p className="relative mt-2 font-heading text-2xl font-bold tabular-nums">{value}</p>
+                {sub && <p className="relative mt-0.5 text-[11px] font-medium text-blue-100">{sub}</p>}
             </motion.div>
         );
     }
@@ -123,9 +137,25 @@ const ClaimRow = ({ claim, accountName, showAccount }) => {
                 </td>
                 <td className="px-4 py-3 align-top"><ClaimStatusBadge status={claim.ticket_status} /></td>
                 <td className="px-4 py-3 text-right align-top">
-                    {hasAmount
-                        ? <span className="text-sm font-bold tabular-nums text-emerald-700">{fmtINR(claim.claim_amount)}</span>
-                        : <span className="text-sm text-slate-300">—</span>}
+                    {claim.payment_received_at ? (
+                        <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-bold tabular-nums text-blue-700">
+                                {claim.payment_received_amount ? fmtINR(claim.payment_received_amount) : (hasAmount ? fmtINR(claim.claim_amount) : '—')}
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-100">
+                                <Banknote size={9} /> Payment received
+                            </span>
+                        </div>
+                    ) : hasAmount ? (
+                        <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-bold tabular-nums text-emerald-700">{fmtINR(claim.claim_amount)}</span>
+                            {claim.ticket_status === 'approved' && (
+                                <span className="text-[10px] font-medium text-amber-600">Pending settlement</span>
+                            )}
+                        </div>
+                    ) : (
+                        <span className="text-sm text-slate-300">—</span>
+                    )}
                 </td>
             </tr>
             <AnimatePresence initial={false}>
@@ -134,7 +164,7 @@ const ClaimRow = ({ claim, accountName, showAccount }) => {
                         <td colSpan={7} className="p-0">
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                                 className="overflow-hidden bg-violet-50/40">
-                                <div className="grid gap-3 px-11 pb-4 pt-1 sm:grid-cols-2">
+                                <div className={`grid gap-3 px-11 pb-4 pt-1 ${claim.payment_received_at ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                                     <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
                                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Latest from Meesho</p>
                                         <p className="mt-1 text-xs leading-relaxed text-slate-700">
@@ -146,6 +176,20 @@ const ClaimRow = ({ claim, accountName, showAccount }) => {
                                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Your description</p>
                                         <p className="mt-1 text-xs leading-relaxed text-slate-700">{claim.description || '—'}</p>
                                     </div>
+                                    {claim.payment_received_at && (
+                                        <div className="rounded-xl bg-blue-50 p-3 ring-1 ring-blue-100">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500">Payment received</p>
+                                            <p className="mt-1 text-lg font-bold tabular-nums text-blue-800">
+                                                {claim.payment_received_amount ? fmtINR(claim.payment_received_amount) : '—'}
+                                            </p>
+                                            {claim.payment_received_date && (
+                                                <p className="mt-1 text-[11px] text-blue-600">
+                                                    Settled on {fmtDateOnly(claim.payment_received_date)}
+                                                </p>
+                                            )}
+                                            <p className="mt-1 text-[10px] text-blue-400">Matched from Meesho payment file</p>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         </td>
@@ -241,7 +285,7 @@ const ReturnClaimsSection = ({ marketplaceIds, meeshoAccounts = [], refreshKey =
                 </AnimatePresence>
 
                 {/* KPIs */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
                     <KpiTile index={0} label="Claims raised" value={(stats?.total_raised ?? 0).toLocaleString('en-IN')} icon={Ticket} tone="violet"
                         active={status === 'all'} onClick={() => setStatus('all')} sub={claimable ? `${claimable} more claimable` : 'Through SpeedEcom'} />
                     <KpiTile index={1} label="Pending" value={(stats?.pending_count ?? 0).toLocaleString('en-IN')} icon={Clock} tone="amber"
@@ -253,6 +297,9 @@ const ReturnClaimsSection = ({ marketplaceIds, meeshoAccounts = [], refreshKey =
                         active={status === 'rejected'} onClick={() => setStatus('rejected')} sub="Declined by Meesho" />
                     <KpiTile index={4} featured label="Recovered" value={fmtINR(stats?.total_recovered || 0, { compact: true })} icon={IndianRupee}
                         sub={<span className="inline-flex items-center gap-1"><TrendingUp size={11} /> From approved claims</span>} />
+                    <KpiTile index={5} featuredGreen label="Payment Received" value={(stats?.payment_received_count ?? 0).toLocaleString('en-IN')}
+                        icon={Banknote}
+                        sub={stats?.payment_received_count > 0 ? fmtINR(stats.payment_received_total || 0, { compact: true }) + ' settled' : 'Matched from payment file'} />
                 </div>
 
                 {neverRaised ? (
