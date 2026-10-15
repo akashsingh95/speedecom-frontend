@@ -964,6 +964,14 @@ const SpeedyAgentPage = () => {
         if (selectedQuestion.requiresMarketplace) {
             if (!selectedMarketplace) {
                 newErrors._marketplace = 'Please select a marketplace';
+            } else if (!isQuestionSupportedForMarketplace(selectedQuestion, selectedMarketplace)) {
+                // Reachable when a tenant has exactly one marketplace and it
+                // doesn't support this question — selectedMarketplace is
+                // intentionally left set in that case (see FAQWorkspace's
+                // marketplace-sync effect) rather than cleared, to avoid an
+                // infinite loop with the "auto-pick the only marketplace"
+                // effect. This check is what actually stops the Run.
+                newErrors._marketplace = 'This question is not supported for the selected marketplace';
             } else if (selectedAccount.length === 0) {
                 newErrors._account = 'Please select at least one account';
             }
@@ -3225,7 +3233,16 @@ const FAQWorkspace = ({
         const supportedMps = marketplaces.filter(m => isMarketplaceSupported(m.key));
         const isCurrentSupported = selectedMarketplace && isMarketplaceSupported(selectedMarketplace);
 
-        if (selectedMarketplace && !isCurrentSupported) {
+        // Don't clear when there's exactly one marketplace total — the sibling
+        // "auto-pick the only marketplace" effect (SpeedyAgentPage's own
+        // useEffect on marketplaces/selectedMarketplace) has no concept of
+        // per-question support and immediately re-selects it whenever it's
+        // empty, so clearing here would just bounce selectedMarketplace
+        // between '' and that marketplace forever (visible as the whole
+        // marketplace/account UI flickering). Leaving it selected but
+        // unsupported is safe: the marketplace button already renders
+        // disabled for it, and handleRunFAQ's validation blocks submitting.
+        if (selectedMarketplace && !isCurrentSupported && marketplaces.length !== 1) {
             setSelectedMarketplace('');
         }
 
