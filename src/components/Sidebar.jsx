@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import {
     LayoutDashboard, CheckCircle, Upload, Building, User, ChevronDown,
@@ -5,11 +7,15 @@ import {
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import PresenceToggle from './support/PresenceToggle';
 
 const Sidebar = () => {
     const location = useLocation();
     const { user, isImpersonating, impersonatedTenant, impersonationSyncing } = useAuth();
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    // Same audience the support drawer and ring banner use.
+    const isSupportStaff = ['RM', 'SBM', 'SuperAdmin'].includes(user?.role)
+        && (user.role !== 'SBM' || user.permissions?.viewSupport !== false);
 
     let menuItems = [];
 
@@ -235,6 +241,8 @@ const Sidebar = () => {
                     </div>
                 )}
             </nav>
+
+            {isSupportStaff && <PresenceToggle />}
 
             {/* User Profile / Footer Mockup */}
             <div className="p-4 mt-2">

@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 // ─────────────────────────────────────────────────────────
 //  Speedy Agent — Language Context
 //  Provides `lang` + `setLang` + a `t()` helper used to read
@@ -6,13 +8,14 @@
 //  Field shape:  string  → returned as-is (untranslated entries
 //                          keep working without breakage)
 //                { en, hi } → returned for current `lang` with
-//                          fallback to `en` on missing key.
+//                          fallback to `en` on missing key (no `gu`
+//                          strings exist yet, so Gujarati shows English).
 // ─────────────────────────────────────────────────────────
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 
 const STORAGE_KEY = 'speedy.lang';
-const SUPPORTED   = ['en', 'hi'];
+const SUPPORTED   = ['en', 'hi', 'gu'];
 
 const LanguageContext = createContext({
     lang: 'en',
