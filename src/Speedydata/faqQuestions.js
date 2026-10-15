@@ -390,10 +390,14 @@ export const FAQ_QUESTIONS = [
         },
         type: 'dynamic',
         requiresMarketplace: true,
+        excludedPlatforms: ['myntra'],
         // Bar chart of P/L per month; the response carries a deterministic
-        // driver-breakdown note (see template 84's insight()). Myntra is
-        // supported — the gainers/losers breakdown excludes non-product
-        // sentinel values for Myntra-only selections.
+        // driver-breakdown note (see template 84's insight()). The gainers/
+        // losers breakdown excludes non-product sentinel values (Amazon-only
+        // artifacts like Brand Ads / FBA fee rows) whenever Amazon is in the
+        // selection — see template 84's insight() in faqTemplates.js. Myntra
+        // stays excluded here; this question was never asked to be enabled
+        // for Myntra, only fixed for Amazon.
         params: [
             { key: 'startDate', label: 'Start Date', type: 'date', placeholder: 'Start date', required: true },
             { key: 'endDate',   label: 'End Date',   type: 'date', placeholder: 'End date',   required: true },
