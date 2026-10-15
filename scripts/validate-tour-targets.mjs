@@ -29,16 +29,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const CLIENT_DIR = resolve(fileURLToPath(new URL('.', import.meta.url)), '..');
 const SRC_DIR = join(CLIENT_DIR, 'src');
 const normalizePath = (p) => p.replace(/[\\/]+/g, '/').toLowerCase();
-const TARGETS_FILE = join(SRC_DIR, 'Tour', 'targets.js');
-const STEPS_FILE = join(SRC_DIR, 'Tour', 'steps.js');
+const TARGETS_FILE = join(SRC_DIR, 'tour', 'targets.js');
+const STEPS_FILE = join(SRC_DIR, 'tour', 'steps.js');
 
 // Files that reference targets without rendering them. The runner and the
 // spotlight take an id as data, so a mention there is not proof of an element.
 const NON_RENDERING = new Set([
     normalizePath(TARGETS_FILE),
     normalizePath(STEPS_FILE),
-    normalizePath(join(SRC_DIR, 'Tour', 'TourProvider.jsx')),
-    normalizePath(join(SRC_DIR, 'Tour', 'TourSpotlight.jsx')),
+    normalizePath(join(SRC_DIR, 'tour', 'TourProvider.jsx')),
+    normalizePath(join(SRC_DIR, 'tour', 'TourSpotlight.jsx')),
 ]);
 
 const SOURCE_EXTENSIONS = /\.(js|jsx)$/;

@@ -20,7 +20,7 @@ import {
     MARKETPLACE_ONBOARDING_MYNTRA,
     getMarketplaceTourKey,
 } from '../tour/steps';
-import { useTour } from '../tour/tourProvider';
+import { useTour } from '../tour/TourProvider';
 import forge from 'node-forge';
 import { getFriendlySyncErrorMessage } from '../utils/meeshoSyncErrorMessages';
 const base = import.meta.env.BASE_URL;
@@ -173,7 +173,13 @@ const MarketplaceSettings = () => {
         hasSeen,
         stopTour,
         runKey,
+        localKey,
     } = useTour() || {};
+
+    const getTourStorageKey = useCallback((k) => {
+        return localKey ? localKey(k) : (user?._id ? `tour:${user._id}:${k}` : `tour:${k}`);
+    }, [localKey, user?._id]);
+
     const [loading, setLoading] = useState(true);
     const [marketplaces, setMarketplaces] = useState([]);
 
@@ -308,10 +314,10 @@ const MarketplaceSettings = () => {
         if (tourKey && (!hasActiveAccounts || isFromOnboarding)) {
             try {
                 if (isFromOnboarding) {
-                    localStorage.setItem('tour:tenant-onboarding', 'completed');
+                    localStorage.setItem(getTourStorageKey('tenant-onboarding'), 'completed');
                 }
-                localStorage.removeItem(`tour:marketplace_onboarded:${mpSlug}`);
-                localStorage.setItem('tour:active_marketplace_tour', JSON.stringify({ key: tourKey, marketplaceName: mpName, stepIndex: 0 }));
+                localStorage.removeItem(getTourStorageKey(`marketplace_onboarded:${mpSlug}`));
+                localStorage.setItem(getTourStorageKey('active_marketplace_tour'), JSON.stringify({ key: tourKey, marketplaceName: mpName, stepIndex: 0 }));
             } catch { /* ignore */ }
 
             startTour?.(tourKey, 0);
@@ -319,7 +325,7 @@ const MarketplaceSettings = () => {
             // Dismiss any background page tour so it never overlaps the connect modal
             stopTour?.();
         }
-    }, [setSelectedMarketplace, startTour, stopTour, marketplaces, runKey, currentStep]);
+    }, [setSelectedMarketplace, startTour, stopTour, marketplaces, runKey, currentStep, getTourStorageKey]);
 
     useEffect(() => {
         const handleSelectMp = (e) => {
@@ -338,25 +344,29 @@ const MarketplaceSettings = () => {
     // Restore modal and tour on page refresh if an active onboarding tour was in progress
     useEffect(() => {
         try {
-            const raw = localStorage.getItem('tour:active_marketplace_tour');
+            const raw = localStorage.getItem(getTourStorageKey('active_marketplace_tour'));
             if (raw) {
                 const parsed = JSON.parse(raw);
-                if (parsed?.marketplaceName && !isMarketplaceOnboarded(parsed.marketplaceName)) {
-                    const target = (marketplaces || []).find(m => m.name === parsed.marketplaceName || m.name.toLowerCase().includes(parsed.marketplaceName.toLowerCase()));
-                    setConnectModalData({
-                        name: parsed.marketplaceName,
-                        mode: 'add',
-                        existingEmail: '',
-                        supportedSignInTypes: target?.supportedSignInTypes || ['email', 'phone']
-                    });
-                    if (parsed.key) {
-                        const resumeIndex = typeof parsed.stepIndex === 'number' ? parsed.stepIndex : 0;
-                        startTour?.(parsed.key, resumeIndex);
+                if (parsed?.marketplaceName) {
+                    if (isMarketplaceOnboarded(parsed.marketplaceName)) {
+                        localStorage.removeItem(getTourStorageKey('active_marketplace_tour'));
+                    } else if (!runKey) {
+                        const target = (marketplaces || []).find(m => m.name === parsed.marketplaceName || m.name.toLowerCase().includes(parsed.marketplaceName.toLowerCase()));
+                        setConnectModalData({
+                            name: parsed.marketplaceName,
+                            mode: 'add',
+                            existingEmail: '',
+                            supportedSignInTypes: target?.supportedSignInTypes || ['email', 'phone']
+                        });
+                        if (parsed.key) {
+                            const resumeIndex = typeof parsed.stepIndex === 'number' ? parsed.stepIndex : 0;
+                            startTour?.(parsed.key, resumeIndex);
+                        }
                     }
                 }
             }
         } catch { /* ignore */ }
-    }, [marketplaces, isMarketplaceOnboarded, startTour]);
+    }, [marketplaces, isMarketplaceOnboarded, startTour, runKey, getTourStorageKey]);
 
     const handleSeeAccounts = useCallback(async (m) => {
         // Open the modal immediately with what we already have so it feels responsive,
@@ -968,7 +978,12 @@ const MarketplaceSettings = () => {
         setSuccessMessage(connectModalData?.mode === 'update' ? 'Account updated successfully!' : 'Account connected successfully!');
         if (isAddMode && connectedName) {
             completeTourAction?.('marketplace_connected', { marketplace: connectedName });
-            onMarketplaceConnected?.(connectedName);
+            // Delay by one tick so this runs in a fresh render cycle AFTER onClose → stopTour()
+            // has already committed its setRunKey(null). Without the delay, React batches both
+            // setRunKey calls together and stopTour's null wins, preventing the celebration popup.
+            setTimeout(() => {
+                onMarketplaceConnected?.(connectedName);
+            }, 0);
         }
     };
 
@@ -1054,7 +1069,7 @@ const MarketplaceSettings = () => {
                         onClose={() => {
                             setConnectModalData(null);
                             try {
-                                localStorage.removeItem('tour:active_marketplace_tour');
+                                localStorage.removeItem(getTourStorageKey('active_marketplace_tour'));
                             } catch { /* ignore */ }
                             if (runKey && runKey.startsWith('mp-onboarding-')) {
                                 stopTour?.();

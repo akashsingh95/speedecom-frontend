@@ -3,9 +3,57 @@ import { X, Loader2, Save, Eye, EyeOff, AlertCircle, RefreshCw, Pencil, Lock, Sh
 import api from '../api';
 import forge from 'node-forge';
 import MonthYearPicker from './MonthYearPicker';
-import { TOUR } from '../Tour/targets';
+import ConfirmModal from './ConfirmModal';
+import { useAuth } from '../AuthContext';
+import { TOUR } from '../tour/targets';
+import { useTour } from '../tour/TourProvider';
 
-const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountData, mode, accountPassword, bypassPassword = false, supportedSignInTypes = ['email', 'phone', 'oauth'], onBack }) => {
+/**
+ * Strict RFC 5322 & TLD compliant email validation.
+ * Enforces:
+ * - Length between 5 and 254 characters
+ * - Valid local part characters without spaces or consecutive dots
+ * - Valid domain format
+ * - TLD of at least 2 alphabetic characters (e.g. .com, .in, .org — rejects .c)
+ */
+export const isValidEmail = (email) => {
+    if (!email || typeof email !== 'string') return false;
+    const trimmed = email.trim();
+    if (trimmed.length < 5 || trimmed.length > 254) return false;
+    if (/\s/.test(trimmed) || trimmed.includes('..')) return false;
+
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(trimmed)) return false;
+
+    const parts = trimmed.split('@');
+    if (parts.length !== 2) return false;
+    const domain = parts[1];
+    const domainParts = domain.split('.');
+    if (domainParts.length < 2) return false;
+    const tld = domainParts[domainParts.length - 1];
+    if (!tld || tld.length < 2 || !/^[a-zA-Z]{2,63}$/.test(tld)) return false;
+
+    return true;
+};
+
+const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountData, mode, accountPassword, bypassPassword = false, supportedSignInTypes = ['email', 'phone', 'oauth'], onBack, onAutoSyncChange }) => {
+    const { user } = useAuth();
+    const canToggleAutoSync = ['SuperAdmin', 'SBM'].includes(user?.role);
+    const [autoSyncOn, setAutoSyncOn] = useState(accountData?.autoSyncEnabled !== false);
+    const [awaitingFirstSync, setAwaitingFirstSync] = useState(accountData?.autoSyncAwaitingFirstSync === true);
+    const [autoSyncSaving, setAutoSyncSaving] = useState(false);
+    const [showAutoSyncConfirm, setShowAutoSyncConfirm] = useState(false);
+    const tour = useTour();
+    const isTourActive = !!(
+        tour?.isRunning &&
+        (
+            tour?.runKey?.startsWith?.('mp-onboarding-') ||
+            tour?.currentStep?.target?.startsWith?.('marketplace.modal') ||
+            (tour?.currentStep?.id?.startsWith?.('mp-') && !tour?.currentStep?.isCelebration && !tour?.currentStep?.isMarketplaceSelect)
+        ) &&
+        !tour?.currentStep?.isCelebration
+    );
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
@@ -140,8 +188,14 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
         setError(null);
 
         try {
-            if (formData.signInType === 'email' && !formData.email) {
-                throw new Error('Please enter an Email Address');
+            if (formData.signInType === 'email' || formData.email) {
+                const trimmedEmail = (formData.email || '').trim();
+                if (!trimmedEmail) {
+                    throw new Error('Please enter an Email Address');
+                }
+                if (!isValidEmail(trimmedEmail)) {
+                    throw new Error('Invalid email address. Please enter a valid email format with a complete domain (e.g. name@example.com)');
+                }
             }
 
             // Account name required for add mode and common update (no accountPassword = common update)
@@ -151,11 +205,6 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
 
             if (mode === 'add' && !formData.analysisStartDate) {
                 throw new Error('Please select an Analysis Start Date');
-            }
-
-            if (formData.signInType === 'email') {
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(formData.email)) throw new Error('Invalid Email Address');
             }
 
             if (mode === 'add' && marketplaceName === 'Meesho' && showAutoSyncFields) {
@@ -271,7 +320,13 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
 
     return (
         <div className="fixed inset-0 bg-black/60 z-[9995] flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-            <div data-tour-modal="connect-marketplace" className="bg-white rounded-3xl w-full max-w-[440px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] overflow-hidden animate-zoomIn flex flex-col relative max-h-[92vh]" onClick={(e) => e.stopPropagation()}>
+            <div
+                data-tour-modal="connect-marketplace"
+                className={`bg-white rounded-3xl w-full max-w-[440px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col relative max-h-[92vh] transition-transform duration-150 ${
+                    isTourActive ? 'md:-translate-x-[180px] lg:-translate-x-[200px]' : 'animate-zoomIn'
+                }`}
+                onClick={(e) => e.stopPropagation()}
+            >
 
                 {/* Loading Overlay */}
                 {loading && (
@@ -444,8 +499,18 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                                     value={formData.signInType === 'phone' ? (formData.phone || '') : formData.email}
                                     onChange={handleChange}
                                     placeholder={formData.signInType === 'phone' ? '10-digit number' : 'name@example.com'}
-                                    className="w-full text-sm text-slate-800 bg-white border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 px-4 py-3 rounded-xl outline-none placeholder:text-slate-300 transition-all shadow-sm"
+                                    className={`w-full text-sm text-slate-800 bg-white border ${
+                                        formData.signInType !== 'phone' && formData.email && !isValidEmail(formData.email)
+                                            ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/10'
+                                            : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
+                                    } px-4 py-3 rounded-xl outline-none placeholder:text-slate-300 transition-all shadow-sm`}
                                 />
+                                {formData.signInType !== 'phone' && formData.email && !isValidEmail(formData.email) && (
+                                    <p className="text-[11px] font-medium text-amber-600 flex items-center gap-1 mt-1 ml-1">
+                                        <AlertCircle size={12} className="shrink-0" />
+                                        Please enter a complete email domain (e.g. name@example.com)
+                                    </p>
+                                )}
                             </div>
 
                             {/* Auto-sync credentials (Meesho sync update only — not shown in common update) */}
@@ -509,10 +574,23 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                             <div data-tour={TOUR.marketplace.modalEmail}>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
                                 <input
-                                    type="email" name="email" value={formData.email} onChange={handleChange}
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
                                     placeholder="name@example.com"
-                                    className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-200 outline-none transition-all placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                                    className={`w-full px-3.5 py-2 text-sm rounded-xl border ${
+                                        formData.email && !isValidEmail(formData.email)
+                                            ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/10'
+                                            : 'border-slate-200 focus:border-brand-500 focus:ring-brand-500/10'
+                                    } outline-none transition-all placeholder:text-slate-400`}
                                 />
+                                {formData.email && !isValidEmail(formData.email) && (
+                                    <p className="text-[11px] font-medium text-amber-600 flex items-center gap-1 mt-1">
+                                        <AlertCircle size={12} className="shrink-0" />
+                                        Please enter a complete email domain (e.g. name@example.com)
+                                    </p>
+                                )}
                             </div>
 
                             {/* Meesho auto-sync fields (add mode) */}

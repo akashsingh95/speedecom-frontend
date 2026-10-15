@@ -7,9 +7,10 @@
 //  TourProvider.
 // ─────────────────────────────────────────────────────────
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { X, ArrowLeft, ArrowRight, Sparkles, Zap, ShieldCheck, Clock, TrendingUp, Check, Lock, RefreshCw, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { TOUR, tourSelector } from './targets';
+import { isValidEmail } from '../components/ConnectMarketplaceModal';
 
 const GAP = 14;        // space between the cut-out and the popover
 const EDGE = 20;       // popover never comes closer than this to the viewport edge
@@ -34,14 +35,43 @@ const inflate = (rect) => ({
 });
 
 /**
+ * Detects whether a checkout modal (SpeedEcom checkout or active Razorpay frame)
+ * is currently visibly open in the DOM.
+ * Strictly scoped to billing steps and verifies that the container is actively visible
+ * so stale/hidden elements from prior transactions never suppress the spotlight hole.
+ */
+const isCheckoutActivelyOpen = (step) => {
+    if (typeof document === 'undefined') return false;
+    const isBilling = step?.id?.startsWith?.('bill-') || step?.target?.startsWith?.('billing');
+    if (!isBilling) return false;
+
+    const modal = document.querySelector('[data-tour-modal="checkout"]') ||
+        document.querySelector(`${tourSelector(TOUR.billing.modal)} > div`);
+    if (modal) {
+        const r = modal.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return true;
+    }
+
+    const rzp = document.querySelector('.razorpay-container');
+    if (rzp) {
+        const r = rzp.getBoundingClientRect();
+        const style = window.getComputedStyle(rzp);
+        if (r.width > 0 && r.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+            return true;
+        }
+    }
+    return false;
+};
+
+/**
  * Picks a side with room for the popover, preferring the step's own choice or
  * dynamically selecting the most natural adjacent position (beside or below).
  * Returns viewport coordinates plus the side actually used, so the arrow can
  * point directly back at the element.
  */
-const place = (hole, size, preferred, step = null) => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+const place = (hole, size, preferred, step = null, viewport = null) => {
+    const vw = viewport?.width || (typeof window !== 'undefined' ? window.innerWidth : 1280);
+    const vh = viewport?.height || (typeof window !== 'undefined' ? window.innerHeight : 800);
 
     // Clamps coordinates strictly inside the viewport with safe margins
     const clampY = (val, h) => {
@@ -55,7 +85,23 @@ const place = (hole, size, preferred, step = null) => {
         return Math.max(minLeft, Math.min(val, maxLeft));
     };
 
-    if (!hole || preferred === 'center' || step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration) {
+    const isMarketplaceModal = !!(
+        step?.target?.startsWith?.('marketplace.modal') ||
+        (step?.id?.startsWith?.('mp-') && step?.id?.includes('-') && !step?.isMarketplaceSelect && !step?.isCelebration)
+    );
+
+    const checkoutModalEl = (!isMarketplaceModal && isCheckoutActivelyOpen(step))
+        ? (typeof document !== 'undefined'
+            ? (document.querySelector('[data-tour-modal="checkout"]') ||
+               document.querySelector(`${tourSelector(TOUR.billing.modal)} > div`) ||
+               document.querySelector('.razorpay-container'))
+            : null)
+        : null;
+
+    const isModalTarget = !!(checkoutModalEl || isMarketplaceModal);
+
+    // Non-modal centering steps
+    if (!isModalTarget && (!hole || preferred === 'center' || step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration)) {
         return {
             top: clampY(Math.round((vh - size.height) / 2), size.height),
             left: clampX(Math.round((vw - size.width) / 2), size.width),
@@ -63,54 +109,89 @@ const place = (hole, size, preferred, step = null) => {
         };
     }
 
-    const isModalTarget = !!(
-        step?.target?.startsWith?.('marketplace.modal') ||
-        (step?.id?.startsWith?.('mp-') && step?.id?.includes('-') && !step?.isMarketplaceSelect && !step?.isCelebration)
-    );
-
     // Modal-aware positioning: keep popover completely outside the modal dialog
     // so inputs and buttons remain visible, unclipped, and freely editable.
     if (isModalTarget) {
-        const modalEl = typeof document !== 'undefined'
-            ? (document.querySelector('[data-tour-modal="connect-marketplace"]') ||
-               document.querySelector('[data-tour-modal]') ||
-               document.querySelector('.connect-marketplace-modal') ||
-               document.querySelector('.fixed .rounded-3xl.bg-white') ||
-               document.querySelector('.fixed .bg-white.rounded-3xl'))
-            : null;
+        const modalEl = isMarketplaceModal
+            ? (typeof document !== 'undefined'
+                ? (document.querySelector('[data-tour-modal="connect-marketplace"]') ||
+                   document.querySelector('.connect-marketplace-modal') ||
+                   document.querySelector('[data-tour-modal]') ||
+                   document.querySelector('.fixed .rounded-3xl.bg-white') ||
+                   document.querySelector('.fixed .bg-white.rounded-3xl'))
+                : null)
+            : checkoutModalEl;
         const modalRect = modalEl?.getBoundingClientRect();
 
-        if (modalRect) {
-            // Check if there is comfortable room to the right of the entire modal
-            if (vw - modalRect.right - GAP - EDGE >= size.width) {
+        if (modalRect && modalRect.width > 0 && modalRect.height > 0) {
+            const spaceRight = vw - modalRect.right - GAP - EDGE;
+            const spaceLeft = modalRect.left - GAP - EDGE;
+            const popoverW = size.width || 340;
+            const popoverH = size.height || 300;
+
+            const targetY = hole
+                ? (hole.top + hole.height / 2)
+                : (modalRect.top + Math.min(140, modalRect.height / 3));
+            const idealTop = clampY(targetY - popoverH / 2, popoverH);
+
+            // 1. Preferred: comfortable room to the right of the entire modal
+            if (spaceRight >= popoverW) {
                 return {
-                    top: clampY(hole.top + hole.height / 2 - size.height / 2, size.height),
-                    left: clampX(modalRect.right + GAP, size.width),
+                    top: idealTop,
+                    left: Math.max(modalRect.right + GAP, Math.min(modalRect.right + GAP, vw - popoverW - EDGE)),
                     side: 'right',
                 };
             }
-            // Check if there is comfortable room to the left of the entire modal
-            if (modalRect.left - GAP - EDGE >= size.width) {
+            // 2. Comfortable room to the left of the entire modal
+            if (spaceLeft >= popoverW) {
                 return {
-                    top: clampY(hole.top + hole.height / 2 - size.height / 2, size.height),
-                    left: clampX(modalRect.left - GAP - size.width, size.width),
+                    top: idealTop,
+                    left: Math.max(EDGE, modalRect.left - GAP - popoverW),
                     side: 'left',
                 };
             }
-            // Screen is too narrow (<840px): dock at top or bottom opposite of the field being edited
-            if (hole.top > vh / 2) {
+
+            // 3. Medium-to-large displays (vw >= 768px):
+            // Keep strictly clear of the modal dialog so all inputs remain unblocked
+            if (vw >= 768) {
+                if (spaceRight >= spaceLeft && spaceRight >= 160) {
+                    return {
+                        top: idealTop,
+                        left: Math.max(modalRect.right + GAP, vw - popoverW - EDGE),
+                        side: 'right',
+                    };
+                } else if (spaceLeft >= 160) {
+                    return {
+                        top: idealTop,
+                        left: Math.min(modalRect.left - GAP - popoverW, EDGE),
+                        side: 'left',
+                    };
+                }
+            }
+
+            // 4. Narrow mobile screens (<768px): dock above or below modal without blocking form fields
+            if (modalRect.top >= popoverH + GAP + EDGE) {
                 return {
                     top: EDGE,
-                    left: clampX((vw - size.width) / 2, size.width),
+                    left: clampX((vw - popoverW) / 2, popoverW),
                     side: 'top',
                 };
             }
             return {
-                top: clampY(vh - size.height - EDGE, size.height),
-                left: clampX((vw - size.width) / 2, size.width),
+                top: clampY(vh - popoverH - EDGE, popoverH),
+                left: clampX((vw - popoverW) / 2, popoverW),
                 side: 'bottom',
             };
         }
+    }
+
+    // If hole is still null at this point (e.g. modal element not yet in DOM), return centered.
+    if (!hole) {
+        return {
+            top: clampY(Math.round((vh - size.height) / 2), size.height),
+            left: clampX(Math.round((vw - size.width) / 2), size.width),
+            side: 'center',
+        };
     }
 
     const room = {
@@ -219,9 +300,13 @@ const TourSpotlight = ({
     const defaultWidth = step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration
         ? 580
         : isModalTarget
-            ? 350
-            : (step?.id?.startsWith('bill-plan-') ? 350 : POPOVER_W);
+            ? 340
+            : (step?.id?.startsWith('bill-plan-') ? 340 : POPOVER_W);
     const [size, setSize] = useState({ width: defaultWidth, height: step?.isBillingIntro ? 420 : 200 });
+    const [viewport, setViewport] = useState(() => ({
+        width: typeof window !== 'undefined' ? window.innerWidth : 1280,
+        height: typeof window !== 'undefined' ? window.innerHeight : 800,
+    }));
 
     // Live form state & synchronization for validation
     const [formState, setFormState] = useState({
@@ -317,9 +402,8 @@ const TourSpotlight = ({
 
     const trimmedAccountName = (formState.accountName || '').trim();
     const isAccountNameValid = trimmedAccountName.length > 0;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const trimmedEmail = (formState.email || '').trim();
-    const isEmailValid = emailRegex.test(trimmedEmail);
+    const isEmailValid = isValidEmail(trimmedEmail);
     const trimmedPassword = (formState.password || '').trim();
     const isPasswordValid = trimmedPassword.length > 0;
 
@@ -351,7 +435,7 @@ const TourSpotlight = ({
             isNextDisabled = true;
             actionStatus = {
                 type: 'invalid',
-                text: 'Enter a valid email format (e.g. seller@store.com)',
+                text: 'Enter a valid email address with a complete domain (e.g. seller@store.com)',
             };
         } else {
             isNextDisabled = false;
@@ -378,24 +462,119 @@ const TourSpotlight = ({
         isNextDisabled = true;
     }
 
-    // Follow the element every frame rather than binding scroll/resize
-    // listeners: the target can sit inside any number of scrollable panes, and
-    // several of them animate on mount. A short-lived rAF loop is cheaper than
-    // getting that ancestor bookkeeping right.
-    useEffect(() => {
-        if (!element) {
-            setHole(null);
-            return undefined;
+    // Reliably resolves the live target element from DOM if the prop reference is stale/detached
+    const resolveLiveElement = useCallback(() => {
+        if (element && element.isConnected) {
+            const r = element.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0) return element;
         }
+        if (step?.target) {
+            const sel = tourSelector(step.target);
+            if (sel) {
+                const found = document.querySelector(sel);
+                if (found && found.isConnected) {
+                    const r = found.getBoundingClientRect();
+                    if (r.width > 0 && r.height > 0) return found;
+                }
+            }
+        }
+        return element && element.isConnected ? element : null;
+    }, [element, step?.target]);
+
+    // Recalculates viewport dimensions, element hole, and popover size
+    const remeasureAll = useCallback(() => {
+        // 1. Sync viewport dimensions
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        setViewport((prev) => (prev.width === vw && prev.height === vh ? prev : { width: vw, height: vh }));
+
+        // 2. Measure target element hole from live DOM
+        const isCheckoutOpen = isCheckoutActivelyOpen(step);
+        if (isCheckoutOpen) {
+            setHole(null);
+        } else {
+            const liveEl = resolveLiveElement();
+            if (liveEl) {
+                const rect = liveEl.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    const nextHole = inflate(rect);
+                    setHole((curr) => (sameRect(curr, nextHole) ? curr : nextHole));
+                }
+            } else if (!step?.target) {
+                setHole(null);
+            }
+        }
+
+        // 3. Measure popover size
+        if (popoverRef.current) {
+            const popRect = popoverRef.current.getBoundingClientRect();
+            if (popRect.width > 0 && popRect.height > 0) {
+                setSize((curr) => (
+                    Math.abs(curr.height - popRect.height) < 0.5 && Math.abs(curr.width - popRect.width) < 0.5
+                        ? curr
+                        : { width: popRect.width, height: popRect.height }
+                ));
+            }
+        }
+    }, [resolveLiveElement, step?.target]);
+
+    // Recalculate on window focus, tab visibility changes, viewport resize, and pageshow
+    useEffect(() => {
+        let timer1, timer2;
+        const handleSync = () => {
+            remeasureAll();
+            requestAnimationFrame(remeasureAll);
+            clearTimeout(timer1);
+            clearTimeout(timer2);
+            timer1 = setTimeout(remeasureAll, 50);
+            timer2 = setTimeout(remeasureAll, 150);
+        };
+
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                handleSync();
+            }
+        };
+
+        window.addEventListener('focus', handleSync);
+        window.addEventListener('resize', handleSync);
+        window.addEventListener('pageshow', handleSync);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        return () => {
+            clearTimeout(timer1);
+            clearTimeout(timer2);
+            window.removeEventListener('focus', handleSync);
+            window.removeEventListener('resize', handleSync);
+            window.removeEventListener('pageshow', handleSync);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+        };
+    }, [remeasureAll]);
+
+    // Follow the element every frame with live DOM resolution
+    useEffect(() => {
         let frame;
         const tick = () => {
-            const next = inflate(element.getBoundingClientRect());
-            setHole((current) => (sameRect(current, next) ? current : next));
+            const isCheckoutOpen = isCheckoutActivelyOpen(step);
+            if (isCheckoutOpen) {
+                setHole(null);
+            } else {
+                const liveEl = resolveLiveElement();
+                if (liveEl) {
+                    const rect = liveEl.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        const next = inflate(rect);
+                        setHole((current) => (sameRect(current, next) ? current : next));
+                    }
+                } else if (!step?.target) {
+                    setHole(null);
+                }
+            }
             frame = requestAnimationFrame(tick);
         };
         tick();
         return () => cancelAnimationFrame(frame);
-    }, [element]);
+    }, [resolveLiveElement, step?.target]);
 
     // Measure the popover so placement can react to its real height — the body
     // copy varies enough between steps that a fixed guess mis-clamps.
@@ -404,11 +583,13 @@ const TourSpotlight = ({
         if (!node) return undefined;
         const measure = () => {
             const rect = node.getBoundingClientRect();
-            setSize((current) => (
-                Math.abs(current.height - rect.height) < 0.5 && Math.abs(current.width - rect.width) < 0.5
-                    ? current
-                    : { width: rect.width, height: rect.height }
-            ));
+            if (rect.width > 0 && rect.height > 0) {
+                setSize((current) => (
+                    Math.abs(current.height - rect.height) < 0.5 && Math.abs(current.width - rect.width) < 0.5
+                        ? current
+                        : { width: rect.width, height: rect.height }
+                ));
+            }
         };
         measure();
         const observer = new ResizeObserver(measure);
@@ -493,7 +674,7 @@ const TourSpotlight = ({
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [onClose, onNext, onPrev, isFirst, isNextDisabled]);
 
-    const position = place(hole, size, step?.side || 'bottom', step);
+    const position = place(hole, size, step?.side || 'bottom', step, viewport);
     const progress = total > 1 ? ((index + 1) / total) * 100 : 100;
 
     // Arrow offset along the shared edge — suppressed for centered popups
@@ -509,8 +690,10 @@ const TourSpotlight = ({
         return { top: `${Math.min(Math.max(center, 24), Math.max(size.height - 24, 24))}px` };
     })();
 
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
+    const vh = viewport.height;
+    const vw = viewport.width;
+
+    const isCheckoutModalOpen = isCheckoutActivelyOpen(step);
 
     // Safety guard: if the connect marketplace modal is open in the DOM, never show the marketplace selection card
     const hasConnectModalInDom = typeof document !== 'undefined' && !!document.querySelector('[data-tour-modal="connect-marketplace"]');
@@ -543,8 +726,9 @@ const TourSpotlight = ({
                     y="0"
                     width="100%"
                     height="100%"
-                    fill="rgba(15, 23, 42, 0.65)"
+                    fill={!isCheckoutModalOpen && (hole || !step?.target) ? "rgba(15, 23, 42, 0.65)" : "transparent"}
                     mask="url(#tour-spotlight-mask)"
+                    className="transition-all duration-200"
                 />
                 {hole && (
                     <rect
@@ -605,13 +789,31 @@ const TourSpotlight = ({
                 </>
             )}
 
+            {/* During plan exploration steps, absorb clicks on the highlighted plan card to prevent accidental button clicks */}
+            {hole && step?.id?.startsWith('bill-plan-') && (
+                <div
+                    className="absolute pointer-events-auto cursor-default z-[9999]"
+                    style={{
+                        top: `${hole.top}px`,
+                        left: `${hole.left}px`,
+                        width: `${hole.width}px`,
+                        height: `${hole.height}px`,
+                        borderRadius: '16px',
+                    }}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                    }}
+                />
+            )}
+
             <div
                 ref={popoverRef}
-                className={`absolute pointer-events-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.35),0_0_0_1px_rgba(255,255,255,0.8)] border border-slate-200/90 font-sans animate-tour-pop overflow-y-auto max-h-[calc(100vh-40px)] custom-scrollbar ${
+                className={`absolute pointer-events-auto bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.35),0_0_0_1px_rgba(255,255,255,0.8)] border border-slate-200/90 font-sans animate-tour-pop overflow-y-auto max-h-[calc(100vh-40px)] custom-scrollbar transition-[top,left] duration-150 ease-out ${
                     step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration
                         ? 'w-[580px] max-w-[calc(100vw-32px)]'
                         : (isModalTarget || step?.id?.startsWith('bill-plan-'))
-                            ? 'w-[350px] max-w-[calc(100vw-32px)]'
+                            ? 'w-[340px] max-w-[calc(100vw-24px)]'
                             : 'w-[420px] max-w-[calc(100vw-32px)]'
                 }`}
                 style={{ top: `${position.top}px`, left: `${position.left}px` }}
@@ -857,7 +1059,7 @@ const TourSpotlight = ({
                                 <span>Unique Store / Brand Nickname</span>
                             </div>
                             <p className="text-[11px] text-indigo-700 leading-relaxed">
-                                Enter your store or brand nickname above (e.g. "My Meesho Store"). This ensures you can identify and distinguish this connection in multi-account dashboards.
+                                Enter your store or brand nickname above (e.g. "My {step?.id?.includes('flipkart') ? 'Flipkart' : step?.id?.includes('amazon') ? 'Amazon' : step?.id?.includes('myntra') ? 'Myntra' : 'Meesho'} Store"). This ensures you can identify and distinguish this connection in multi-account dashboards.
                             </p>
                         </div>
                     )}
@@ -1041,27 +1243,21 @@ const TourSpotlight = ({
                                 </button>
                             </div>
                         ) : (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={onClose}
-                                    className="text-xs font-semibold text-slate-400 hover:text-slate-700 px-2 py-1.5 transition-colors cursor-pointer"
-                                >
-                                    Skip
-                                </button>
+                            <div className="flex items-center justify-between w-full gap-2">
+                                {!isFirst ? (
+                                    <button
+                                        type="button"
+                                        onClick={onPrev}
+                                        className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200/80 rounded-xl px-3.5 py-2 transition-all active:scale-95 cursor-pointer"
+                                    >
+                                        <ArrowLeft size={14} />
+                                        Back
+                                    </button>
+                                ) : (
+                                    <div />
+                                )}
 
-                                <div className="flex items-center gap-2">
-                                    {!isFirst && (
-                                        <button
-                                            type="button"
-                                            onClick={onPrev}
-                                            className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200/80 rounded-xl px-3.5 py-2 transition-all active:scale-95 cursor-pointer"
-                                        >
-                                            <ArrowLeft size={14} />
-                                            Back
-                                        </button>
-                                    )}
-
+                                <div className="flex items-center gap-2 ml-auto">
                                     {step?.actionType === 'connect' ? (
                                         <div className="flex items-center gap-2">
                                             {formState.loading ? (
@@ -1089,12 +1285,18 @@ const TourSpotlight = ({
                                                     : 'bg-gradient-to-r from-brand-600 via-brand-700 to-indigo-700 hover:from-brand-500 hover:to-indigo-600 shadow-brand-500/25 hover:scale-[1.02]'
                                             }`}
                                         >
-                                            <span>{isLast && !step?.isMarketplaceSelect ? (step?.lastButtonText || 'Finish Tour & Choose Plan ➔') : (step?.nextButtonText || 'Next')}</span>
-                                            {(!isLast || step?.isMarketplaceSelect) && !step?.nextButtonText?.includes('➔') && <ArrowRight size={14} />}
+                                            <span>
+                                                {isLast && !step?.isMarketplaceSelect
+                                                    ? (step?.lastButtonText || 'Finish Tour & Choose Plan ➔')
+                                                    : (step?.id === 'mp-meesho-autosync'
+                                                        ? (formState.showAutoSyncFields ? 'Next: Password ➔' : 'Next: Connect ➔')
+                                                        : (step?.nextButtonText || 'Next'))}
+                                            </span>
+                                            {(!isLast || step?.isMarketplaceSelect) && !(step?.id === 'mp-meesho-autosync' || step?.nextButtonText?.includes('➔')) && <ArrowRight size={14} />}
                                         </button>
                                     )}
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
                 </div>

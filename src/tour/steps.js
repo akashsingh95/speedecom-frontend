@@ -155,16 +155,6 @@ export const MEESHO_ONBOARDING_STEPS = [
         side: 'right',
         title: 'Size-wise Calculations Setting',
         body: 'Do your SKUs have different size variants (e.g. S, M, L, XL)? If enabled, SpeedEcom calculates P&L, returns, and courier weight charges separately per size. If you sell single-size items, you can keep this disabled.',
-        nextButtonText: 'Next: File Sync ➔',
-    },
-    {
-        id: 'mp-meesho-autosync',
-        target: TOUR.marketplace.modalAutoSyncToggle,
-        route: '/settings/marketplace',
-        required: true,
-        side: 'right',
-        title: 'Automatic File Synchronization (Meesho Sync)',
-        body: 'SpeedEcom can automatically log in to your Meesho supplier panel to download and reconcile daily orders, payments, returns, and claims without manual Excel uploads. Toggle Auto-Sync ON to enable automated sync, or keep it off for manual uploads.',
         nextButtonText: 'Next: Panel Email ➔',
     },
     {
@@ -177,6 +167,16 @@ export const MEESHO_ONBOARDING_STEPS = [
         actionType: 'email',
         title: 'Enter Meesho Panel Email',
         body: 'Enter your registered Meesho supplier panel email address. Important: Enter accurate credentials — incorrect credentials will prevent the account from connecting.',
+        nextButtonText: 'Next: Auto-Sync ➔',
+    },
+    {
+        id: 'mp-meesho-autosync',
+        target: TOUR.marketplace.modalAutoSyncToggle,
+        route: '/settings/marketplace',
+        required: true,
+        side: 'right',
+        title: 'Automatic File Synchronization (Meesho Sync)',
+        body: 'SpeedEcom can automatically log in to your Meesho supplier panel to download and reconcile daily orders, payments, returns, and claims without manual Excel uploads. Toggle Auto-Sync ON to enable automated sync, or keep it off for manual uploads.',
         nextButtonText: 'Next: Password ➔',
     },
     {
