@@ -63,6 +63,10 @@ export default function ListingPage({ startInPreview = false }) {
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [dragId, setDragId] = useState(null);
   const [overId, setOverId] = useState(null);
+  // reorderImages derives the full id sequence from `project`, which only updates once its
+  // refresh() lands — a second drop before then would be computed from the pre-move order and
+  // silently overwrite the first move (the API writes absolute positions, not a delta).
+  const [reordering, setReordering] = useState(false);
   const libraryEntries = project.imageLibrary?.entries ?? [];
 
   const finalizeRemoveImage = async (imageId) => {
@@ -136,15 +140,19 @@ export default function ListingPage({ startInPreview = false }) {
   // position, so every image in between shifts by one and the rest of the sequence
   // (including which image ends up first, i.e. the Main Image) stays as the user sees it.
   const reorderImages = async (from, to) => {
+    if (reordering) return;
     const ids = sortedGeneratedImages(project).map((img) => img.id);
     if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) return;
     const [moved] = ids.splice(from, 1);
     ids.splice(to, 0, moved);
+    setReordering(true);
     try {
       await listingStudioApi.reorderGeneratedImages(project.id, ids);
       await refresh();
     } catch {
       // The shared axios instance's response interceptor already shows a toast for this.
+    } finally {
+      setReordering(false);
     }
   };
 
@@ -173,6 +181,7 @@ export default function ListingPage({ startInPreview = false }) {
         onSave={() => void saveListing()}
         onBack={() => navigate(`/listing-studio/p/${project.id}/listing`)}
         onReorderImages={project.generatedImages?.length ? reorderImages : undefined}
+        reorderPending={reordering}
         showShare
       />
     );
@@ -223,7 +232,7 @@ export default function ListingPage({ startInPreview = false }) {
               .filter((img) => img.id !== removingImage?.id)
               .map((img) => {
                 const sourceConcept = concepts.find((c) => c.id === img.sourceConceptId);
-                const canDrag = images.length > 1;
+                const canDrag = images.length > 1 && !reordering;
                 return (
                   <div
                     key={img.id}
