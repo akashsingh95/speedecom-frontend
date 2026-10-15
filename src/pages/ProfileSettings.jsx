@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useMemo } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../AuthContext';
@@ -11,8 +13,11 @@ import { toast } from 'sonner';
 import { getMarketplaceLogo } from '../utils/marketplaceLogos';
 import { formatTenantLabel } from '../utils/tenantDisplay';
 
+const LANGUAGE_LABELS = { en: 'English', hi: 'हिन्दी (Hindi)', gu: 'ગુજરાતી (Gujarati)' };
+
 const ProfileSettings = () => {
     const { user: contextUser, updateUserInContext, logout, isImpersonating } = useAuth();
+    const isSeller = ['Admin', 'User'].includes(contextUser?.role) && !isImpersonating;
     const [loading, setLoading] = useState(true);
     const [profileData, setProfileData] = useState(null);
 
@@ -24,6 +29,7 @@ const ProfileSettings = () => {
     // Profile update state
     const [fullName, setFullName] = useState('');
     const [mobileNumber, setMobileNumber] = useState('');
+    const [preferredLanguage, setPreferredLanguage] = useState('en');
     const [savingProfile, setSavingProfile] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -116,6 +122,7 @@ const ProfileSettings = () => {
             setProfileData(data);
             setFullName(data.fullName);
             setMobileNumber(data.mobileNumber || '');
+            setPreferredLanguage(data.preferredLanguage || 'en');
             // Load GST details for Admin
             if (data.role === 'Admin') {
                 try {
@@ -260,9 +267,14 @@ const ProfileSettings = () => {
         try {
             const { data } = await api.put('/auth/profile', {
                 fullName: fullName.trim(),
-                mobileNumber: mobileNumber.trim() || undefined
+                mobileNumber: mobileNumber.trim() || undefined,
+                ...(isSeller && { preferredLanguage }),
             });
             setProfileData(data);
+            if (isSeller) {
+                // Speedy AI keeps its own language choice; follow the profile setting there too.
+                try { localStorage.setItem('speedy.lang', data.preferredLanguage); } catch { /* storage unavailable */ }
+            }
             toast.success('Profile updated successfully');
             setIsEditMode(false); // Exit edit mode
 
@@ -420,6 +432,7 @@ const ProfileSettings = () => {
         setIsEditMode(false);
         setFullName(profileData?.fullName);
         setMobileNumber(profileData?.mobileNumber || '');
+        setPreferredLanguage(profileData?.preferredLanguage || 'en');
     };
 
     const getPasswordStrengthColor = () => {
@@ -636,6 +649,28 @@ const ProfileSettings = () => {
                                                 )}
                                             </div>
 
+                                            {isSeller && (
+                                                <div>
+                                                    <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+                                                        Preferred Language
+                                                    </label>
+                                                    {isEditMode ? (
+                                                        <select
+                                                            value={preferredLanguage}
+                                                            onChange={(e) => setPreferredLanguage(e.target.value)}
+                                                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                                                        >
+                                                            {Object.entries(LANGUAGE_LABELS).map(([code, label]) => (
+                                                                <option key={code} value={code}>{label}</option>
+                                                            ))}
+                                                        </select>
+                                                    ) : (
+                                                        <p className="text-base font-medium text-slate-800">{LANGUAGE_LABELS[profileData?.preferredLanguage || 'en']}</p>
+                                                    )}
+                                                    <p className="text-xs text-slate-400 mt-1">Support chat replies in this language</p>
+                                                </div>
+                                            )}
+
                                             {/* Email (Read-only) */}
                                             <div>
                                                 <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
@@ -697,7 +732,7 @@ const ProfileSettings = () => {
                                             <div className="flex gap-3 pt-6 border-t border-slate-100">
                                                 <button
                                                     type="submit"
-                                                    disabled={savingProfile || (fullName === profileData?.fullName && mobileNumber === (profileData?.mobileNumber || ''))}
+                                                    disabled={savingProfile || (fullName === profileData?.fullName && mobileNumber === (profileData?.mobileNumber || '') && preferredLanguage === (profileData?.preferredLanguage || 'en'))}
                                                     className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-brand-500/20 flex items-center gap-2"
                                                 >
                                                     <Check size={18} />

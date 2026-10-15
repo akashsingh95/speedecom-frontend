@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { X, CheckCircle2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +9,9 @@ import { useAuth } from '../../AuthContext';
 import useLiveTicket from '../../hooks/useLiveTicket';
 import { useSocketEvent } from '../../hooks/useSupportSocket';
 import ChatThread from './ChatThread';
+
+export const OPEN_SUPPORT_DRAWER_EVENT = 'support-drawer:open';
+export const openSupportDrawer = (ticketId) => window.dispatchEvent(new CustomEvent(OPEN_SUPPORT_DRAWER_EVENT, { detail: { ticketId } }));
 
 const STAFF_ROLES = ['RM', 'SBM', 'SuperAdmin'];
 const SELLER_ROLES = ['User', 'Admin'];
@@ -25,6 +28,13 @@ const SupportChatDrawer = () => {
   const [ticketId, setTicketId] = useState(null);
   const [resolving, setResolving] = useState(false);
   const { ticket, emitTyping, sendMessage, typingName, reload, loadError } = useLiveTicket(ticketId);
+
+  useEffect(() => {
+    if (!isStaff) return undefined;
+    const handleOpen = (e) => setTicketId(e.detail.ticketId);
+    window.addEventListener(OPEN_SUPPORT_DRAWER_EVENT, handleOpen);
+    return () => window.removeEventListener(OPEN_SUPPORT_DRAWER_EVENT, handleOpen);
+  }, [isStaff]);
 
   // The support page already shows these tickets live; toasts there would just be noise.
   const onSupportPage = location.pathname === '/admin/support';
@@ -67,7 +77,7 @@ const SupportChatDrawer = () => {
     <div
       role="dialog"
       aria-label="Support chat"
-      className="fixed inset-y-0 right-0 z-[80] w-full sm:w-[420px] bg-white shadow-2xl border-l border-slate-200 flex flex-col"
+      className="fixed inset-y-0 right-0 z-[9000] w-full sm:w-[420px] bg-white shadow-2xl border-l border-slate-200 flex flex-col"
     >
       <div className="px-4 py-3 border-b border-slate-200 flex items-start justify-between gap-2">
         <div className="min-w-0">

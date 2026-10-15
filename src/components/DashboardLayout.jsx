@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import MeeshoSyncIndicator from './MeeshoSyncIndicator';
 import SupportChatWidget from './support/SupportChatWidget';
 import SupportChatDrawer from './support/SupportChatDrawer';
+import EscalationBanner from './support/EscalationBanner';
 import { useAuth } from '../AuthContext';
 import { AlertTriangle, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -60,6 +61,7 @@ const DashboardLayout = ({ children }) => {
             {hasTenantContext && <MeeshoSyncIndicator />}
             <SupportChatWidget />
             <SupportChatDrawer />
+            <EscalationBanner />
         </div>
     );
 };

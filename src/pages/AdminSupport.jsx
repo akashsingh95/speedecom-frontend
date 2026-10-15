@@ -6,12 +6,13 @@ import { toast } from 'sonner';
 import { useAuth } from '../AuthContext';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
-import { Headphones, X, MessageSquare, Paperclip, CheckCircle2, Clock, AlertCircle, Send, Image as ImageIcon, UserCheck, Search, ChevronDown, History, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Headphones, X, MessageSquare, Paperclip, CheckCircle2, Clock, AlertCircle, Send, UserCheck, Search, ChevronDown, History, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import StarRating from '../components/StarRating';
 import TicketTimeline from '../components/TicketTimeline';
 import DateRangePicker from '../components/DateRangePicker';
 import { getClosingTime } from '../utils/formatDuration';
 import { useSocketEvent, useTicketRoom } from '../hooks/useSupportSocket';
+import AttachmentGallery from '../components/support/AttachmentGallery';
 
 const AdminSupport = () => {
     const { user } = useAuth();
@@ -379,15 +380,6 @@ const AdminSupport = () => {
         return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
     };
 
-    // Synthesize a clean attachment label from the GCS storage path.
-    // Stored paths are `support-screenshots/<scope>/<timestamp>-<uuid>.<ext>`, so the
-    // raw filename isn't user-friendly — show "Screenshot N.<ext>" instead.
-    const attachmentLabel = (url, index) => {
-        const base = String(url || '').split('?')[0].split('/').pop() || '';
-        const ext = (base.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
-        return `screenshot_${String(index + 1).padStart(2, '0')}${ext ? '.' + ext : ''}`;
-    };
-
     // Build a chronological item list combining the original description (as the opening
     // tenant-side bubble) with all messages, then group consecutive items by day.
     const buildConversationGroups = (ticket) => {
@@ -413,7 +405,7 @@ const AdminSupport = () => {
                     _key: `msg-${i}`,
                     kind: 'message',
                     isAdmin,
-                    senderName: m.senderId?.fullName || (isAdmin ? 'Support Team' : 'Tenant'),
+                    senderName: m.bot ? 'Speedy · AI assistant' : m.senderId?.fullName || (isAdmin ? 'Support Team' : 'Tenant'),
                     message: m.message,
                     attachments: m.attachments || [],
                     createdAt: m.createdAt,
@@ -443,7 +435,7 @@ const AdminSupport = () => {
                 <div className="max-w-7xl mx-auto space-y-6">
 
                     {/* ═══════════════ HERO HEADER ═══════════════ */}
-                    <div className="relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-700 to-blue-800 rounded-2xl p-7 text-white shadow-lg mb-6">
+                    <div className="relative overflow-hidden bg-brand-600 rounded-2xl p-7 text-white shadow-lg mb-6">
                         <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-2xl"></div>
                         <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-400/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl"></div>
                         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -939,11 +931,11 @@ const AdminSupport = () => {
                         <div className="fixed inset-y-0 right-0 max-w-full flex">
                             <div className="w-screen max-w-2xl transform transition-transform bg-white shadow-2xl flex flex-col h-full">
                                 {/* Header */}
-                                <div className="relative px-6 pt-5 pb-4 border-b border-slate-200 bg-gradient-to-br from-white via-white to-slate-50">
+                                <div className="relative px-6 pt-5 pb-4 border-b border-slate-200 bg-white">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2.5 flex-wrap">
-                                                <span className="text-[11px] font-bold tracking-wider text-white bg-gradient-to-br from-brand-500 to-brand-700 px-2.5 py-1 rounded-lg shadow-sm">{selectedTicket.ticketId}</span>
+                                                <span className="text-[11px] font-bold tracking-wider text-white bg-brand-600 px-2.5 py-1 rounded-lg shadow-sm">{selectedTicket.ticketId}</span>
                                                 <h2 className="text-xl font-bold text-slate-900 tracking-tight truncate">{selectedTicket.title}</h2>
                                             </div>
                                             <div className="mt-2.5 flex items-center gap-3 flex-wrap">
@@ -1012,23 +1004,12 @@ const AdminSupport = () => {
                                     <div className="px-6 py-3 border-b border-slate-200 bg-white flex items-center gap-2 flex-wrap">
                                         <Paperclip size={14} className="text-slate-400" />
                                         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Attachments</span>
-                                        {selectedTicket.screenshots.map((screenshotUrl, index) => (
-                                            <a
-                                                key={index}
-                                                href={screenshotUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 hover:bg-brand-50 hover:border-brand-200 border border-slate-200 rounded-lg text-xs text-slate-700 font-medium transition-all hover:-translate-y-px hover:shadow-sm"
-                                            >
-                                                <ImageIcon size={12} className="text-slate-400" />
-                                                {attachmentLabel(screenshotUrl, index)}
-                                            </a>
-                                        ))}
+                                        <AttachmentGallery urls={selectedTicket.screenshots} />
                                     </div>
                                 )}
 
                                 {/* Conversation */}
-                                <div className="flex-1 overflow-y-auto px-6 py-6 bg-gradient-to-b from-slate-50/60 via-white to-white">
+                                <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50">
                                     {buildConversationGroups(selectedTicket).map((group, gIdx) => (
                                         <div key={gIdx} className="mb-2 last:mb-0">
                                             {/* Date pill */}
@@ -1048,8 +1029,8 @@ const AdminSupport = () => {
                                                         {isLastOfRun ? (
                                                             <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shadow-md ring-2 ring-white shrink-0 ${
                                                                 item.isAdmin
-                                                                    ? 'bg-gradient-to-br from-brand-500 to-brand-700 text-white'
-                                                                    : 'bg-gradient-to-br from-slate-500 to-slate-700 text-white'
+                                                                    ? 'bg-brand-600 text-white'
+                                                                    : 'bg-slate-600 text-white'
                                                             }`}>
                                                                 {item.isAdmin ? 'ST' : getInitials(item.senderName)}
                                                             </div>
@@ -1065,22 +1046,19 @@ const AdminSupport = () => {
                                                                 </span>
                                                             )}
 
-                                                            <div className={`px-4 py-2.5 text-[14.5px] leading-relaxed transition-shadow ${
-                                                                item.isAdmin
-                                                                    ? `bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-md shadow-brand-500/20 rounded-2xl ${isLastOfRun ? 'rounded-br-md' : ''} ${!isFirstOfRun ? 'rounded-tr-md' : ''}`
-                                                                    : `bg-white text-slate-800 border border-slate-200/80 shadow-sm rounded-2xl ${isLastOfRun ? 'rounded-bl-md' : ''} ${!isFirstOfRun ? 'rounded-tl-md' : ''}`
-                                                            }`}>
-                                                                <p className="whitespace-pre-wrap break-words">{item.message}</p>
-                                                            </div>
+                                                            {item.message && (
+                                                                <div className={`px-4 py-2.5 text-[14.5px] leading-relaxed transition-shadow ${
+                                                                    item.isAdmin
+                                                                        ? `bg-brand-600 text-white shadow-sm rounded-2xl ${isLastOfRun ? 'rounded-br-md' : ''} ${!isFirstOfRun ? 'rounded-tr-md' : ''}`
+                                                                        : `bg-white text-slate-800 border border-slate-200/80 shadow-sm rounded-2xl ${isLastOfRun ? 'rounded-bl-md' : ''} ${!isFirstOfRun ? 'rounded-tl-md' : ''}`
+                                                                }`}>
+                                                                    <p className="whitespace-pre-wrap break-words">{item.message}</p>
+                                                                </div>
+                                                            )}
 
                                                             {Array.isArray(item.attachments) && item.attachments.length > 0 && item.kind !== 'description' && (
-                                                                <div className={`mt-2 flex flex-wrap gap-1.5 ${item.isAdmin ? 'justify-end' : 'justify-start'}`}>
-                                                                    {item.attachments.map((attUrl, aIdx) => (
-                                                                        <a key={aIdx} href={attUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-brand-50 hover:border-brand-200 border border-slate-200 rounded-lg text-xs text-slate-700 font-medium transition-all">
-                                                                            <ImageIcon size={12} className="text-slate-400" />
-                                                                            {attachmentLabel(attUrl, aIdx)}
-                                                                        </a>
-                                                                    ))}
+                                                                <div className={item.message ? 'mt-2' : ''}>
+                                                                    <AttachmentGallery urls={item.attachments} align={item.isAdmin ? 'end' : 'start'} />
                                                                 </div>
                                                             )}
 
@@ -1122,7 +1100,7 @@ const AdminSupport = () => {
                                             <button
                                                 type="submit"
                                                 disabled={replying || !replyMessage.trim()}
-                                                className="w-11 h-11 shrink-0 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all shadow-md shadow-brand-500/30 hover:shadow-lg hover:shadow-brand-500/40 active:scale-95"
+                                                className="w-11 h-11 shrink-0 rounded-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors shadow-sm active:scale-95"
                                                 aria-label="Send reply"
                                             >
                                                 <Send size={16} className="-ml-0.5" />
@@ -1189,7 +1167,7 @@ const AdminSupport = () => {
                                                 type="button"
                                                 onClick={() => handleStatusUpdate('Resolved')}
                                                 disabled={statusUpdating}
-                                                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-white bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 rounded-lg transition-all shadow-md shadow-emerald-500/20 hover:shadow-lg hover:shadow-emerald-500/30 active:scale-95"
+                                                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg transition-colors shadow-sm active:scale-95"
                                             >
                                                 <CheckCircle2 size={14} />
                                                 Resolve Ticket

@@ -1,16 +1,18 @@
 /* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import { useEffect, useRef, useState } from 'react';
-import { Send, Image as ImageIcon, Paperclip, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Send, Paperclip, X, Sparkles, ImagePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../api';
 import { newClientId } from '../../socket';
+import AttachmentGallery from './AttachmentGallery';
 
 const SELLER_ROLES = ['User', 'Admin'];
 const TYPING_IDLE_MS = 3000;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FILES = 10;
+const MAX_INPUT_HEIGHT_PX = 128;
 
 // Signed-URL upload, same flow the old ticket form used. Returns the storage path.
 const uploadScreenshot = async (file) => {
@@ -40,11 +42,12 @@ const threadItems = (ticket) => {
     });
   }
   for (const m of ticket.messages || []) {
-    const isSeller = SELLER_ROLES.includes(m.senderId?.role);
+    const isSeller = !m.bot && SELLER_ROLES.includes(m.senderId?.role);
     items.push({
       _id: m._id,
       isSeller,
-      senderName: m.senderId?.fullName || (isSeller ? 'Seller' : 'Support Team'),
+      isBot: Boolean(m.bot),
+      senderName: m.bot ? 'Speedy · AI assistant' : (m.senderId?.fullName || (isSeller ? 'Seller' : 'Support Team')),
       message: m.message,
       attachments: m.attachments || [],
       createdAt: m.createdAt,
@@ -58,32 +61,74 @@ const threadItems = (ticket) => {
  * viewer: 'seller' | 'staff' — decides which side is "mine".
  * onSend(text, clientId, attachments) must reject on failure; the text, uploaded paths and
  * clientId are kept so a retry re-sends with the same clientId and is stored only once.
+ * Screenshots can be attached with the clip button, pasted (Ctrl+V) or dropped on the chat,
+ * and a message may be screenshots only.
  */
 const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, placeholder = 'Type a message…', emptyState = null }) => {
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const pendingRef = useRef(null);
   const bottomRef = useRef(null);
   const idleTimerRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const dragDepthRef = useRef(0);
   const items = threadItems(ticket);
 
-  // Grow with the text up to the CSS max height instead of showing a scrollbar on one line.
+  const previews = useMemo(() => files.map((f) => ({ key: fileKey(f), name: f.name, url: URL.createObjectURL(f) })), [files]);
+  useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews]);
+
+  // Grow with the text up to the max height; only then show a scrollbar.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
+    const border = el.offsetHeight - el.clientHeight;
+    const needed = el.scrollHeight + border;
+    el.style.height = `${Math.min(needed, MAX_INPUT_HEIGHT_PX)}px`;
+    el.style.overflowY = needed > MAX_INPUT_HEIGHT_PX ? 'auto' : 'hidden';
   }, [text]);
 
-  const addFiles = (e) => {
-    const picked = Array.from(e.target.files || []);
-    e.target.value = '';
+  const addFiles = (picked) => {
+    if (picked.length === 0) return;
     const valid = picked.filter((f) => ALLOWED_TYPES.includes(f.type) && f.size <= MAX_FILE_BYTES);
     if (valid.length < picked.length) toast.error('Only PNG or JPG images up to 10 MB can be attached');
-    setFiles((prev) => [...prev, ...valid].slice(0, MAX_FILES));
+    setFiles((prev) => {
+      const next = [...prev, ...valid];
+      if (next.length > MAX_FILES) toast.error(`You can attach up to ${MAX_FILES} screenshots`);
+      return next.slice(0, MAX_FILES);
+    });
+    textareaRef.current?.focus();
+  };
+
+  const handlePaste = (e) => {
+    const pasted = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'));
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    addFiles(pasted);
+  };
+
+  const dropHandlers = closedNote ? {} : {
+    onDragEnter: (e) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      dragDepthRef.current += 1;
+      setDragging(true);
+    },
+    onDragOver: (e) => {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+    },
+    onDragLeave: () => {
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) setDragging(false);
+    },
+    onDrop: (e) => {
+      e.preventDefault();
+      dragDepthRef.current = 0;
+      setDragging(false);
+      addFiles(Array.from(e.dataTransfer?.files || []));
+    },
   };
 
   useEffect(() => {
@@ -100,9 +145,11 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
     idleTimerRef.current = setTimeout(() => onTyping(false), TYPING_IDLE_MS);
   };
 
+  const canSend = !sending && (text.trim() || files.length > 0);
+
   const submit = async () => {
     const message = text.trim();
-    if (!message || sending) return;
+    if (!canSend) return;
     const key = [message, ...files.map(fileKey)].join('|');
     if (!pendingRef.current || pendingRef.current.key !== key) {
       pendingRef.current = { key, clientId: newClientId(), paths: null };
@@ -126,38 +173,55 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50/60">
+    <div className="relative flex flex-col h-full min-h-0" {...dropHandlers}>
+      {dragging && (
+        <div className="absolute inset-2 z-10 rounded-2xl border-2 border-dashed border-brand-400 bg-brand-50/90 flex flex-col items-center justify-center gap-2 text-brand-700 pointer-events-none">
+          <ImagePlus size={28} />
+          <span className="text-sm font-semibold">Drop screenshots to attach</span>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
         {items.length === 0 && emptyState}
         {items.map((item) => {
           const mine = viewer === 'seller' ? item.isSeller : !item.isSeller;
           return (
             <div key={item._id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
               {!mine && (
-                <span className="text-[11px] font-semibold text-slate-500 mb-0.5 px-1">{item.senderName}</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 mb-1 px-1">
+                  {item.isBot && <Sparkles size={11} className="text-brand-600" />}
+                  {item.senderName}
+                </span>
               )}
-              <div className={`max-w-[85%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
-                mine
-                  ? 'bg-brand-600 text-white rounded-br-md'
-                  : 'bg-white text-slate-800 border border-slate-200 rounded-bl-md'
-              }`}>
-                {item.message}
-              </div>
-              {item.attachments.length > 0 && (
-                <div className={`mt-1 flex flex-wrap gap-1.5 ${mine ? 'justify-end' : ''}`}>
-                  {item.attachments.map((url, i) => (
-                    <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-xs text-slate-600 hover:border-brand-300">
-                      <ImageIcon size={11} /> Attachment {i + 1}
-                    </a>
-                  ))}
+              {item.message && (
+                <div className={`max-w-[85%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                  mine
+                    ? 'bg-brand-600 text-white rounded-br-md'
+                    : item.isBot
+                      ? 'bg-brand-50 text-slate-800 border border-brand-100 rounded-bl-md'
+                      : 'bg-white text-slate-800 border border-slate-200 rounded-bl-md'
+                }`}>
+                  {item.message}
                 </div>
               )}
-              <span className="text-[10px] text-slate-400 mt-0.5 px-1">{formatTime(item.createdAt)}</span>
+              {item.attachments.length > 0 && (
+                <div className={`max-w-[85%] ${item.message ? 'mt-1.5' : ''}`}>
+                  <AttachmentGallery urls={item.attachments} align={mine ? 'end' : 'start'} />
+                </div>
+              )}
+              <span className="text-[10px] text-slate-400 mt-1 px-1">{formatTime(item.createdAt)}</span>
             </div>
           );
         })}
         {typingName && (
-          <div className="text-xs text-slate-500 italic px-1" aria-live="polite">{typingName} is typing…</div>
+          <div className="flex items-center gap-2 text-xs text-slate-500 px-1" aria-live="polite">
+            <span className="flex gap-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
+            </span>
+            {typingName} is typing
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
@@ -167,63 +231,71 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
           <div className="text-sm text-slate-500 text-center py-2">{closedNote}</div>
         ) : (
           <>
-          {files.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {files.map((f, i) => (
-                <span key={fileKey(f)} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-slate-100 rounded-md text-xs text-slate-600 max-w-[160px]">
-                  <span className="truncate">{f.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                    aria-label={`Remove ${f.name}`}
-                    className="p-0.5 hover:text-slate-900"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <form
-            onSubmit={(e) => { e.preventDefault(); submit(); }}
-            className="flex items-end gap-2"
-          >
-            <input ref={fileInputRef} type="file" multiple accept="image/png,image/jpeg" className="hidden" onChange={addFiles} />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={sending || files.length >= MAX_FILES}
-              aria-label="Attach screenshot"
-              title="Attach screenshot"
-              className="w-10 h-10 shrink-0 rounded-full text-slate-500 hover:text-brand-600 hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center"
+            {previews.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {previews.map((p, i) => (
+                  <div key={p.key} className="relative w-14 h-14 rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                    <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      aria-label={`Remove ${p.name}`}
+                      className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-slate-900/70 hover:bg-slate-900 text-white flex items-center justify-center"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <form
+              onSubmit={(e) => { e.preventDefault(); submit(); }}
+              className="flex items-end gap-2"
             >
-              <Paperclip size={18} />
-            </button>
-            <textarea
-              ref={textareaRef}
-              value={text}
-              onChange={handleChange}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-              rows={1}
-              maxLength={5000}
-              placeholder={placeholder}
-              aria-label="Message"
-              className="flex-1 resize-none overflow-y-auto max-h-32 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 focus:bg-white"
-            />
-            <button
-              type="submit"
-              disabled={sending || !text.trim()}
-              aria-label="Send message"
-              className="w-10 h-10 shrink-0 rounded-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
-            >
-              <Send size={16} />
-            </button>
-          </form>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={(e) => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending || files.length >= MAX_FILES}
+                aria-label="Attach screenshot"
+                title="Attach screenshot (or paste / drop one)"
+                className="w-10 h-10 shrink-0 rounded-full text-slate-500 hover:text-brand-600 hover:bg-slate-100 disabled:opacity-40 flex items-center justify-center"
+              >
+                <Paperclip size={18} />
+              </button>
+              <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={handleChange}
+                onPaste={handlePaste}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+                rows={1}
+                maxLength={5000}
+                placeholder={placeholder}
+                aria-label="Message"
+                className="flex-1 resize-none overflow-hidden px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 focus:bg-white"
+              />
+              <button
+                type="submit"
+                disabled={!canSend}
+                aria-label="Send message"
+                className="w-10 h-10 shrink-0 rounded-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors"
+              >
+                <Send size={16} />
+              </button>
+            </form>
           </>
         )}
       </div>

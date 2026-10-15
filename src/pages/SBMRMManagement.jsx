@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserPen, Search, Plus, ShieldCheck, Mail, Phone, Settings, Trash2, Building, ChevronDown, Users, Shield, Eye, X, Copy, AlertTriangle, Check, ToggleLeft, ToggleRight, Calendar, ChevronLeft, ChevronRight, Clock, User, Gift, Minus, Download, XCircle, LifeBuoy, RotateCcw } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
@@ -287,6 +289,11 @@ const SBMRMManagement = () => {
             // Expiry
             payload.expiresAt = formData.hasExpiry && formData.expiresAt ? formData.expiresAt : null;
 
+            // Backup RM is set on an existing RM only (the create endpoint doesn't take it).
+            if (selectedUser?._id && formData.role === 'RM') {
+                payload.backupRM = formData.backupRM || null;
+            }
+
             if (selectedUser && selectedUser._id) {
                 await api.put(`/auth/admin-users/${selectedUser._id}`, payload);
                 toast.success(`${payload.role} updated successfully`);
@@ -424,6 +431,7 @@ const SBMRMManagement = () => {
             viewSupport: u.permissions?.viewSupport !== undefined ? u.permissions.viewSupport : true,
             hasExpiry: !!expiry,
             expiresAt: expiry,
+            backupRM: u.backupRM || '',
         });
         setIsAddModalOpen(true);
     };
@@ -468,7 +476,7 @@ const SBMRMManagement = () => {
             rejectRegistrations: true, viewTenants: false, viewPricing: true, manageRM: true,
             giftCredits: true, deductCredits: true, suspendTenant: true, deleteUpload: true, deactivateMarketplace: true, reactivateMarketplace: false,
             exportInvoices: false, viewSupport: true,
-            hasExpiry: false, expiresAt: '',
+            hasExpiry: false, expiresAt: '', backupRM: '',
         });
         tenantPermsBackup.current = { giftCredits: true, deductCredits: true, suspendTenant: true, deleteUpload: true, deactivateMarketplace: true };
     };
@@ -1006,6 +1014,23 @@ const SBMRMManagement = () => {
                                         />
                                     )}
                                 </div>
+
+                                {selectedUser?._id && formData.role === 'RM' && (
+                                    <div className="pt-3 border-t border-slate-100 mt-5">
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1">Backup RM for support chats</label>
+                                        <p className="text-xs text-slate-500 mb-2">Rung when this RM doesn't accept a seller's chat within a minute.</p>
+                                        <select
+                                            value={formData.backupRM || ''}
+                                            onChange={(e) => setFormData({ ...formData, backupRM: e.target.value })}
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                                        >
+                                            <option value="">No backup (go straight to SBMs)</option>
+                                            {(users.rmUsers || [])
+                                                .filter(u => u.status === 'active' && u._id !== selectedUser._id)
+                                                .map(u => <option key={u._id} value={u._id}>{u.fullName} ({u.email})</option>)}
+                                        </select>
+                                    </div>
+                                )}
 
                                 {formData.role === 'SBM' && (
                                     <div className="pt-3 border-t border-slate-100 mt-5">
