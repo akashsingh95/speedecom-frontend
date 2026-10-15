@@ -48,10 +48,11 @@ import ListingStudioPremiumAplusPage from './pages/listingStudio/project/Premium
 import ListingStudioListingPage from './pages/listingStudio/project/ListingPage';
 import ListingStudioPublicPreviewPage from './pages/listingStudio/PublicPreviewPage';
 import ListingStudioImagesPage from './pages/listingStudio/project/ImagesPage';
+import ListingStudioVideosPage from './pages/listingStudio/project/VideosPage';
 import ListingStudioComparisonShelfPage from './pages/listingStudio/project/ComparisonShelfPage';
 import ListingStudioAlexaReadinessPage from './pages/listingStudio/project/AlexaReadinessPage';
 import { ComingSoonPage } from './pages/listingStudio/project/ComingSoonPage';
-import { Video, Boxes } from 'lucide-react';
+import { Boxes } from 'lucide-react';
 
 import { Toaster } from 'sonner';
 
@@ -267,10 +268,7 @@ function App() {
                 <Route path="listing" element={<ListingStudioListingPage />} />
                 <Route path="preview" element={<ListingStudioListingPage startInPreview />} />
                 <Route path="images" element={<ListingStudioImagesPage />} />
-                <Route
-                  path="videos"
-                  element={<ComingSoonPage icon={Video} title="Videos" description="Generate and manage listing videos for this campaign. This feature is on its way." />}
-                />
+                <Route path="videos" element={<ListingStudioVideosPage />} />
                 <Route path="compare" element={<ListingStudioComparisonShelfPage />} />
                 <Route path="readiness" element={<ListingStudioAlexaReadinessPage />} />
                 <Route
