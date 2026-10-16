@@ -91,6 +91,9 @@ export const listingStudioApi = {
   generateCategoryVideo: (id, kind, sourceImageIds, aspectRatio) =>
     api.post(`${BASE}/projects/${id}/videos/category`, { kind, sourceImageIds, aspectRatio }).then((r) => r.data),
   generateVideo: (id, conceptId) => api.post(`${BASE}/projects/${id}/videos/${conceptId}/generate`).then((r) => r.data),
+  // Queues the edit as a new video card (the original is kept) and returns { id } of that card.
+  editVideo: (id, conceptId, instruction) =>
+    api.post(`${BASE}/projects/${id}/videos/${conceptId}/edit`, { instruction }).then((r) => r.data),
   getVideoStatus: (id, conceptId) => api.get(`${BASE}/projects/${id}/videos/${conceptId}/status`).then((r) => r.data),
   deleteVideoConcept: (id, conceptId) => api.delete(`${BASE}/projects/${id}/videos/${conceptId}`).then((r) => r.data),
 

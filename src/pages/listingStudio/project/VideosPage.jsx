@@ -1,18 +1,23 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Sparkles, Video, Clock, X } from 'lucide-react';
+import { Sparkles, Video, Clock, X, Pencil } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
 import { videoCreditNotificationMessage } from '../../../components/listingStudio/creditNotifications';
 import { formatClock, useVideoGenerationClock, clearVideoGenerationClock } from '../../../components/listingStudio/pipelineClock';
 import { useProjectCtx } from '../../../components/listingStudio/context';
 import { EmptyStateCard } from '../../../components/listingStudio/ui/EmptyStateCard';
 import { Modal } from '../../../components/listingStudio/ui/Modal';
+import { CreditCostPill } from '../../../components/listingStudio/ui/CreditCostPill';
 import { VideoCreatePicker } from '../../../components/listingStudio/VideoCreatePicker';
 import {
   PAGE_HEAD, PAGE_TITLE, MUTED, BTN, BTN_PRIMARY, ICON_LABEL, GRID_CARDS,
-  GEN_CARD, GEN_CARD_GENERATE, GEN_CARD_FOOTER, GEN_CARD_TYPE_BADGE, GEN_CARD_REMOVE,
+  GEN_CARD, GEN_CARD_GENERATE, GEN_CARD_FOOTER, GEN_CARD_TYPE_BADGE, GEN_CARD_REMOVE, GEN_CARD_EDIT_ON_HOVER,
 } from '../../../components/listingStudio/ui/classNames';
+
+const MAX_EDIT_INSTRUCTION_LENGTH = 1000;
 
 const OVERLAY_MODULE_TYPE = 'STANDARD_IMAGE_TEXT_OVERLAY';
 const ASPECT_RATIOS = [
@@ -30,7 +35,7 @@ function hasReadySeedImage(aplusConcepts, angleName) {
 }
 
 export default function VideosPage() {
-  const { project, jobRunning, refresh, watchJob } = useProjectCtx();
+  const { project, jobRunning, refresh, watchJob, creditRates } = useProjectCtx();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -82,6 +87,28 @@ export default function VideosPage() {
     await listingStudioApi.generateCategoryVideo(project.id, kind, sourceImageIds, aspectRatio);
     setPickerOpen(false);
     await refresh();
+  };
+
+  const [editTarget, setEditTarget] = useState(null);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const openEdit = (concept) => {
+    setEditTarget(concept);
+    setEditInstruction('');
+  };
+  const submitEdit = async () => {
+    const instruction = editInstruction.trim();
+    if (!instruction || !editTarget) return;
+    setEditSubmitting(true);
+    try {
+      await listingStudioApi.editVideo(project.id, editTarget.id, instruction);
+      setEditTarget(null);
+      await refresh();
+    } catch {
+      // api.js's interceptor already toasted this
+    } finally {
+      setEditSubmitting(false);
+    }
   };
 
   const dismissVideo = async (conceptId) => {
@@ -180,6 +207,17 @@ export default function VideosPage() {
                     <X size={13} />
                   </button>
                 )}
+                {c.path && !busy && (
+                  <button
+                    type="button"
+                    title="Edit video"
+                    aria-label="Edit video"
+                    onClick={() => openEdit(c)}
+                    className={GEN_CARD_EDIT_ON_HOVER}
+                  >
+                    <Pencil size={13} />
+                  </button>
+                )}
                 {c.path && !busy ? (
                   <video
                     src={c.path}
@@ -204,7 +242,7 @@ export default function VideosPage() {
                   </div>
                 )}
                 <div className={GEN_CARD_FOOTER}>
-                  <span className={GEN_CARD_TYPE_BADGE}>{c.sourceAngleName || c.name}</span>
+                  <span className={GEN_CARD_TYPE_BADGE}>{c.editOf ? c.name : c.sourceAngleName || c.name}</span>
                 </div>
               </div>
             );
@@ -224,6 +262,43 @@ export default function VideosPage() {
             </button>
           )}
         </div>
+      )}
+
+      {editTarget && (
+        <Modal onClose={() => !editSubmitting && setEditTarget(null)}>
+          <h2 className="text-lg font-semibold text-slate-900 mb-3">Edit video</h2>
+          <video
+            src={editTarget.path}
+            muted
+            className="w-full max-h-[240px] object-contain block bg-black rounded-lg mb-3"
+            style={{ aspectRatio: cssAspectRatio(editTarget.aspectRatio) }}
+          />
+          <textarea
+            value={editInstruction}
+            onChange={(e) => setEditInstruction(e.target.value)}
+            maxLength={MAX_EDIT_INSTRUCTION_LENGTH}
+            rows={4}
+            placeholder="What should change?"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 resize-y focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
+          />
+          <div className="flex justify-between items-center mt-3">
+            <span>
+              {!editSubmitting && (
+                <CreditCostPill imageCost={creditRates?.videoCost ?? null} freeRemaining={creditRates?.freeVideosRemaining ?? 0} unit="video" />
+              )}
+            </span>
+            <button
+              type="button"
+              className={BTN_PRIMARY}
+              onClick={submitEdit}
+              disabled={editSubmitting || !editInstruction.trim()}
+            >
+              <span className={ICON_LABEL}>
+                <Pencil size={14} /> {editSubmitting ? 'Starting…' : 'Edit video'}
+              </span>
+            </button>
+          </div>
+        </Modal>
       )}
 
       {pickerOpen && (
@@ -251,6 +326,8 @@ export default function VideosPage() {
             onGenerateCategory={generateCategoryVideo}
             onGenerateAngles={generateConcepts}
             busy={jobRunning}
+            videoCost={creditRates?.videoCost ?? null}
+            freeVideosRemaining={creditRates?.freeVideosRemaining ?? 0}
           />
         </Modal>
       )}

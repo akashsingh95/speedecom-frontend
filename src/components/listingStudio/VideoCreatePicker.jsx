@@ -1,6 +1,9 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState } from 'react';
 import { Shirt, Gem, Car, UtensilsCrossed, Package, LayoutGrid, ArrowLeft } from 'lucide-react';
 import { CARD_TITLE, MUTED, BTN, BTN_PRIMARY, CANDIDATE_BADGE } from './ui/classNames';
+import { CreditCostPill } from './ui/CreditCostPill';
 
 const CATEGORY_OPTIONS = [
   { kind: 'clothing', icon: Shirt, title: 'Clothing', description: 'Worn by a model and revealed from multiple angles.' },
@@ -76,7 +79,7 @@ function AngleRow({ angle, ready, checked, pickedImageIds, images, pickerOpen, o
   );
 }
 
-export function VideoCreatePicker({ angles, hasReadySeedImage, generatedImages, onGenerateCategory, onGenerateAngles, busy }) {
+export function VideoCreatePicker({ angles, hasReadySeedImage, generatedImages, onGenerateCategory, onGenerateAngles, busy, videoCost = null, freeVideosRemaining = 0 }) {
   const [step, setStep] = useState('choose');
   const [categoryKind, setCategoryKind] = useState(null);
   const [categoryImageIds, setCategoryImageIds] = useState([]);
@@ -198,9 +201,12 @@ export function VideoCreatePicker({ angles, hasReadySeedImage, generatedImages, 
           Pick up to {MAX_REFERENCE_IMAGES} images of the same product — they're used together as references for one video.
         </p>
         <ImageThumbPicker images={generatedImages} selectedIds={categoryImageIds} maxSelected={MAX_REFERENCE_IMAGES} onToggle={toggleCategoryImage} />
-        <button type="button" className={`${BTN_PRIMARY} mt-4`} disabled={categoryImageIds.length === 0 || busy} onClick={submitCategory}>
-          {busy ? 'Generating…' : 'Generate video'}
-        </button>
+        <div className="flex items-center gap-2 mt-4">
+          <button type="button" className={BTN_PRIMARY} disabled={categoryImageIds.length === 0 || busy} onClick={submitCategory}>
+            {busy ? 'Generating…' : 'Generate video'}
+          </button>
+          {!busy && <CreditCostPill imageCost={videoCost} freeRemaining={freeVideosRemaining} unit="video" />}
+        </div>
       </div>
     );
   }
@@ -233,9 +239,15 @@ export function VideoCreatePicker({ angles, hasReadySeedImage, generatedImages, 
           );
         })}
       </div>
-      <button type="button" className={`${BTN_PRIMARY} mt-4`} disabled={checkedAngles.size === 0 || busy} onClick={submitAngles}>
-        {busy ? 'Generating…' : `Generate video${checkedAngles.size === 1 ? '' : 's'} for ${checkedAngles.size} angle${checkedAngles.size === 1 ? '' : 's'}`}
-      </button>
+      <div className="flex items-center gap-2 mt-4">
+        <button type="button" className={BTN_PRIMARY} disabled={checkedAngles.size === 0 || busy} onClick={submitAngles}>
+          {busy ? 'Generating…' : `Generate video${checkedAngles.size === 1 ? '' : 's'} for ${checkedAngles.size} angle${checkedAngles.size === 1 ? '' : 's'}`}
+        </button>
+        {/* One video per checked angle; nothing to price until at least one is checked. */}
+        {!busy && checkedAngles.size > 0 && (
+          <CreditCostPill imageCost={videoCost} freeRemaining={freeVideosRemaining} count={checkedAngles.size} unit="video" />
+        )}
+      </div>
     </div>
   );
 }
