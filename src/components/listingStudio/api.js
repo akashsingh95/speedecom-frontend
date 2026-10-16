@@ -94,7 +94,9 @@ export const listingStudioApi = {
   // Queues the edit as a new video card (the original is kept) and returns { id } of that card.
   editVideo: (id, conceptId, instruction) =>
     api.post(`${BASE}/projects/${id}/videos/${conceptId}/edit`, { instruction }).then((r) => r.data),
-  getVideoStatus: (id, conceptId) => api.get(`${BASE}/projects/${id}/videos/${conceptId}/status`).then((r) => r.data),
+  // VideosPage's poll retries or settles on its own errors, so the global toast is skipped.
+  getVideoStatus: (id, conceptId) =>
+    api.get(`${BASE}/projects/${id}/videos/${conceptId}/status`, { skipErrorToast: true }).then((r) => r.data),
   deleteVideoConcept: (id, conceptId) => api.delete(`${BASE}/projects/${id}/videos/${conceptId}`).then((r) => r.data),
 
   // A file download, not JSON — fetched as a blob through the shared axios instance (so the
