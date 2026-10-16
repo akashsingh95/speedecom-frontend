@@ -33,26 +33,34 @@ import {
 // row by image position. Sticky table header/first-column via Tailwind `sticky` utilities
 // in place of the source's plain CSS `position: sticky` rules.
 
-// Campaigns added via "+ Add campaign to compare" are persisted per project: this shelf is one
-// section route among many, so switching section tabs unmounts the page — holding the added
-// campaigns in component state alone silently dropped them on every tab switch. Same
-// localStorage-per-project convention as ProjectLayout's dismissed-job / pipeline-from keys.
-const storageKey = (projectId) => `listingStudio:compareWith:${projectId}`;
+// Campaigns added via "+ Add campaign to compare" are persisted on the project itself
+// (`project.compareWith`, PATCH /projects/:id/compare-with), not in component state: this shelf
+// is one section route among many, so switching section tabs unmounts the page and local-only
+// state silently dropped every added column. Server-side rather than localStorage so a shelf
+// follows the account across devices and teammates instead of one browser profile.
+// Mirrors the server's own cap (projectsService.MAX_COMPARE_WITH).
+const MAX_COMPARE_WITH = 8;
 
-function readStoredIds(projectId) {
+// One-shot carry-over from the short-lived localStorage-backed version of this list. The key is
+// removed only once the server has accepted the ids, so a failed carry-over is retried on the
+// next visit rather than dropped.
+const legacyStorageKey = (projectId) => `listingStudio:compareWith:${projectId}`;
+
+function takeLegacyIds(projectId) {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(storageKey(projectId)) ?? '[]');
+    const raw = window.localStorage.getItem(legacyStorageKey(projectId));
+    const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
   } catch {
     return [];
   }
 }
 
-function writeStoredIds(projectId, ids) {
+function dropLegacyIds(projectId) {
   try {
-    window.localStorage.setItem(storageKey(projectId), JSON.stringify(ids));
+    window.localStorage.removeItem(legacyStorageKey(projectId));
   } catch {
-    // ignore — the comparison set is a convenience, not critical state
+    // ignore — worst case the (idempotent) carry-over runs again on the next visit
   }
 }
 
@@ -93,9 +101,10 @@ function generatedColumn(p, label, onRemove) {
 }
 
 export default function ComparisonShelfPage() {
-  const { project } = useProjectCtx();
+  const { project, refresh } = useProjectCtx();
   const [extraProjects, setExtraProjects] = useState([]);
   const [picker, setPicker] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [allProjects, setAllProjects] = useState(null);
 
   useEffect(() => {
@@ -105,46 +114,76 @@ export default function ComparisonShelfPage() {
     }
   }, [picker, allProjects]);
 
-  // Re-load the persisted comparison set. Keyed on project.id rather than mount-only because
-  // this page is reused (not remounted) when navigating straight from one campaign's shelf to
-  // another's.
+  // Stable dependency for the loader below. project.compareWith is a fresh array on every
+  // refresh() of the project — and a running job refreshes it every few seconds — so depending
+  // on the array itself would re-fetch every pinned campaign on each poll tick.
+  const compareKey = (project.compareWith ?? []).join(',');
+  const compareIds = compareKey ? compareKey.split(',') : [];
+
+  // The pinned ids are resolved to full projects here rather than stored as a snapshot: the
+  // shelf shows each one's *current* generated images.
   useEffect(() => {
-    const ids = readStoredIds(project.id);
+    const ids = compareKey ? compareKey.split(',') : [];
     if (ids.length === 0) {
       setExtraProjects([]);
       return undefined;
     }
     let active = true;
-    // A campaign deleted since it was added just drops out of the stored set, rather than
-    // failing this fetch again on every visit.
-    Promise.all(ids.map((cid) => listingStudioApi.getProject(cid).catch(() => null))).then((loaded) => {
-      if (!active) return;
-      const found = loaded.filter(Boolean);
-      setExtraProjects(found);
-      if (found.length !== ids.length) writeStoredIds(project.id, found.map((p) => p.id));
+    // getProjectIfVisible, not getProject: a campaign deleted in another tab since this shelf
+    // was last loaded resolves to null and is dropped from the row instead of raising an error
+    // toast. The id itself is unpinned server-side by store.deleteProject.
+    Promise.all(ids.map((cid) => listingStudioApi.getProjectIfVisible(cid))).then((loaded) => {
+      if (active) setExtraProjects(loaded.filter(Boolean));
     });
     return () => {
       active = false;
     };
-  }, [project.id]);
+  }, [compareKey]);
 
-  const commit = (next) => {
-    setExtraProjects(next);
-    writeStoredIds(project.id, next.map((p) => p.id));
-  };
-
-  const addProject = async (id) => {
-    setPicker(false);
-    if (extraProjects.some((p) => p.id === id)) return;
+  /** Replaces the whole pinned set, then pulls the updated project through the layout's shared
+   *  state so `compareKey` (and the loader above) reacts to it — rather than keeping a second,
+   *  separately-drifting copy of the list in this component. */
+  const saveCompareWith = async (ids) => {
+    setSaving(true);
     try {
-      const full = await listingStudioApi.getProject(id);
-      commit([...extraProjects, full]);
+      await listingStudioApi.setProjectCompareWith(project.id, ids);
+      await refresh();
+      return true;
     } catch {
       // The shared axios instance's response interceptor already shows a toast for this.
+      return false;
+    } finally {
+      setSaving(false);
     }
   };
 
-  const removeProject = (id) => commit(extraProjects.filter((p) => p.id !== id));
+  // Carry over whatever the previous localStorage-backed version of this shelf still holds, so
+  // the columns a user pinned before this change don't silently vanish. Intentionally keyed on
+  // project.id alone — it must run once per campaign, not on every compareWith change.
+  useEffect(() => {
+    const legacy = takeLegacyIds(project.id);
+    if (legacy.length === 0) return;
+    const current = project.compareWith ?? [];
+    const merged = [...current, ...legacy.filter((id) => id !== project.id && !current.includes(id))];
+    if (merged.length === current.length) {
+      dropLegacyIds(project.id);
+      return;
+    }
+    void saveCompareWith(merged.slice(0, MAX_COMPARE_WITH)).then((ok) => {
+      if (ok) dropLegacyIds(project.id);
+    });
+  }, [project.id]);
+
+  const addProject = (id) => {
+    setPicker(false);
+    if (saving || compareIds.includes(id) || compareIds.length >= MAX_COMPARE_WITH) return;
+    void saveCompareWith([...compareIds, id]);
+  };
+
+  const removeProject = (id) => {
+    if (saving) return;
+    void saveCompareWith(compareIds.filter((cid) => cid !== id));
+  };
 
   const columns = useMemo(() => {
     const cols = [generatedColumn(project, 'After')];
@@ -187,8 +226,13 @@ export default function ComparisonShelfPage() {
             position — so the shelf space they cover and you don&apos;t is visible at a glance.
           </p>
         </div>
-        <button className={BTN} onClick={() => setPicker(true)}>
-          + Add campaign to compare
+        <button
+          className={`${BTN} disabled:opacity-50 disabled:cursor-not-allowed`}
+          onClick={() => setPicker(true)}
+          disabled={saving || compareIds.length >= MAX_COMPARE_WITH}
+          title={compareIds.length >= MAX_COMPARE_WITH ? `Up to ${MAX_COMPARE_WITH} campaigns can be compared at once` : undefined}
+        >
+          {saving ? 'Saving…' : '+ Add campaign to compare'}
         </button>
       </div>
       {!project.competitors && (
@@ -222,8 +266,9 @@ export default function ComparisonShelfPage() {
                         <button
                           type="button"
                           onClick={c.onRemove}
+                          disabled={saving}
                           aria-label={`Remove ${c.sublabel} from comparison`}
-                          className="text-slate-400 hover:text-slate-700"
+                          className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
                         >
                           <X size={12} />
                         </button>

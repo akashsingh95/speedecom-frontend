@@ -20,6 +20,15 @@ export const listingStudioApi = {
   listProjects: (tenantId, { page, limit, q } = {}) =>
     api.get(`${BASE}/projects`, { params: { tenantId, page, limit, q } }).then((r) => r.data),
   getProject: (id) => api.get(`${BASE}/projects/${id}`).then((r) => r.data),
+  // Same endpoint, but a 404/403 is an expected outcome here rather than something to toast:
+  // the Comparison Shelf resolves its pinned campaign ids one by one and quietly drops any
+  // that have since gone away.
+  getProjectIfVisible: (id) =>
+    api.get(`${BASE}/projects/${id}`, { skipErrorToast: true }).then((r) => r.data, () => null),
+  // Replaces the whole set of campaigns pinned onto this campaign's Comparison Shelf (ids
+  // only, max 8 server-side) and returns the updated project.
+  setProjectCompareWith: (id, compareWith) =>
+    api.patch(`${BASE}/projects/${id}/compare-with`, { compareWith }).then((r) => r.data),
   createProject: (form) => api.post(`${BASE}/projects`, form).then((r) => r.data),
   fillCampaignFromImage: (form) => api.post(`${BASE}/projects/fill-from-image`, form).then((r) => r.data),
   createFromAsin: (asin, marketplace, brandKitId, autoGen = {}) =>
