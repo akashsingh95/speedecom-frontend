@@ -33,7 +33,8 @@ import {
 // row by image position. Sticky table header/first-column via Tailwind `sticky` utilities
 // in place of the source's plain CSS `position: sticky` rules.
 
-/** For each gallery position, pick the newest final (else newest draft) and report how many candidates share that slot. */
+/** One row per occupied gallery position, in ascending position order: the newest final (else
+ *  newest draft) image for that slot, and how many candidates share it. */
 function bestByPosition(images) {
   const byPosition = new Map();
   for (const img of images) {
@@ -42,16 +43,17 @@ function bestByPosition(images) {
     group.push(img);
     byPosition.set(pos, group);
   }
-  const maxPos = byPosition.size ? Math.max(...byPosition.keys()) : -1;
+  // Ranked, not indexed by absolute position. `position` values are not dense: deleting an image
+  // leaves a hole, and so does a reorder (the backend's reservation counter stays monotonic on
+  // purpose — see store.setGeneratedImagePositions). Walking 0..maxPos instead would emit a blank
+  // row per hole and push this column's images down against the Before/Competitor columns, which
+  // are plain dense path lists that maxRows/rowLabel index the same way — i.e. a gap would
+  // silently compare the wrong images side by side.
   const paths = [];
   const counts = [];
-  for (let p = 0; p <= maxPos; p++) {
-    const group = byPosition.get(p) ?? [];
+  for (const pos of [...byPosition.keys()].sort((a, b) => a - b)) {
+    const group = byPosition.get(pos);
     counts.push(group.length > 1 ? group.length : undefined);
-    if (group.length === 0) {
-      paths.push(undefined);
-      continue;
-    }
     // A raw upload (type 'photo') is stored as quality 'final' from the moment it's added —
     // that's just "this isn't a draft render," not "this was picked as the campaign's image."
     // Letting it win a tied slot over an actual AI draft/final would show the seller's own
