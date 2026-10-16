@@ -122,6 +122,45 @@ const SuccessBody = ({ result, onClose }) => (
     </div>
 );
 
+const RecoveredBody = ({ result, onClose }) => (
+    <div className="px-6 pb-6 pt-8 text-center">
+        <motion.div initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+            className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-violet-50 ring-8 ring-violet-50/60">
+            <Ticket size={32} className="text-violet-600" />
+        </motion.div>
+        <h3 className="mt-4 font-heading text-xl font-bold text-slate-900">Ticket already existed</h3>
+        <p className="mt-1 text-sm text-slate-500">
+            This return had an existing ticket on Meesho. We&apos;ve linked it to SpeedEcom and are syncing its latest status.
+        </p>
+
+        <div className="mx-auto mt-5 inline-flex items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-violet-400">Ticket</span>
+            <span className="font-mono text-lg font-bold text-slate-900">#{result.ticketId}</span>
+            <CopyButton value={result.ticketId} label="Copy ticket ID" />
+        </div>
+
+        <ol className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-2 text-left">
+            {[
+                { icon: CheckCircle2, title: 'Found on Meesho', desc: 'Ticket already raised', done: true },
+                { icon: RefreshCw, title: 'Syncing status', desc: 'Fetching latest updates', done: true },
+                { icon: Clock, title: 'Track in My Claims', desc: 'Status updates live' },
+            ].map(({ icon: Icon, title, desc, done }) => (
+                <li key={title} className={`rounded-xl border p-2.5 ${done ? 'border-violet-200 bg-violet-50/60' : 'border-slate-200 bg-white'}`}>
+                    <Icon size={14} className={done ? 'text-violet-600' : 'text-slate-400'} />
+                    <p className="mt-1 text-xs font-bold text-slate-800">{title}</p>
+                    <p className="text-[11px] text-slate-500">{desc}</p>
+                </li>
+            ))}
+        </ol>
+
+        <button type="button" onClick={onClose}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white hover:bg-slate-800 active:scale-[0.98] transition-all">
+            Done
+        </button>
+    </div>
+);
+
 const ExistingClaim = ({ claim }) => (
     <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
         <div className="flex items-start justify-between gap-3">
@@ -175,7 +214,7 @@ const ErrorCard = ({ error, onRetry }) => {
  */
 const RaiseClaimModal = ({ target, onClose, onRaised }) => {
     const open = Boolean(target);
-    const [phase, setPhase] = useState('loading'); // loading | form | blocked | success | loadError
+    const [phase, setPhase] = useState('loading'); // loading | form | blocked | success | recovered | loadError
     const [ctx, setCtx] = useState(null);
     const [description, setDescription] = useState('I have not received my product yet so please give me my payment.');
     const [callback, setCallback] = useState('');
@@ -248,8 +287,13 @@ const RaiseClaimModal = ({ target, onClose, onRaised }) => {
                 issueCategory: ctx?.defaults?.issueCategory || 5,
             }, { skipErrorToast: true });
             setResult(data);
-            setPhase('success');
-            toast.success(`Claim raised — Ticket #${data.ticketId}`, { description: accountName });
+            if (data.alreadyExisted) {
+                setPhase('recovered');
+                toast.info(`Linked existing ticket #${data.ticketId}`, { description: 'Status syncing in background' });
+            } else {
+                setPhase('success');
+                toast.success(`Claim raised — Ticket #${data.ticketId}`, { description: accountName });
+            }
             onRaised?.(data.claim, target.suborderNumber);
         } catch (err) {
             const body = err.response?.data || {};
@@ -314,6 +358,7 @@ const RaiseClaimModal = ({ target, onClose, onRaised }) => {
                             )}
 
                             {phase === 'success' && result && <SuccessBody result={result} onClose={onClose} />}
+                            {phase === 'recovered' && result && <RecoveredBody result={result} onClose={onClose} />}
 
                             {phase === 'blocked' && ctx && (
                                 <div className="space-y-4 p-6">
