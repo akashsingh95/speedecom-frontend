@@ -1919,6 +1919,7 @@ const AdminInvoiceList = () => {
                                                         </div>
                                                     </div>
 
+                                                    {!isSBM && (
                                                     <div>
                                                         <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Settlement</label>
                                                         <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
@@ -1937,6 +1938,7 @@ const AdminInvoiceList = () => {
                                                             ))}
                                                         </div>
                                                     </div>
+                                                    )}
                                                 </div>
                                             </div>
 
