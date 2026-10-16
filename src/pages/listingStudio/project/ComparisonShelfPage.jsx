@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, GitCompare } from 'lucide-react';
+import { ExternalLink, GitCompare, X } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
 import { amazonUrl } from '../../../components/listingStudio/helpers';
 import { useProjectCtx } from '../../../components/listingStudio/context';
@@ -32,6 +32,37 @@ import {
 // comparison table (new listing vs. current listing vs. competitors vs. other campaigns),
 // row by image position. Sticky table header/first-column via Tailwind `sticky` utilities
 // in place of the source's plain CSS `position: sticky` rules.
+
+// Campaigns added via "+ Add campaign to compare" are persisted on the project itself
+// (`project.compareWith`, PATCH /projects/:id/compare-with), not in component state: this shelf
+// is one section route among many, so switching section tabs unmounts the page and local-only
+// state silently dropped every added column. Server-side rather than localStorage so a shelf
+// follows the account across devices and teammates instead of one browser profile.
+// Mirrors the server's own cap (projectsService.MAX_COMPARE_WITH).
+const MAX_COMPARE_WITH = 8;
+
+// One-shot carry-over from the short-lived localStorage-backed version of this list. The key is
+// removed only once the server has accepted the ids, so a failed carry-over is retried on the
+// next visit rather than dropped.
+const legacyStorageKey = (projectId) => `listingStudio:compareWith:${projectId}`;
+
+function takeLegacyIds(projectId) {
+  try {
+    const raw = window.localStorage.getItem(legacyStorageKey(projectId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function dropLegacyIds(projectId) {
+  try {
+    window.localStorage.removeItem(legacyStorageKey(projectId));
+  } catch {
+    // ignore — worst case the (idempotent) carry-over runs again on the next visit
+  }
+}
 
 /** One row per occupied gallery position, in ascending position order: the newest final (else
  *  newest draft) image for that slot, and how many candidates share it. */
@@ -66,32 +97,94 @@ function bestByPosition(images) {
   return { images: paths, counts };
 }
 
-function generatedColumn(p, label) {
+function generatedColumn(p, label, onRemove) {
   const { images, counts } = bestByPosition(p.generatedImages ?? []);
-  return { key: `gen-${p.id}`, label, sublabel: p.input.name, images, counts, highlight: true };
+  return { key: `gen-${p.id}`, label, sublabel: p.input.name, images, counts, highlight: true, onRemove };
 }
 
 export default function ComparisonShelfPage() {
-  const { project } = useProjectCtx();
+  const { project, refresh } = useProjectCtx();
   const [extraProjects, setExtraProjects] = useState([]);
   const [picker, setPicker] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [allProjects, setAllProjects] = useState(null);
 
   useEffect(() => {
     if (picker && !allProjects) {
       // The shared axios instance's response interceptor already shows a toast on failure.
-      listingStudioApi.listProjects().then(setAllProjects, () => {});
+      listingStudioApi.listProjects().then((data) => setAllProjects(data.projects), () => {});
     }
   }, [picker, allProjects]);
 
-  const addProject = async (id) => {
-    setPicker(false);
+  // Stable dependency for the loader below. project.compareWith is a fresh array on every
+  // refresh() of the project — and a running job refreshes it every few seconds — so depending
+  // on the array itself would re-fetch every pinned campaign on each poll tick.
+  const compareKey = (project.compareWith ?? []).join(',');
+  const compareIds = compareKey ? compareKey.split(',') : [];
+
+  // The pinned ids are resolved to full projects here rather than stored as a snapshot: the
+  // shelf shows each one's *current* generated images.
+  useEffect(() => {
+    const ids = compareKey ? compareKey.split(',') : [];
+    if (ids.length === 0) {
+      setExtraProjects([]);
+      return undefined;
+    }
+    let active = true;
+    // getProjectIfVisible, not getProject: a campaign deleted in another tab since this shelf
+    // was last loaded resolves to null and is dropped from the row instead of raising an error
+    // toast. The id itself is unpinned server-side by store.deleteProject.
+    Promise.all(ids.map((cid) => listingStudioApi.getProjectIfVisible(cid))).then((loaded) => {
+      if (active) setExtraProjects(loaded.filter(Boolean));
+    });
+    return () => {
+      active = false;
+    };
+  }, [compareKey]);
+
+  /** Replaces the whole pinned set, then pulls the updated project through the layout's shared
+   *  state so `compareKey` (and the loader above) reacts to it — rather than keeping a second,
+   *  separately-drifting copy of the list in this component. */
+  const saveCompareWith = async (ids) => {
+    setSaving(true);
     try {
-      const full = await listingStudioApi.getProject(id);
-      setExtraProjects((prev) => (prev.some((p) => p.id === id) ? prev : [...prev, full]));
+      await listingStudioApi.setProjectCompareWith(project.id, ids);
+      await refresh();
+      return true;
     } catch {
       // The shared axios instance's response interceptor already shows a toast for this.
+      return false;
+    } finally {
+      setSaving(false);
     }
+  };
+
+  // Carry over whatever the previous localStorage-backed version of this shelf still holds, so
+  // the columns a user pinned before this change don't silently vanish. Intentionally keyed on
+  // project.id alone — it must run once per campaign, not on every compareWith change.
+  useEffect(() => {
+    const legacy = takeLegacyIds(project.id);
+    if (legacy.length === 0) return;
+    const current = project.compareWith ?? [];
+    const merged = [...current, ...legacy.filter((id) => id !== project.id && !current.includes(id))];
+    if (merged.length === current.length) {
+      dropLegacyIds(project.id);
+      return;
+    }
+    void saveCompareWith(merged.slice(0, MAX_COMPARE_WITH)).then((ok) => {
+      if (ok) dropLegacyIds(project.id);
+    });
+  }, [project.id]);
+
+  const addProject = (id) => {
+    setPicker(false);
+    if (saving || compareIds.includes(id) || compareIds.length >= MAX_COMPARE_WITH) return;
+    void saveCompareWith([...compareIds, id]);
+  };
+
+  const removeProject = (id) => {
+    if (saving) return;
+    void saveCompareWith(compareIds.filter((cid) => cid !== id));
   };
 
   const columns = useMemo(() => {
@@ -106,13 +199,19 @@ export default function ComparisonShelfPage() {
     for (const c of project.competitors ?? []) {
       cols.push({ key: `cmp-${c.asin}`, label: 'Competitor', sublabel: c.asin, asin: c.asin, images: c.images ?? [] });
     }
-    for (const p of extraProjects) cols.push(generatedColumn(p, 'Previous Campaign'));
+    for (const p of extraProjects) {
+      cols.push(generatedColumn(p, 'Previous Campaign', () => removeProject(p.id)));
+    }
     return cols;
   }, [project, extraProjects]);
 
   const maxRows = Math.max(0, ...columns.map((c) => c.images.length));
   const rowLabel = (i) => (i === 0 ? 'Main Image' : `Secondary Image ${i}`);
-  const pickerCandidates = (allProjects ?? []).filter((p) => p.id !== project.id && !extraProjects.some((e) => e.id === p.id));
+  // Excludes campaigns the user started but never finished (e.g. abandoned the wizard before any
+  // image was generated) — there'd be nothing to show in a "Previous Campaign" column for those.
+  const pickerCandidates = (allProjects ?? []).filter(
+    (p) => p.id !== project.id && p.hasGeneratedImages && !extraProjects.some((e) => e.id === p.id),
+  );
 
   return (
     <div>
@@ -129,8 +228,13 @@ export default function ComparisonShelfPage() {
             position — so the shelf space they cover and you don&apos;t is visible at a glance.
           </p>
         </div>
-        <button className={BTN} onClick={() => setPicker(true)}>
-          + Add campaign to compare
+        <button
+          className={`${BTN} disabled:opacity-50 disabled:cursor-not-allowed`}
+          onClick={() => setPicker(true)}
+          disabled={saving || compareIds.length >= MAX_COMPARE_WITH}
+          title={compareIds.length >= MAX_COMPARE_WITH ? `Up to ${MAX_COMPARE_WITH} campaigns can be compared at once` : undefined}
+        >
+          {saving ? 'Saving…' : '+ Add campaign to compare'}
         </button>
       </div>
       {!project.competitors && (
@@ -158,7 +262,20 @@ export default function ComparisonShelfPage() {
                 <th className={`${SHELF_CELL} ${SHELF_ROW_HEAD_TOPLEFT}`}>Image Position</th>
                 {columns.map((c) => (
                   <th key={c.key} className={`${SHELF_CELL} ${SHELF_HEAD_STICKY}`}>
-                    <span className={c.highlight ? BADGE_GOOD : BADGE}>{c.label}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={c.highlight ? BADGE_GOOD : BADGE}>{c.label}</span>
+                      {c.onRemove && (
+                        <button
+                          type="button"
+                          onClick={c.onRemove}
+                          disabled={saving}
+                          aria-label={`Remove ${c.sublabel} from comparison`}
+                          className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </span>
                     <div className={`${MUTED} ${SMALL} ${SHELF_SUBLABEL}`}>
                       {c.asin ? (
                         <a

@@ -19,7 +19,8 @@ export default function TenantToolbar({
     uniqueRMs,
     totalCount,
     currentFilter,
-    onChange 
+    onChange,
+    showPlanFilter = true
 }) {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
@@ -48,6 +49,7 @@ export default function TenantToolbar({
 
     // Speedy Listing plan catalog for the filter dropdown — active plans only, cheapest first.
     useEffect(() => {
+        if (!showPlanFilter) return;
         const loadPlans = async () => {
             try {
                 const { data } = await api.get('/listing-studio/wallet/admin/plans/config');
@@ -58,7 +60,7 @@ export default function TenantToolbar({
             }
         };
         loadPlans();
-    }, []);
+    }, [showPlanFilter]);
 
     // Emit combined state
     useEffect(() => {
@@ -208,7 +210,7 @@ export default function TenantToolbar({
                         />
 
                         {/* Speedy Listing Plan Dropdown */}
-                        {planOptions.length > 0 && (
+                        {showPlanFilter && planOptions.length > 0 && (
                             <PillSelect
                                 value={listingStudioPlan}
                                 onChange={setListingStudioPlan}

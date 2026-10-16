@@ -58,7 +58,7 @@ const Calendar = ({ startDate, endDate, onChange, maxDays }) => {
 
     useEffect(() => {
         if (start) { setViewYear(start.getFullYear()); setViewMonth(start.getMonth()); }
-    }, [startDate]);  
+    }, [startDate]);
 
     useEffect(() => {
         const handler = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setShowMonthPicker(false); };
@@ -163,7 +163,17 @@ const Calendar = ({ startDate, endDate, onChange, maxDays }) => {
                                 const disabled = viewYear === today.getFullYear() && i > today.getMonth();
                                 return (
                                     <button key={m} type="button" disabled={disabled}
-                                        onClick={() => { if (!disabled) { setViewMonth(i); setShowMonthPicker(false); } }}
+                                        onClick={() => {
+                                            if (!disabled) {
+                                                setViewMonth(i);
+                                                setShowMonthPicker(false);
+                                                const firstDay = new Date(viewYear, i, 1);
+                                                const lastDay  = new Date(viewYear, i + 1, 0);
+                                                const clampedEnd = lastDay > today ? today : lastDay;
+                                                onChange({ min: fmt(firstDay), max: fmt(clampedEnd) });
+                                                setSelectingEnd(false);
+                                            }
+                                        }}
                                         className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
                                             viewMonth === i && !disabled ? 'bg-violet-600 text-white' :
                                             disabled ? 'text-slate-200 cursor-not-allowed' :
@@ -260,7 +270,7 @@ const ReturnDateRangePicker = ({ startDate, endDate, onChange, maxDays = 92, dat
                 if (onChange) onChange(v.min, v.max);
             }
         }
-    }, []);  
+    }, []);
 
     const handlePresetClick = (preset) => {
         setActivePreset(preset.label);

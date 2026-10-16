@@ -392,7 +392,12 @@ export const FAQ_QUESTIONS = [
         requiresMarketplace: true,
         excludedPlatforms: ['myntra'],
         // Bar chart of P/L per month; the response carries a deterministic
-        // driver-breakdown note (see template 84's insight()).
+        // driver-breakdown note (see template 84's insight()). The gainers/
+        // losers breakdown excludes non-product sentinel values (Amazon-only
+        // artifacts like Brand Ads / FBA fee rows) whenever Amazon is in the
+        // selection — see template 84's insight() in faqTemplates.js. Myntra
+        // stays excluded here; this question was never asked to be enabled
+        // for Myntra, only fixed for Amazon.
         params: [
             { key: 'startDate', label: 'Start Date', type: 'date', placeholder: 'Start date', required: true },
             { key: 'endDate',   label: 'End Date',   type: 'date', placeholder: 'End date',   required: true },
@@ -683,9 +688,10 @@ export const FAQ_QUESTIONS = [
         },
         type: 'dynamic',
         requiresMarketplace: true,
-        excludedPlatforms: ['myntra'],
         // Pulls from the same per-platform order tables as the "Action Required"
         // screen (payment_status = 'pending'), NOT the calculations table.
+        // Myntra is supported (template 83 has a myn_orders branch, scoped to
+        // just Delivered/Shipped statuses) — no longer excluded.
         params: [
             { key: 'startDate', label: 'Start Date', type: 'date', placeholder: 'Start date', required: true },
             { key: 'endDate',   label: 'End Date',   type: 'date', placeholder: 'End date',   required: true },
