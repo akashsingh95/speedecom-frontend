@@ -224,7 +224,7 @@ export default function PremiumAplusPage() {
     }
   };
 
-  const renderSideTile = (d, side, compositePath, slicePaths, aspectClass) => {
+  const renderSideTile = (d, side, compositePath, slicePaths) => {
     const generating = d[`${side}Generating`];
     const err = d[`${side}Error`];
     const busy = regeneratingKey === `${d.id}:${side}`;
@@ -253,7 +253,7 @@ export default function PremiumAplusPage() {
             onClick={() => setLightbox({ images: [{ src: compositePath, alt: `${d.name} (${side})` }], initialIndex: 0 })}
             className="block w-full rounded-lg overflow-hidden border border-slate-200 hover:ring-2 hover:ring-brand-300 mb-1.5"
           >
-            <img src={compositePath} alt={d.name} className={`w-full ${aspectClass} object-cover block`} />
+            <img src={compositePath} alt={d.name} className="w-full object-contain block" />
           </button>
         )}
         {!compositePath && generating && (
@@ -281,7 +281,7 @@ export default function PremiumAplusPage() {
                 }
                 className="block rounded-md overflow-hidden border border-slate-200 hover:ring-2 hover:ring-brand-300"
               >
-                <img src={path} alt={`${side} slot ${i + 1}`} className="w-full aspect-square object-cover block" />
+                <img src={path} alt={`${side} slot ${i + 1}`} className="w-full object-contain block" />
               </button>
             ))}
           </div>
@@ -407,8 +407,8 @@ export default function PremiumAplusPage() {
                   </div>
                   <div>
                     {viewSide === 'desktop'
-                      ? renderSideTile(d, 'desktop', d.compositePath, d.slicePaths, 'aspect-[650/1027]')
-                      : renderSideTile(d, 'mobile', d.mobileCompositePath, d.mobileSlicePaths, 'aspect-[1/3]')}
+                      ? renderSideTile(d, 'desktop', d.compositePath, d.slicePaths)
+                      : renderSideTile(d, 'mobile', d.mobileCompositePath, d.mobileSlicePaths)}
                   </div>
                 </div>
               );
