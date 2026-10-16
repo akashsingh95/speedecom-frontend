@@ -96,6 +96,10 @@ function competitorArrowStyle(side) {
  *  it now visually covers that nav, a floating back button substitutes for it. */
 export function AmazonPreviewPanel({
   project, draft, dirty, saving, setField, setBullet, onSave, onBack, onReorderImages,
+  // True while the caller's onReorderImages is still persisting an earlier drop. Dragging stays
+  // off until it resolves, because `images` below is the server's order and a drop computed from
+  // the stale sequence would overwrite the pending move instead of building on it.
+  reorderPending = false,
   // Public share page: no editing, no back/save, and the Premium A+ designs arrive already
   // embedded in the payload (its API is login-only) instead of being fetched here.
   readOnly = false,
@@ -138,6 +142,9 @@ export function AmazonPreviewPanel({
 
   // Only offered when the caller can persist a new order (the listing wizard's image sequence).
   const canReorder = typeof onReorderImages === 'function' && images.length > 1;
+  // The hint above stays on `canReorder` so it doesn't flicker out mid-reorder; only the drag
+  // handlers themselves go cold while a drop is being persisted.
+  const dragEnabled = canReorder && !reorderPending;
   const endDrag = () => {
     setDragIdx(null);
     setOverIdx(null);
@@ -333,23 +340,23 @@ export function AmazonPreviewPanel({
                   <div
                     key={src + i}
                     onClick={() => setActiveIdx(i)}
-                    draggable={canReorder}
-                    onDragStart={canReorder ? (e) => {
+                    draggable={dragEnabled}
+                    onDragStart={dragEnabled ? (e) => {
                       e.dataTransfer.effectAllowed = 'move';
                       setDragIdx(i);
                     } : undefined}
-                    onDragOver={canReorder ? (e) => {
+                    onDragOver={dragEnabled ? (e) => {
                       e.preventDefault();
                       if (overIdx !== i) setOverIdx(i);
                     } : undefined}
-                    onDrop={canReorder ? (e) => {
+                    onDrop={dragEnabled ? (e) => {
                       e.preventDefault();
                       dropOn(i);
                     } : undefined}
-                    onDragEnd={canReorder ? endDrag : undefined}
+                    onDragEnd={dragEnabled ? endDrag : undefined}
                     style={{
                       opacity: dragIdx === i ? 0.4 : 1,
-                      outline: canReorder && overIdx === i && dragIdx !== null && dragIdx !== i ? '2px dashed #007185' : 'none',
+                      outline: dragEnabled && overIdx === i && dragIdx !== null && dragIdx !== i ? '2px dashed #007185' : 'none',
                       width: 64,
                       height: 64,
                       flexShrink: 0,
@@ -358,7 +365,7 @@ export function AmazonPreviewPanel({
                       backgroundImage: `url(${src})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
-                      cursor: canReorder ? 'grab' : 'pointer',
+                      cursor: dragEnabled ? 'grab' : 'pointer',
                     }}
                   />
                 ))}
