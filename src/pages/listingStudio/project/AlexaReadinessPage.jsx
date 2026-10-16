@@ -2,7 +2,7 @@
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mic, ChevronRight, HelpCircle, CheckCircle2, Circle } from 'lucide-react';
+import { Mic, ChevronRight, HelpCircle, CheckCircle2, Circle, RefreshCw } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
 import { useProjectCtx } from '../../../components/listingStudio/context';
 import { toneForValue } from '../../../components/listingStudio/ui/StatTile';
@@ -13,6 +13,8 @@ import {
   MUTED,
   BTN_PRIMARY,
   BTN,
+  BTN_SMALL,
+  ICON_LABEL,
   EMPTY_STATE,
   READINESS_SUMMARY_GRID,
   READINESS_SUMMARY_CARD,
@@ -240,7 +242,17 @@ export default function AlexaReadinessPage() {
             to your competitors.
           </p>
         </div>
-        {!readiness && (
+        {/* After the first run the trigger stays available as a quieter secondary button:
+            the scores go stale as soon as the images or the listing copy change, and
+            re-running the analysis is the only way to refresh them. */}
+        {readiness ? (
+          <button className={`${BTN} ${BTN_SMALL}`} onClick={analyze} disabled={jobRunning || blocked}>
+            <span className={ICON_LABEL}>
+              <RefreshCw size={12} className={jobRunning ? 'animate-spin' : ''} />
+              {jobRunning ? 'Analyzing…' : 'Re-analyze'}
+            </span>
+          </button>
+        ) : (
           <button className={`${BTN_PRIMARY} gap-1.5`} onClick={analyze} disabled={jobRunning || blocked}>
             {jobRunning ? (
               'Analyzing…'
