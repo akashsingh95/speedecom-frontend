@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MessageCircle, X, Loader2, UserRound, Headset, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../api';
@@ -10,19 +11,31 @@ import { useSocketEvent } from '../../hooks/useSupportSocket';
 import StarRating from '../StarRating';
 import { newClientId } from '../../socket';
 import ChatThread from './ChatThread';
+import { PRODUCT_LABELS } from './products';
 
 export const OPEN_SUPPORT_CHAT_EVENT = 'support-chat:open';
 export const openSupportChat = () => window.dispatchEvent(new Event(OPEN_SUPPORT_CHAT_EVENT));
 
 const ENDED_STATUSES = ['Resolved', 'Closed'];
 
-// One-tap starters for the empty chat; each is sent as the seller's first message.
-const QUICK_QUESTIONS = [
-  'How do I upload my marketplace reports?',
-  'How do I connect a marketplace account?',
-  'Which of my orders have pending payments?',
-  "I'd like to talk to a person",
-];
+// One-tap starters for the empty chat, per product; each is sent as the seller's first message.
+const QUICK_QUESTIONS = {
+  reconciliation: [
+    'How do I upload my marketplace reports?',
+    'How do I connect a marketplace account?',
+    'Which of my orders have pending payments?',
+    "I'd like to talk to a person",
+  ],
+  speedy_listing: [
+    'How do I create a new campaign?',
+    'How do I generate A+ content?',
+    'How are Speedy Listing credits charged?',
+    "I'd like to talk to a person",
+  ],
+};
+
+// Inside Speedy Listing pages a new chat is most likely about Speedy Listing.
+const productForPath = (pathname) => (pathname.startsWith('/listing-studio') ? 'speedy_listing' : 'reconciliation');
 
 // { text, dot } for the header status line.
 const headerStatus = (ticket) => {
@@ -39,18 +52,25 @@ const headerStatus = (ticket) => {
   };
 };
 
-const RatingPrompt = ({ ticket, onDone }) => {
+/**
+ * Rating is required to finish a chat: there is no skip.
+ * endsChat: the chat is still open, so rating also ends it (the "End chat" flow);
+ * otherwise staff already ended it and the seller rates it before starting another.
+ */
+const RatingPrompt = ({ ticket, endsChat, onCancel, onDone }) => {
   const [stars, setStars] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     setSubmitting(true);
     try {
+      if (endsChat) await api.patch(`/support/${ticket._id}`, { status: 'Resolved' });
       await api.post(`/support/${ticket._id}/rating`, { stars });
       toast.success('Thanks for your feedback');
       onDone();
     } catch {
-      // api.js showed the error; keep the prompt so the seller can retry or skip.
+      // api.js showed the error. If the chat ended but the rating failed, the widget reloads
+      // it as an ended, unrated chat and asks again.
     } finally {
       setSubmitting(false);
     }
@@ -58,16 +78,21 @@ const RatingPrompt = ({ ticket, onDone }) => {
 
   return (
     <div className="p-4 border-t border-slate-200 bg-white text-center space-y-3">
-      <p className="text-sm font-semibold text-slate-700">How was this chat?</p>
-      <div className="flex justify-center"><StarRating value={stars} onChange={setStars} size={26} /></div>
+      <div>
+        <p className="text-sm font-semibold text-slate-800">{endsChat ? 'Rate this chat to end it' : 'How was this chat?'}</p>
+        <p className="text-xs text-slate-500">{endsChat ? 'Your rating helps us improve support.' : 'Please rate it to start a new chat.'}</p>
+      </div>
+      <div className="flex justify-center"><StarRating value={stars} onChange={setStars} size={28} /></div>
       <div className="flex gap-2 justify-center">
-        <button onClick={onDone} className="px-4 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Skip</button>
+        {onCancel && (
+          <button onClick={onCancel} disabled={submitting} className="px-4 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Back to chat</button>
+        )}
         <button
           onClick={submit}
           disabled={!stars || submitting}
           className="px-4 py-1.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 rounded-lg"
         >
-          Submit
+          {endsChat ? 'Rate & end chat' : 'Submit rating'}
         </button>
       </div>
     </div>
@@ -87,6 +112,10 @@ const SupportChatWidget = () => {
   const [unread, setUnread] = useState(0);
   const [escalating, setEscalating] = useState(false);
   const [startingQuick, setStartingQuick] = useState(false);
+  const location = useLocation();
+  const [product, setProduct] = useState(() => productForPath(location.pathname));
+  // Sellers without Speedy Listing are never asked; their chats are always Reconciliation.
+  const canPickProduct = user?.listingStudioEnabled !== false;
   const { ticket, emitTyping, sendMessage, typingName, reload } = useLiveTicket(ticketId, seed);
 
   useEffect(() => {
@@ -142,18 +171,20 @@ const SupportChatWidget = () => {
       await sendMessage(message, clientId, attachments);
       return;
     }
-    const res = await api.post('/support/chat', { message, clientId, attachments });
-    setSeed(res.data.ticket);
-    setTicketId(res.data.ticket._id);
-  };
-
-  const endChat = async () => {
-    setConfirmEnd(false);
     try {
-      await api.patch(`/support/${ticketId}`, { status: 'Resolved' });
-      await reload();
-    } catch {
-      // api.js showed the error; the chat stays open.
+      const res = await api.post('/support/chat', {
+        message, clientId, attachments, product: canPickProduct ? product : 'reconciliation',
+      });
+      setSeed(res.data.ticket);
+      setTicketId(res.data.ticket._id);
+    } catch (error) {
+      // Another tab ended a chat that still needs a rating: show it so it can be rated.
+      const unratedId = error.response?.data?.unratedTicketId;
+      if (unratedId) {
+        setSeed(null);
+        setTicketId(unratedId);
+      }
+      throw error;
     }
   };
 
@@ -183,6 +214,8 @@ const SupportChatWidget = () => {
   const resetToNewChat = () => {
     setTicketId(null);
     setSeed(null);
+    setConfirmEnd(false);
+    setProduct(productForPath(location.pathname));
   };
 
   return (
@@ -207,16 +240,8 @@ const SupportChatWidget = () => {
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {ticket && !ended && (
-                confirmEnd ? (
-                  <span className="flex items-center gap-1 text-xs text-slate-600">
-                    End chat?
-                    <button onClick={endChat} className="px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded-md font-semibold">Yes</button>
-                    <button onClick={() => setConfirmEnd(false)} className="px-2 py-1 hover:bg-slate-100 rounded-md">No</button>
-                  </span>
-                ) : (
-                  <button onClick={() => setConfirmEnd(true)} className="text-xs px-2 py-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md font-semibold">End chat</button>
-                )
+              {ticket && !ended && !confirmEnd && (
+                <button onClick={() => setConfirmEnd(true)} className="text-xs px-2 py-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-md font-semibold">End chat</button>
               )}
               <button onClick={() => setOpen(false)} aria-label="Close chat" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md">
                 <X size={18} />
@@ -251,6 +276,27 @@ const SupportChatWidget = () => {
                   placeholder={ticketId ? 'Type a message…' : 'Type your question…'}
                   emptyState={(
                     <div className="px-2 pt-4">
+                      {canPickProduct && (
+                        <div className="mb-4">
+                          <p className="text-xs font-medium text-slate-500 mb-1.5 px-1">Your question is about</p>
+                          <div role="radiogroup" aria-label="Your question is about" className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
+                            {Object.entries(PRODUCT_LABELS).map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                role="radio"
+                                aria-checked={product === value}
+                                onClick={() => setProduct(value)}
+                                className={`py-1.5 text-sm font-semibold rounded-lg transition-colors ${
+                                  product === value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="flex items-start gap-2">
                         <div className="w-7 h-7 shrink-0 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center">
                           <Sparkles size={14} />
@@ -260,7 +306,7 @@ const SupportChatWidget = () => {
                         </div>
                       </div>
                       <div className="mt-4 flex flex-col items-end gap-2">
-                        {QUICK_QUESTIONS.map((question) => (
+                        {QUICK_QUESTIONS[canPickProduct ? product : 'reconciliation'].map((question) => (
                           <button
                             key={question}
                             onClick={() => sendQuickQuestion(question)}
@@ -275,6 +321,14 @@ const SupportChatWidget = () => {
                   )}
                 />
               </div>
+              {ticket && !ended && confirmEnd && (
+                <RatingPrompt
+                  ticket={ticket}
+                  endsChat
+                  onCancel={() => setConfirmEnd(false)}
+                  onDone={resetToNewChat}
+                />
+              )}
               {ended && (
                 ticket.rating?.stars
                   ? (

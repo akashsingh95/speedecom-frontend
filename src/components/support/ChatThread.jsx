@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import api from '../../api';
 import { newClientId } from '../../socket';
 import AttachmentGallery from './AttachmentGallery';
+import TypewriterText from './TypewriterText';
 
 const SELLER_ROLES = ['User', 'Admin'];
 const TYPING_IDLE_MS = 3000;
@@ -13,6 +14,8 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FILES = 10;
 const MAX_INPUT_HEIGHT_PX = 128;
+// Name the server sends with the bot's typing events (socket/supportEvents.js emitBotTyping).
+const BOT_TYPING_NAME = 'Speedy';
 
 // Signed-URL upload, same flow the old ticket form used. Returns the storage path.
 const uploadScreenshot = async (file) => {
@@ -76,6 +79,33 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
   const textareaRef = useRef(null);
   const dragDepthRef = useRef(0);
   const items = threadItems(ticket);
+
+  // Bot replies that arrive while the chat is open are typed out; everything already in the
+  // chat when it loads (or reloads) is shown as is.
+  const seenRef = useRef({ ticketId: null, ids: new Set() });
+  const [typingIds, setTypingIds] = useState(() => new Set());
+  useEffect(() => {
+    if (!ticket) return;
+    const seen = seenRef.current;
+    if (seen.ticketId !== ticket._id) {
+      seenRef.current = { ticketId: ticket._id, ids: new Set(items.map((i) => i._id)) };
+      setTypingIds(new Set());
+      return;
+    }
+    const fresh = items.filter((i) => !seen.ids.has(i._id));
+    fresh.forEach((i) => seen.ids.add(i._id));
+    const freshBot = fresh.filter((i) => i.isBot && i.message);
+    if (freshBot.length) setTypingIds((current) => new Set([...current, ...freshBot.map((i) => i._id)]));
+  }, [ticket, items]);
+  // Checked during render too, so a new reply never flashes in full before typing starts.
+  const typesOut = (item) => item.isBot && Boolean(item.message) && (typingIds.has(item._id)
+    || (seenRef.current.ticketId === ticket?._id && !seenRef.current.ids.has(item._id)));
+  const doneTyping = (id) => setTypingIds((current) => {
+    const next = new Set(current);
+    next.delete(id);
+    return next;
+  });
+  const scrollToBottom = () => bottomRef.current?.scrollIntoView({ block: 'end' });
 
   const previews = useMemo(() => files.map((f) => ({ key: fileKey(f), name: f.name, url: URL.createObjectURL(f) })), [files]);
   useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews]);
@@ -201,7 +231,9 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
                       ? 'bg-brand-50 text-slate-800 border border-brand-100 rounded-bl-md'
                       : 'bg-white text-slate-800 border border-slate-200 rounded-bl-md'
                 }`}>
-                  {item.message}
+                  {typesOut(item)
+                    ? <TypewriterText text={item.message} onProgress={scrollToBottom} onDone={() => doneTyping(item._id)} />
+                    : item.message}
                 </div>
               )}
               {item.attachments.length > 0 && (
@@ -213,8 +245,21 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
             </div>
           );
         })}
-        {typingName && (
-          <div className="flex items-center gap-2 text-xs text-slate-500 px-1" aria-live="polite">
+        {typingName && (typingName === BOT_TYPING_NAME ? (
+          // Same label and bubble as a bot answer, so the answer replaces it in place without a jump.
+          <div className="flex flex-col items-start animate-[fadeIn_0.2s_ease-out]" aria-live="polite" aria-label="Speedy is typing">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 mb-1 px-1">
+              <Sparkles size={11} className="text-brand-600" />
+              Speedy · AI assistant
+            </span>
+            <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-brand-50 border border-brand-100 flex gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:-0.3s]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce [animation-delay:-0.15s]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-bounce" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-slate-500 px-1 animate-[fadeIn_0.2s_ease-out]" aria-live="polite">
             <span className="flex gap-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
@@ -222,7 +267,7 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
             </span>
             {typingName} is typing
           </div>
-        )}
+        ))}
         <div ref={bottomRef} />
       </div>
 

@@ -12,6 +12,7 @@ import RatingModal from '../components/RatingModal';
 import { openSupportChat } from '../components/support/SupportChatWidget';
 import { useSocketEvent, useTicketRoom } from '../hooks/useSupportSocket';
 import AttachmentGallery from '../components/support/AttachmentGallery';
+import { PRODUCT_BADGE_CLASSES, PRODUCT_LABELS, productLabel } from '../components/support/products';
 
 const SupportPortal = () => {
     const { user } = useAuth();
@@ -19,6 +20,7 @@ const SupportPortal = () => {
     const [loading, setLoading] = useState(true);
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [statusFilters, setStatusFilters] = useState([]);
+    const [productFilter, setProductFilter] = useState('');
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
     const statusDropdownRef = useRef(null);
     const [page, setPage] = useState(1);
@@ -61,11 +63,11 @@ const SupportPortal = () => {
 
     useEffect(() => {
         setPage(1);
-    }, [statusFilters]);
+    }, [statusFilters, productFilter]);
 
     useEffect(() => {
         fetchTickets();
-    }, [statusFilters, page]);
+    }, [statusFilters, productFilter, page]);
 
     useEffect(() => {
         const delay = setTimeout(() => {
@@ -95,6 +97,7 @@ const SupportPortal = () => {
             if (!silent) setLoading(true);
             const params = { page, limit: 20 };
             if (statusFilters.length > 0) params.status = statusFilters.join(',');
+            if (productFilter) params.product = productFilter;
             const res = await api.get('/support', { params });
             setTickets(res.data?.data || res.data || []);
             const pagination = res.pagination || res.data?.pagination;
@@ -285,6 +288,22 @@ const SupportPortal = () => {
 
                 <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden transition-all duration-300">
                     <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                        {user?.listingStudioEnabled !== false && (
+                            <div role="radiogroup" aria-label="Product" className="inline-flex p-0.5 bg-slate-100 rounded-lg">
+                                {[['', 'All'], ...Object.entries(PRODUCT_LABELS)].map(([value, label]) => (
+                                    <button
+                                        key={value || 'all'}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={productFilter === value}
+                                        onClick={() => setProductFilter(value)}
+                                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${productFilter === value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                         <div className="relative" ref={statusDropdownRef}>
                             <button
                                 onClick={() => setStatusDropdownOpen(o => !o)}
@@ -333,8 +352,8 @@ const SupportPortal = () => {
                                 <LifeBuoy className="w-10 h-10 text-slate-400" />
                             </div>
                             <div className="text-center">
-                                <h3 className="font-semibold text-slate-700">{statusFilters.length === 0 ? 'No support tickets' : 'No tickets match this filter'}</h3>
-                                <p className="mt-1 text-sm text-slate-500">{statusFilters.length === 0 ? "You haven't created any support requests yet." : 'Try a different status to see more tickets.'}</p>
+                                <h3 className="font-semibold text-slate-700">{statusFilters.length === 0 && !productFilter ? 'No support tickets' : 'No tickets match this filter'}</h3>
+                                <p className="mt-1 text-sm text-slate-500">{statusFilters.length === 0 && !productFilter ? "You haven't created any support requests yet." : 'Try a different filter to see more tickets.'}</p>
                             </div>
                         </div>
                     ) : (
@@ -358,6 +377,9 @@ const SupportPortal = () => {
                                             </td>
                                             <td className="px-6 py-4 text-sm text-slate-700">
                                                 <div className="font-medium line-clamp-1">{ticket.title}</div>
+                                                <span className={`mt-1 inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border ${PRODUCT_BADGE_CLASSES[ticket.product] || PRODUCT_BADGE_CLASSES.reconciliation}`}>
+                                                    {productLabel(ticket.product)}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-md border ${getStatusColor(ticket.status)}`}>

@@ -8,6 +8,7 @@ import api from '../../api';
 import { useAuth } from '../../AuthContext';
 import useLiveTicket from '../../hooks/useLiveTicket';
 import { useSocketEvent } from '../../hooks/useSupportSocket';
+import useOffers from '../../hooks/useOffers';
 import ChatThread from './ChatThread';
 
 export const OPEN_SUPPORT_DRAWER_EVENT = 'support-drawer:open';
@@ -39,19 +40,15 @@ const SupportChatDrawer = () => {
   // The support page already shows these tickets live; toasts there would just be noise.
   const onSupportPage = location.pathname === '/admin/support';
 
-  useSocketEvent('support:chat:new', ({ ticket: started }) => {
-    if (onSupportPage) return;
-    toast(`New support chat · ${started.ticketId}`, {
-      description: started.title,
-      duration: TOAST_MS,
-      action: { label: 'Open', onClick: () => setTicketId(started._id) },
-    });
-  }, isStaff);
+  // New chats announce themselves through the ring banner (EscalationBanner), so there is no
+  // "new chat" toast here, and no message toasts while a chat is still ringing for this user.
+  const { offers } = useOffers(isStaff);
+  const ringing = new Set(offers.map((o) => o.ticket._id));
 
   useSocketEvent('support:message', ({ ticketId: id, message }) => {
-    if (onSupportPage || id === ticketId || !SELLER_ROLES.includes(message.senderId?.role)) return;
+    if (onSupportPage || id === ticketId || ringing.has(id) || !SELLER_ROLES.includes(message.senderId?.role)) return;
     toast(`New message from ${message.senderId?.fullName || 'a seller'}`, {
-      description: message.message.length > 90 ? `${message.message.slice(0, 89)}…` : message.message,
+      description: !message.message ? 'Sent a screenshot' : message.message.length > 90 ? `${message.message.slice(0, 89)}…` : message.message,
       duration: TOAST_MS,
       action: { label: 'Open', onClick: () => setTicketId(id) },
     });
