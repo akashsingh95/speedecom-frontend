@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, GitCompare } from 'lucide-react';
+import { ExternalLink, GitCompare, X } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
 import { amazonUrl } from '../../../components/listingStudio/helpers';
 import { useProjectCtx } from '../../../components/listingStudio/context';
@@ -33,6 +33,29 @@ import {
 // row by image position. Sticky table header/first-column via Tailwind `sticky` utilities
 // in place of the source's plain CSS `position: sticky` rules.
 
+// Campaigns added via "+ Add campaign to compare" are persisted per project: this shelf is one
+// section route among many, so switching section tabs unmounts the page — holding the added
+// campaigns in component state alone silently dropped them on every tab switch. Same
+// localStorage-per-project convention as ProjectLayout's dismissed-job / pipeline-from keys.
+const storageKey = (projectId) => `listingStudio:compareWith:${projectId}`;
+
+function readStoredIds(projectId) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey(projectId)) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredIds(projectId, ids) {
+  try {
+    window.localStorage.setItem(storageKey(projectId), JSON.stringify(ids));
+  } catch {
+    // ignore — the comparison set is a convenience, not critical state
+  }
+}
+
 /** For each gallery position, pick the newest final (else newest draft) and report how many candidates share that slot. */
 function bestByPosition(images) {
   const byPosition = new Map();
@@ -64,9 +87,9 @@ function bestByPosition(images) {
   return { images: paths, counts };
 }
 
-function generatedColumn(p, label) {
+function generatedColumn(p, label, onRemove) {
   const { images, counts } = bestByPosition(p.generatedImages ?? []);
-  return { key: `gen-${p.id}`, label, sublabel: p.input.name, images, counts, highlight: true };
+  return { key: `gen-${p.id}`, label, sublabel: p.input.name, images, counts, highlight: true, onRemove };
 }
 
 export default function ComparisonShelfPage() {
@@ -82,15 +105,46 @@ export default function ComparisonShelfPage() {
     }
   }, [picker, allProjects]);
 
+  // Re-load the persisted comparison set. Keyed on project.id rather than mount-only because
+  // this page is reused (not remounted) when navigating straight from one campaign's shelf to
+  // another's.
+  useEffect(() => {
+    const ids = readStoredIds(project.id);
+    if (ids.length === 0) {
+      setExtraProjects([]);
+      return undefined;
+    }
+    let active = true;
+    // A campaign deleted since it was added just drops out of the stored set, rather than
+    // failing this fetch again on every visit.
+    Promise.all(ids.map((cid) => listingStudioApi.getProject(cid).catch(() => null))).then((loaded) => {
+      if (!active) return;
+      const found = loaded.filter(Boolean);
+      setExtraProjects(found);
+      if (found.length !== ids.length) writeStoredIds(project.id, found.map((p) => p.id));
+    });
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
+
+  const commit = (next) => {
+    setExtraProjects(next);
+    writeStoredIds(project.id, next.map((p) => p.id));
+  };
+
   const addProject = async (id) => {
     setPicker(false);
+    if (extraProjects.some((p) => p.id === id)) return;
     try {
       const full = await listingStudioApi.getProject(id);
-      setExtraProjects((prev) => (prev.some((p) => p.id === id) ? prev : [...prev, full]));
+      commit([...extraProjects, full]);
     } catch {
       // The shared axios instance's response interceptor already shows a toast for this.
     }
   };
+
+  const removeProject = (id) => commit(extraProjects.filter((p) => p.id !== id));
 
   const columns = useMemo(() => {
     const cols = [generatedColumn(project, 'After')];
@@ -104,7 +158,9 @@ export default function ComparisonShelfPage() {
     for (const c of project.competitors ?? []) {
       cols.push({ key: `cmp-${c.asin}`, label: 'Competitor', sublabel: c.asin, asin: c.asin, images: c.images ?? [] });
     }
-    for (const p of extraProjects) cols.push(generatedColumn(p, 'Previous Campaign'));
+    for (const p of extraProjects) {
+      cols.push(generatedColumn(p, 'Previous Campaign', () => removeProject(p.id)));
+    }
     return cols;
   }, [project, extraProjects]);
 
@@ -160,7 +216,19 @@ export default function ComparisonShelfPage() {
                 <th className={`${SHELF_CELL} ${SHELF_ROW_HEAD_TOPLEFT}`}>Image Position</th>
                 {columns.map((c) => (
                   <th key={c.key} className={`${SHELF_CELL} ${SHELF_HEAD_STICKY}`}>
-                    <span className={c.highlight ? BADGE_GOOD : BADGE}>{c.label}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={c.highlight ? BADGE_GOOD : BADGE}>{c.label}</span>
+                      {c.onRemove && (
+                        <button
+                          type="button"
+                          onClick={c.onRemove}
+                          aria-label={`Remove ${c.sublabel} from comparison`}
+                          className="text-slate-400 hover:text-slate-700"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </span>
                     <div className={`${MUTED} ${SMALL} ${SHELF_SUBLABEL}`}>
                       {c.asin ? (
                         <a
