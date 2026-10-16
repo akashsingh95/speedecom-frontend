@@ -13,10 +13,12 @@ const TONES = {
 };
 
 /** Green/amber/red by value, so a card's color always tells you at a glance whether the
- *  number behind it is good or bad — instead of a fixed hue per metric that doesn't. */
+ *  number behind it is good or bad — instead of a fixed hue per metric that doesn't. The
+ *  bands match the legend Alexa Readiness prints above its coverage table: 70+ strong,
+ *  40-69 partial, under 40 a gap. */
 export function toneForValue(value) {
   if (value >= 70) return 'green';
-  if (value >= 30) return 'amber';
+  if (value >= 40) return 'amber';
   return 'red';
 }
 
