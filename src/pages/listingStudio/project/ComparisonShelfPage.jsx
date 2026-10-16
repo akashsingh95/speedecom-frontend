@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, GitCompare } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
