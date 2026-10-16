@@ -10,6 +10,18 @@ export function creditNotificationMessage(billing, action) {
   return null;
 }
 
+export function videoCreditNotificationMessage(billing, action) {
+  if (!billing || billing.alreadyCharged) return null;
+  const subject = action || 'Video generation';
+  if (billing.charged === 'FREE_ALLOWANCE') {
+    return `${subject} completed — 1 free video used. ${billing.freeVideosRemaining ?? 0} free videos left.`;
+  }
+  if (billing.charged === 'LOT') {
+    return `${subject} completed — ${billing.amount} credits deducted. ${billing.balance ?? 0} credits remaining.`;
+  }
+  return null;
+}
+
 /** One toast for a Premium A+ generation that renders several images (desktop + mobile), each
  *  with its own billing — sums them instead of showing one toast per image. */
 export function multiImageCreditNotificationMessage(billings, action) {

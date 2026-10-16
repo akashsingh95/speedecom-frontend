@@ -363,6 +363,7 @@ const RMTenantList = () => {
                             totalCount={tenants.length}
                             currentFilter={activeFilter}
                             onChange={handleToolbarChange}
+                            showPlanFilter={false}
                         />
                     </div>
 
