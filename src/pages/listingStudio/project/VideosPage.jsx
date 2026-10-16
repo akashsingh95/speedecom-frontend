@@ -25,6 +25,35 @@ const ASPECT_RATIOS = [
   { value: '9:16', label: 'Portrait (9:16)' },
 ];
 const cssAspectRatio = (ratio) => (ratio || '16:9').replace(':', ' / ');
+const videoPolls = new Map();
+const mountedRefresh = new Map();
+
+async function pollVideoUntilDone(projectId, conceptId, { intervalMs = 2000, maxAttempts = 150 } = {}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    const status = await listingStudioApi.getVideoStatus(projectId, conceptId);
+    if (!status.generating) {
+      if (status.error) throw new Error(status.error);
+      return status;
+    }
+  }
+  throw new Error('Still generating — this is taking longer than usual. Check back shortly.');
+}
+
+function watchVideo(projectId, conceptId) {
+  const key = `${projectId}:${conceptId}`;
+  videoPolls.set(key, 'running');
+  pollVideoUntilDone(projectId, conceptId)
+    .then((result) => {
+      const message = videoCreditNotificationMessage(result?.billing, 'Video generation');
+      if (message) toast.success(message);
+    })
+    .catch((err) => toast.error(err?.message || 'Video generation failed'))
+    .finally(() => {
+      videoPolls.set(key, 'settled');
+      mountedRefresh.get(projectId)?.();
+    });
+}
 
 function hasReadySeedImage(aplusConcepts, angleName) {
   return aplusConcepts.some((c) => {
@@ -47,35 +76,20 @@ export default function VideosPage() {
   const videoConcepts = project.videoConcepts ?? [];
   const canCreateVideo = readyAngles.length > 0 || generatedImages.length > 0;
 
-  const [busyIds, setBusyIds] = useState(() => new Set(videoConcepts.filter((c) => c.generating).map((c) => c.id)));
-  const setBusy = (id, isBusy) =>
-    setBusyIds((prev) => {
-      const next = new Set(prev);
-      if (isBusy) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  const { secondsLeft } = useVideoGenerationClock(busyIds.size > 0, project.id);
+  const anyGenerating = videoConcepts.some((c) => c.generating);
+  const { secondsLeft } = useVideoGenerationClock(anyGenerating, project.id);
   useEffect(() => {
-    if (busyIds.size === 0) clearVideoGenerationClock(project.id);
-  }, [busyIds.size, project.id]);
+    if (!anyGenerating) clearVideoGenerationClock(project.id);
+  }, [anyGenerating, project.id]);
 
-  const waitForVideoDone = async (conceptId, { intervalMs = 2000, maxAttempts = 150 } = {}) => {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-      const status = await listingStudioApi.getVideoStatus(project.id, conceptId);
-      if (!status.generating) {
-        if (status.error) throw new Error(status.error);
-        return status;
-      }
-    }
-    throw new Error('Still generating — this is taking longer than usual. Check back shortly.');
-  };
-  const waitForVideoResult = async (conceptId) => {
-    const status = await waitForVideoDone(conceptId);
-    await refresh();
-    return status;
-  };
+  useEffect(() => {
+    mountedRefresh.set(project.id, refresh);
+    // A poll settled while this page was unmounted — pick up its result now.
+    if ([...videoPolls].some(([key, state]) => state === 'settled' && key.startsWith(`${project.id}:`))) refresh();
+    return () => {
+      if (mountedRefresh.get(project.id) === refresh) mountedRefresh.delete(project.id);
+    };
+  }, [project.id, refresh]);
 
   const generateConcepts = async (angles) => {
     await listingStudioApi.startVideoConcepts(project.id, angles, aspectRatio);
@@ -123,21 +137,15 @@ export default function VideosPage() {
   const generatingKey = videoConcepts.map((c) => `${c.id}:${c.generating}`).join(',');
   useEffect(() => {
     videoConcepts.forEach((c) => {
-      if (c.generating && !busyIds.has(c.id)) {
-        setBusy(c.id, true);
-        waitForVideoResult(c.id)
-          .then((result) => {
-            const message = videoCreditNotificationMessage(result?.billing, 'Video generation');
-            if (message) toast.success(message);
-          })
-          .catch((err) => {
-            toast.error(err?.message || 'Video generation failed');
-            refresh();
-          })
-          .finally(() => setBusy(c.id, false));
+      const key = `${project.id}:${c.id}`;
+      // Fresh data shows it finished: forget the settled poll so a later retry can be watched again.
+      if (!c.generating) {
+        if (videoPolls.get(key) === 'settled') videoPolls.delete(key);
+        return;
       }
+      if (!videoPolls.has(key)) watchVideo(project.id, c.id);
     });
-  }, [generatingKey]);
+  }, [generatingKey, project.id]);
 
   return (
     <div>
@@ -192,7 +200,7 @@ export default function VideosPage() {
       {videoConcepts.length > 0 && (
         <div className={`${GRID_CARDS} items-start`}>
           {videoConcepts.map((c) => {
-            const busy = busyIds.has(c.id) || c.generating;
+            const busy = Boolean(c.generating);
             const dismissible = Boolean(c.error) && !c.path && !busy;
             return (
               <div key={c.id} className={GEN_CARD}>
