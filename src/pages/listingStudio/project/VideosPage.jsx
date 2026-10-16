@@ -28,12 +28,25 @@ const cssAspectRatio = (ratio) => (ratio || '16:9').replace(':', ' / ');
 const videoPolls = new Map();
 const mountedRefresh = new Map();
 
+// Network errors, 5xx and 429 are retried; any other 4xx (card deleted, access lost) ends the poll quietly.
+const isRetryablePollError = (err) => {
+  const status = err?.response?.status;
+  return !status || status >= 500 || status === 429;
+};
+
 async function pollVideoUntilDone(projectId, conceptId, { intervalMs = 2000, fastAttempts = 150, maxIntervalMs = 30000 } = {}) {
   let delay = intervalMs;
   for (let attempt = 0; ; attempt++) {
     if (attempt >= fastAttempts) delay = Math.min(delay * 1.5, maxIntervalMs);
     await new Promise((resolve) => setTimeout(resolve, delay));
-    const status = await listingStudioApi.getVideoStatus(projectId, conceptId);
+    let status;
+    try {
+      status = await listingStudioApi.getVideoStatus(projectId, conceptId);
+    } catch (err) {
+      // A blip or 5xx must not end the poll: a settled key is never re-watched while the card is still generating.
+      if (isRetryablePollError(err)) continue;
+      return null;
+    }
     if (!status.generating) {
       if (status.error) throw new Error(status.error);
       return status;
