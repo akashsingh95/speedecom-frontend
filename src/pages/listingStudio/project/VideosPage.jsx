@@ -28,16 +28,17 @@ const cssAspectRatio = (ratio) => (ratio || '16:9').replace(':', ' / ');
 const videoPolls = new Map();
 const mountedRefresh = new Map();
 
-async function pollVideoUntilDone(projectId, conceptId, { intervalMs = 2000, maxAttempts = 150 } = {}) {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+async function pollVideoUntilDone(projectId, conceptId, { intervalMs = 2000, fastAttempts = 150, maxIntervalMs = 30000 } = {}) {
+  let delay = intervalMs;
+  for (let attempt = 0; ; attempt++) {
+    if (attempt >= fastAttempts) delay = Math.min(delay * 1.5, maxIntervalMs);
+    await new Promise((resolve) => setTimeout(resolve, delay));
     const status = await listingStudioApi.getVideoStatus(projectId, conceptId);
     if (!status.generating) {
       if (status.error) throw new Error(status.error);
       return status;
     }
   }
-  throw new Error('Still generating — this is taking longer than usual. Check back shortly.');
 }
 
 function watchVideo(projectId, conceptId) {
