@@ -7,6 +7,7 @@ import { useAuth } from '../../AuthContext';
 import useOffers from '../../hooks/useOffers';
 import { isSoundReady, startRinging, stopRinging, subscribeSound } from './offerSound';
 import { openSupportDrawer } from './SupportChatDrawer';
+import { PRODUCT_BADGE_CLASSES, productLabel } from './products';
 
 const STAFF_ROLES = ['RM', 'SBM', 'SuperAdmin'];
 const LEVEL_LABELS = ['Your seller', 'Backup for another RM', 'No RM available', 'No RM or SBM available'];
@@ -85,6 +86,9 @@ const EscalationBanner = () => {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-bold text-slate-800 truncate">Incoming chat · {offer.ticket.ticketId}</p>
+                <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${PRODUCT_BADGE_CLASSES[offer.ticket.product] || PRODUCT_BADGE_CLASSES.reconciliation}`}>
+                  {productLabel(offer.ticket.product)}
+                </span>
                 <span className="ml-auto text-xs font-semibold tabular-nums text-amber-700">{secondsLeft}s</span>
               </div>
               <p className="text-xs text-slate-600 truncate">

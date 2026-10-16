@@ -13,6 +13,7 @@ import DateRangePicker from '../components/DateRangePicker';
 import { getClosingTime } from '../utils/formatDuration';
 import { useSocketEvent, useTicketRoom } from '../hooks/useSupportSocket';
 import AttachmentGallery from '../components/support/AttachmentGallery';
+import { PRODUCT_BADGE_CLASSES, PRODUCT_LABELS, productLabel } from '../components/support/products';
 
 const AdminSupport = () => {
     const { user } = useAuth();
@@ -41,6 +42,7 @@ const AdminSupport = () => {
     const [statusUpdating, setStatusUpdating] = useState(false);
     const [adminUsers, setAdminUsers] = useState([]);
     const [statusFilters, setStatusFilters] = useState([]);
+    const [productFilter, setProductFilter] = useState('');
     const [rmFilters, setRmFilters] = useState([]);
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
     const statusDropdownRef = useRef(null);
@@ -79,11 +81,11 @@ const AdminSupport = () => {
 
     useEffect(() => {
         setPage(1);
-    }, [statusFilters, rmFilters, developerFilters, filterType, debouncedSearchTerm, sortOrder]);
+    }, [statusFilters, productFilter, rmFilters, developerFilters, filterType, debouncedSearchTerm, sortOrder]);
 
     useEffect(() => {
         fetchTickets();
-    }, [statusFilters, rmFilters, developerFilters, filterType, dateRanges.created.start, dateRanges.created.end, dateRanges.closed.start, dateRanges.closed.end, debouncedSearchTerm, sortOrder, page]);
+    }, [statusFilters, productFilter, rmFilters, developerFilters, filterType, dateRanges.created.start, dateRanges.created.end, dateRanges.closed.start, dateRanges.closed.end, debouncedSearchTerm, sortOrder, page]);
 
     // Close date filter dropdown on outside click
     useEffect(() => {
@@ -227,6 +229,7 @@ const AdminSupport = () => {
             if (!silent) setLoading(true);
             const params = { page, limit: 20 };
             if (statusFilters.length > 0) params.status = statusFilters.join(',');
+            if (productFilter) params.product = productFilter;
             if (rmFilters.length > 0) params.assignedRM = rmFilters.join(',');
             if (developerFilters.length > 0) params.assignedDeveloper = developerFilters.join(',');
             if (filterType === 'created') {
@@ -288,6 +291,20 @@ const AdminSupport = () => {
             fetchTickets(); // refresh list
         } catch (error) {
             toast.error("Failed to update status");
+        } finally {
+            setStatusUpdating(false);
+        }
+    };
+
+    const handleProductUpdate = async (newProduct) => {
+        try {
+            setStatusUpdating(true);
+            await api.patch(`/support/${selectedTicket._id}`, { product: newProduct });
+            toast.success("Product updated");
+            fetchTicketDetails(selectedTicket._id);
+            fetchTickets();
+        } catch (error) {
+            toast.error("Failed to update product");
         } finally {
             setStatusUpdating(false);
         }
@@ -428,6 +445,7 @@ const AdminSupport = () => {
     const isAssignedToMe = selectedTicket?.assignedRM?._id === user?._id;
     const canBeAssignee = user && ['SuperAdmin', 'SBM', 'RM'].includes(user.role);
     const canManageAssignment = user && ['SuperAdmin', 'SBM'].includes(user.role);
+    const canChangeProduct = canManageAssignment || isAssignedToMe;
 
     return (
         <><DashboardLayout>
@@ -534,6 +552,20 @@ const AdminSupport = () => {
 
                 <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden transition-all duration-300">
                     <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center gap-4">
+                        <div role="radiogroup" aria-label="Product" className="inline-flex p-0.5 bg-slate-100 rounded-lg">
+                            {[['', 'All'], ...Object.entries(PRODUCT_LABELS)].map(([value, label]) => (
+                                <button
+                                    key={value || 'all'}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={productFilter === value}
+                                    onClick={() => setProductFilter(value)}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${productFilter === value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                         <div className="relative" ref={statusDropdownRef}>
                             <button
                                 onClick={() => setStatusDropdownOpen(o => !o)}
@@ -756,8 +788,8 @@ const AdminSupport = () => {
                                 <MessageSquare className="w-10 h-10 text-slate-400" />
                             </div>
                             <div className="text-center">
-                                <h3 className="font-semibold text-slate-700">{statusFilters.length === 0 && rmFilters.length === 0 && developerFilters.length === 0 ? 'No tickets found' : 'No tickets match these filters'}</h3>
-                                <p className="mt-1 text-sm text-slate-500">{statusFilters.length === 0 && rmFilters.length === 0 && developerFilters.length === 0 ? 'There are no active support tickets at the moment.' : 'Try adjusting the filters.'}</p>
+                                <h3 className="font-semibold text-slate-700">{statusFilters.length === 0 && rmFilters.length === 0 && developerFilters.length === 0 && !productFilter ? 'No tickets found' : 'No tickets match these filters'}</h3>
+                                <p className="mt-1 text-sm text-slate-500">{statusFilters.length === 0 && rmFilters.length === 0 && developerFilters.length === 0 && !productFilter ? 'There are no active support tickets at the moment.' : 'Try adjusting the filters.'}</p>
                             </div>
                         </div>
                     ) : (
@@ -789,6 +821,9 @@ const AdminSupport = () => {
                                             </td>
                                             <td className="px-6 py-4 text-sm text-slate-700 w-[240px] max-w-[240px]">
                                                 <div className="font-medium line-clamp-1">{ticket.title}</div>
+                                                <span className={`mt-1 inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border ${PRODUCT_BADGE_CLASSES[ticket.product] || PRODUCT_BADGE_CLASSES.reconciliation}`}>
+                                                    {productLabel(ticket.product)}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                 {ticket.assignedRM?.fullName ? (
@@ -975,8 +1010,22 @@ const AdminSupport = () => {
                                     )}
                                     <span className="h-3 w-px bg-slate-300"></span>
                                     <div className="inline-flex items-center gap-1.5">
-                                        <span className="text-slate-500 font-semibold">Category</span>
-                                        <span className="font-bold text-slate-800">Tenant Support</span>
+                                        <span className="text-slate-500 font-semibold">Product</span>
+                                        {canChangeProduct ? (
+                                            <select
+                                                value={selectedTicket.product || 'reconciliation'}
+                                                onChange={(e) => handleProductUpdate(e.target.value)}
+                                                disabled={statusUpdating}
+                                                aria-label="Product"
+                                                className="font-bold text-slate-800 bg-transparent border border-slate-200 rounded-md px-1.5 py-0.5 hover:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 disabled:opacity-50"
+                                            >
+                                                {Object.entries(PRODUCT_LABELS).map(([value, label]) => (
+                                                    <option key={value} value={value}>{label}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <span className="font-bold text-slate-800">{productLabel(selectedTicket.product)}</span>
+                                        )}
                                     </div>
                                     <span className="h-3 w-px bg-slate-300"></span>
                                     <button
