@@ -2,13 +2,15 @@
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, Layers, Download, CheckCircle2, Clock, RefreshCw, X, Monitor, Smartphone } from 'lucide-react';
+import { Sparkles, Layers, Download, CheckCircle2, Clock, RefreshCw, X, Monitor, Smartphone, Pencil, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { creditNotificationMessage, multiImageCreditNotificationMessage } from '../../../components/listingStudio/creditNotifications';
 import { premiumAplusApi } from '../../../components/listingStudio/premiumAplusApi';
+import { uploadImagesViaSignedUrl } from '../../../components/listingStudio/api';
 import { useProjectCtx } from '../../../components/listingStudio/context';
 import { getErrorMessage } from '../../../components/listingStudio/errors';
 import { EmptyStateCard } from '../../../components/listingStudio/ui/EmptyStateCard';
+import { GeneratedImageModal } from '../../../components/listingStudio/ui/GeneratedImageModal';
 import { ImageLightbox } from '../../../components/listingStudio/ui/ImageLightbox';
 import { Modal } from '../../../components/listingStudio/ui/Modal';
 import { AnglePicker } from '../../../components/listingStudio/AnglePicker';
@@ -19,6 +21,42 @@ import {
 
 const POLL_INTERVAL_MS = 2500;
 const POLL_MAX_ATTEMPTS = 150; // ~6 minutes — same bound ProjectLayout's pollUntil defaults to
+// An edit is one model call plus a Real-ESRGAN upscale and can run far longer than a fresh
+// render, so it gets its own bound: just past the server's 15-minute abandoned-edit window
+// (EDIT_STALE_MS in pipeline/premiumAplus.js), after which the design itself reports the failure.
+const EDIT_POLL_MAX_ATTEMPTS = 400; // ~16.5 minutes
+
+// Same pill-on-hover shape as the Images tab's GEN_CARD_EDIT, pinned top-right: these tiles have
+// no Remove button contesting that corner (same choice AplusPage made for its overlay card).
+const ASSET_EDIT_BTN =
+  'absolute top-1 right-1 rounded-full bg-white shadow-md ring-1 ring-slate-200 text-slate-600 grid place-items-center opacity-90 group-hover:opacity-100 transition-opacity hover:text-brand-600 hover:ring-brand-200 disabled:opacity-50 disabled:cursor-not-allowed';
+
+/** The `edits` map key the server writes a composite's edit state under (pipeline/premiumAplus.js's
+ *  editKeyFor). Only the full banner image is editable from this page — the slices below it are
+ *  cut from whatever the banner currently is, so editing the banner is what updates them all. */
+const compositeEditKey = (side) => `${side}-composite`;
+
+/** What this design is, in one line — the popup's AI edit suggestions are generated from it
+ *  (GeneratedImageModal reads `image.prompt` for that, and rejects an empty one). A Premium A+
+ *  asset has no per-asset brief of its own, so the design's own name/rationale is the context. */
+const designContext = (d) => [d.name, d.rationale].filter(Boolean).join(' — ') || 'Premium A+ design';
+
+/** The banner's Edit affordance. Shows a spinner while its edit is in flight, and is disabled
+ *  while a regeneration of the same canvas would overwrite what the edit is about to write. */
+function AssetEditButton({ busy, disabled, title, onClick }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      disabled={disabled || busy}
+      onClick={onClick}
+      className={`${ASSET_EDIT_BTN} w-7 h-7`}
+    >
+      {busy ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+    </button>
+  );
+}
 
 const VIEW_OPTIONS = [
   { key: 'desktop', label: 'Desktop', icon: Monitor },
@@ -66,9 +104,12 @@ function ViewToggle({ value, onChange }) {
  * Premium A+ Content: for each selected marketing-angle combination, one 650x1027 "desktop"
  * composite plus a 608x1824 "mobile" companion, both generated from one shared concept, each
  * sliced into 4 bands for upload into Amazon's Premium A+ builder (pipeline/premiumAplus.js).
- * This page is a pure viewing/downloading gallery — picking angles and triggering generation
- * both happen on the Strategy page (the same AnglePicker Standard A+ already uses, sharing one
- * checked selection between both features); this page only links there.
+ * Besides viewing and downloading, each side's full banner image carries an Edit button, opening
+ * the same GeneratedImageModal the Images tab and the A+ module editor use; the edit is billed as
+ * one image and the slices below are re-cut from the edited banner (see editAsset below). The
+ * slices themselves are not separately editable — they are cuts of the banner, so the banner is
+ * the one place an edit belongs. Angles can be picked and new designs generated from this page's own picker
+ * modal (the same AnglePicker Standard A+ uses, sharing one checked selection between both).
  */
 export default function PremiumAplusPage() {
   const { project, creditRates } = useProjectCtx();
@@ -94,6 +135,9 @@ export default function PremiumAplusPage() {
   const resumedRef = useRef(new Set());
   // Which canvas each design card shows, keyed by design id — Desktop unless toggled.
   const [viewSides, setViewSides] = useState({});
+  // The banner whose Edit popup is open: { designId, side, path, label, context, … } | null.
+  // A design has one banner per canvas, so this identifies a side of a design, not just a design.
+  const [editingAsset, setEditingAsset] = useState(null);
 
   const loadDesigns = useCallback(async () => {
     try {
@@ -130,7 +174,30 @@ export default function PremiumAplusPage() {
     }
   }, [project.id]);
 
-  // Resume polling for any design left mid-generation or mid-retry across a page reload.
+  // An edit is queued server-side and tracked under the design's `edits` map, so this polls that
+  // one entry (not the canvas's `[side]Generating`, which an edit deliberately never touches:
+  // that flag clears the images on screen, while an edit leaves them up until the replacement
+  // lands). Resolves with the settled entry so the caller can read its `billing`.
+  const waitForEditResult = useCallback(async (designId, editKey) => {
+    const resumeKey = `${designId}:edit:${editKey}`;
+    try {
+      for (let attempt = 0; attempt < EDIT_POLL_MAX_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        const d = await premiumAplusApi.getDesign(project.id, designId);
+        if (!d) return null; // design deleted mid-poll
+        setDesigns((prev) => prev?.map((x) => (x.id === designId ? d : x)) ?? prev);
+        const state = d.edits?.[editKey];
+        if (state?.editing) continue;
+        if (state?.error) throw new Error(state.error);
+        return state ?? null;
+      }
+      throw new Error('Still editing — this is taking longer than usual. Check back shortly.');
+    } finally {
+      resumedRef.current.delete(resumeKey);
+    }
+  }, [project.id]);
+
+  // Resume polling for any design left mid-generation, mid-retry or mid-edit across a page reload.
   useEffect(() => {
     (designs || []).forEach((d) => {
       ['desktop', 'mobile'].forEach((side) => {
@@ -140,8 +207,40 @@ export default function PremiumAplusPage() {
           waitForSideResult(d.id, side).catch(() => {});
         }
       });
+      Object.entries(d.edits || {}).forEach(([editKey, state]) => {
+        const key = `${d.id}:edit:${editKey}`;
+        if (state?.editing && !resumedRef.current.has(key)) {
+          resumedRef.current.add(key);
+          waitForEditResult(d.id, editKey).catch(() => {});
+        }
+      });
     });
-  }, [designs, waitForSideResult]);
+  }, [designs, waitForSideResult, waitForEditResult]);
+
+  /** From the Edit popup on a side's banner image: queues the edit, then resolves once that
+   *  banner's edit entry settles — GeneratedImageModal awaits this for its progress bar, closes
+   *  itself on resolve, and turns the returned `billing` into the "credits deducted" toast (one
+   *  image per edit, billed exactly like an Images-tab or A+ slot edit). The server re-cuts this
+   *  side's slices from the edited banner, so the strip below updates with it. Must reject on
+   *  failure so the modal surfaces the error instead of closing as if the edit had landed. */
+  const editAsset = async (asset, prompt, referenceImageIds, referenceFile) => {
+    const { designId, side } = asset;
+    const editKey = compositeEditKey(side);
+    const [referencePhotoKey] = referenceFile ? await uploadImagesViaSignedUrl([referenceFile], { transient: true }) : [];
+    await premiumAplusApi.editAsset(project.id, designId, side, { prompt, referenceImageIds, referencePhotoKey });
+    // Reflect the server's claim right away so the banner shows as editing without waiting for
+    // the first poll 2.5s from now.
+    resumedRef.current.add(`${designId}:edit:${editKey}`);
+    setDesigns((prev) =>
+      prev?.map((x) =>
+        x.id === designId
+          ? { ...x, edits: { ...(x.edits || {}), [editKey]: { ...(x.edits?.[editKey] || {}), editing: true, error: null } } }
+          : x,
+      ) ?? prev,
+    );
+    const done = await waitForEditResult(designId, editKey);
+    return { billing: done?.billing ?? null };
+  };
 
   const regenerateSide = async (designId, side) => {
     const key = `${designId}:${side}`;
@@ -229,6 +328,12 @@ export default function PremiumAplusPage() {
     const err = d[`${side}Error`];
     const busy = regeneratingKey === `${d.id}:${side}`;
     const sideLabel = side === 'desktop' ? 'Desktop (1536×2464)' : 'Mobile (608×1824)';
+    // An edit and a regeneration both rewrite this canvas's banner AND every slice cut from it,
+    // so each locks the other out for the duration rather than letting one silently overwrite
+    // the other's result.
+    const compositeEdit = d.edits?.[compositeEditKey(side)];
+    const editing = Boolean(compositeEdit?.editing);
+    const editError = compositeEdit?.error;
     return (
       <div className="px-3 sm:px-12 lg:px-24">
         <div className="flex items-center justify-between mb-1">
@@ -237,7 +342,8 @@ export default function PremiumAplusPage() {
             <button
               type="button"
               className={`${BTN} ${BTN_SMALL}`}
-              disabled={busy || generating}
+              disabled={busy || generating || editing}
+              title={editing ? 'An edit is in progress on this canvas' : undefined}
               onClick={() => regenerateSide(d.id, side)}
             >
               <span className={ICON_LABEL}>
@@ -247,14 +353,31 @@ export default function PremiumAplusPage() {
           )}
         </div>
         {compositePath && (
-          <button
-            type="button"
-            title={`View ${side} design`}
-            onClick={() => setLightbox({ images: [{ src: compositePath, alt: `${d.name} (${side})` }], initialIndex: 0 })}
-            className="block w-full rounded-lg overflow-hidden border border-slate-200 hover:ring-2 hover:ring-brand-300 mb-1.5"
-          >
-            <img src={compositePath} alt={d.name} className="w-full object-contain block" />
-          </button>
+          <div className="relative group mb-1.5">
+            <button
+              type="button"
+              title={`View ${side} design`}
+              onClick={() => setLightbox({ images: [{ src: compositePath, alt: `${d.name} (${side})` }], initialIndex: 0 })}
+              className="block w-full rounded-lg overflow-hidden border border-slate-200 hover:ring-2 hover:ring-brand-300"
+            >
+              <img src={compositePath} alt={d.name} className="w-full object-contain block" />
+            </button>
+            <AssetEditButton
+              busy={editing}
+              disabled={busy || generating}
+              title={`Edit the full ${side} image`}
+              onClick={() =>
+                setEditingAsset({
+                  designId: d.id,
+                  side,
+                  target: 'composite',
+                  path: compositePath,
+                  label: `Premium A+ ${side}`,
+                  context: designContext(d),
+                })
+              }
+            />
+          </div>
         )}
         {!compositePath && generating && (
           <div className={`${GEN_CARD} grid place-items-center text-slate-400 text-sm p-6 mb-1.5`}>
@@ -268,6 +391,8 @@ export default function PremiumAplusPage() {
         )}
         {slicePaths?.length > 0 && (
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+            {/* View-only: a slice is a cut of the banner above, so it has no Edit button of its
+                own — editing the banner re-cuts all of them. */}
             {slicePaths.map((path, i) => (
               <button
                 key={path}
@@ -286,6 +411,9 @@ export default function PremiumAplusPage() {
             ))}
           </div>
         )}
+        {/* An edit that failed after the popup was closed (or after a reload) has nowhere else to
+            report it — the toast is long gone by then. */}
+        {editError && <p className="text-red-600 text-xs mt-1.5">{editError}</p>}
       </div>
     );
   };
@@ -419,6 +547,28 @@ export default function PremiumAplusPage() {
 
       {lightbox && (
         <ImageLightbox images={lightbox.images} initialIndex={lightbox.initialIndex} onClose={() => setLightbox(null)} />
+      )}
+
+      {editingAsset && (
+        <GeneratedImageModal
+          projectId={project.id}
+          image={{
+            // Per-banner id: it keys the modal's own "an edit is in flight" marker, so closing and
+            // reopening the popup on the same banner picks that edit back up instead of looking idle.
+            id: `${editingAsset.designId}:${compositeEditKey(editingAsset.side)}`,
+            path: editingAsset.path,
+            prompt: editingAsset.context,
+            type: editingAsset.label,
+          }}
+          libraryEntries={project.imageLibrary?.entries ?? []}
+          imageCost={creditRates?.imageCost ?? null}
+          freeImagesRemaining={creditRates?.freeImagesRemaining ?? 0}
+          onClose={() => setEditingAsset(null)}
+          onRegenerate={(prompt, referenceImageIds, referenceFile) =>
+            editAsset(editingAsset, prompt, referenceImageIds, referenceFile)
+          }
+          onRegenerated={async () => setEditingAsset(null)}
+        />
       )}
 
       {pickerOpen && strategy && (
