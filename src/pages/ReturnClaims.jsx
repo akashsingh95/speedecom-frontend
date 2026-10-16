@@ -156,7 +156,9 @@ const BulkBanner = ({ bulk, cancelRef, onStart, onChange, onDismiss }) => {
                         <div>
                             <p className="text-sm font-semibold text-slate-800">
                                 {bulk.raised > 0 && <span>{bulk.raised} claim{bulk.raised !== 1 ? 's' : ''} raised</span>}
-                                {bulk.raised > 0 && bulk.failed > 0 && <span className="text-slate-400"> · </span>}
+                                {bulk.raised > 0 && bulk.linked > 0 && <span className="text-slate-400"> · </span>}
+                                {bulk.linked > 0 && <span className="text-violet-600">{bulk.linked} already existed on Meesho</span>}
+                                {(bulk.raised > 0 || bulk.linked > 0) && bulk.failed > 0 && <span className="text-slate-400"> · </span>}
                                 {bulk.failed > 0 && <span className="text-rose-600">{bulk.failed} failed</span>}
                             </p>
                             <p className="text-xs text-slate-500">Statuses will update on the next claims sync</p>
@@ -271,6 +273,7 @@ const ReturnClaims = () => {
         const progress = {};
         setBulkRaise({ phase: 'running', rows, total: rows.length, current: 0, callbackNumber, progress });
         let raised = 0;
+        let linked = 0;
         let failed = 0;
 
         for (let i = 0; i < rows.length; i++) {
@@ -280,7 +283,7 @@ const ReturnClaims = () => {
             setBulkRaise(prev => ({ ...prev, current: i + 1, progress: { ...progress } }));
 
             try {
-                await api.post('/returns/claims', {
+                const { data } = await api.post('/returns/claims', {
                     marketplaceId: row.marketplace_id,
                     suborderNumber: row.suborder_number,
                     awbNumber: row.awb_number || '',
@@ -288,8 +291,13 @@ const ReturnClaims = () => {
                     callbackNumber,
                     issueCategory: 5,
                 });
-                progress[row.suborder_number] = { phase: 'success' };
-                raised++;
+                if (data.alreadyExisted) {
+                    progress[row.suborder_number] = { phase: 'recovered' };
+                    linked++;
+                } else {
+                    progress[row.suborder_number] = { phase: 'success' };
+                    raised++;
+                }
             } catch (err) {
                 const msg = err.response?.data?.message || 'Failed';
                 progress[row.suborder_number] = { phase: 'error', error: msg };
@@ -298,9 +306,10 @@ const ReturnClaims = () => {
             setBulkRaise(prev => ({ ...prev, progress: { ...progress } }));
         }
 
-        setBulkRaise(prev => ({ ...prev, phase: 'done', raised, failed }));
+        setBulkRaise(prev => ({ ...prev, phase: 'done', raised, linked, failed }));
         setRefreshKey(k => k + 1);
         if (raised) toast.success(`${raised} claim${raised !== 1 ? 's' : ''} raised`);
+        if (linked) toast.info(`${linked} already existed on Meesho — linked and syncing`);
         if (failed) toast.error(`${failed} claim${failed !== 1 ? 's' : ''} failed — check the rows below`);
     };
 

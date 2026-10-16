@@ -47,6 +47,13 @@ const ClaimCell = ({ row, canRaise, onRaise, bulkProgress }) => {
             </span>
         );
     }
+    if (bp?.phase === 'recovered') {
+        return (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700">
+                <Ticket size={12} /> Already existed
+            </span>
+        );
+    }
     if (bp?.phase === 'error') {
         return (
             <span title={bp.error} className="inline-flex cursor-help items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700">
