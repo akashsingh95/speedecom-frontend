@@ -371,7 +371,9 @@ export default function ProjectLayout() {
   // stacked on the same page). Every other page still gets it as their only progress feedback
   // when a job is running.
   const showGenericJobbar = currentSection !== 'processing';
-  const showJobProgressBar = showGenericJobbar;
+  // Writing video prompts is a short step before the real (per-card) video generation, so it gets
+  // no progress bar; its failures still surface through the generic error bar below.
+  const showJobProgressBar = showGenericJobbar && job?.kind !== 'video-concepts';
 
   // Any of the three jobs (research/strategy/aplus) takes the user to the full-page Processing
   // view once when it starts — including strategy/aplus jobs a user starts by hand from their

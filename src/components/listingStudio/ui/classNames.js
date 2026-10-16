@@ -186,6 +186,10 @@ export const GEN_CARD_REMOVE =
   'absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-white shadow-md ring-1 ring-slate-200 text-slate-600 grid place-items-center text-xs opacity-90 group-hover:opacity-100 transition-opacity hover:text-red-600 hover:ring-red-200';
 export const GEN_CARD_EDIT =
   'absolute top-1.5 left-1.5 w-7 h-7 rounded-full bg-white shadow-md ring-1 ring-slate-200 text-slate-600 grid place-items-center opacity-90 group-hover:opacity-100 transition-opacity hover:text-brand-600 hover:ring-brand-200';
+// Same as GEN_CARD_EDIT but hidden until the card is hovered (or the button is keyboard-focused) —
+// a separate full string, since stacking opacity-0 onto opacity-90 races on stylesheet order.
+export const GEN_CARD_EDIT_ON_HOVER =
+  'absolute top-1.5 left-1.5 z-10 w-7 h-7 rounded-full bg-white shadow-md ring-1 ring-slate-200 text-slate-600 grid place-items-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:text-brand-600 hover:ring-brand-200';
 // Text overlaid on a photo (any photo — busy backgrounds, bright/dark areas) never reads
 // cleanly regardless of pill shape or clamping, so the type tag + concept name live in a
 // plain footer strip below the image instead of on top of it.
