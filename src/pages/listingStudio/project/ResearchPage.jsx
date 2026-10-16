@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Search, CheckCircle2, BarChart3, ThumbsUp, AlertTriangle, Lightbulb, LayoutGrid, Heart, ExternalLink, Star, Users, Leaf, DollarSign, Brain, ZoomIn, LineChart } from 'lucide-react';
+import { Search, CheckCircle2, BarChart3, ThumbsUp, AlertTriangle, Lightbulb, LayoutGrid, Heart, ExternalLink, Star, Users, Leaf, DollarSign, Brain, ZoomIn } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
 import { amazonUrl } from '../../../components/listingStudio/helpers';
 import { useProjectCtx } from '../../../components/listingStudio/context';
 import { SentimentDonut, DemographicsBars } from '../../../components/listingStudio/charts';
-import { TrendChart } from '../../../components/listingStudio/KeywordTrendChart';
-import { Modal } from '../../../components/listingStudio/ui/Modal';
 import CompetitorPicker from '../../../components/listingStudio/CompetitorPicker';
 import { EmptyStateCard } from '../../../components/listingStudio/ui/EmptyStateCard';
 import { ImageLightbox } from '../../../components/listingStudio/ui/ImageLightbox';
@@ -67,7 +65,6 @@ export default function ResearchPage() {
   const meta = project.researchMeta;
   const isAwaitingSelection = job?.status === 'awaiting_selection';
   const [lightboxSrc, setLightboxSrc] = useState(null);
-  const [trendKeyword, setTrendKeyword] = useState(null);
 
 
   // A concept's A+ overlay image lives at modules[].images[].path, keyed by module type/slot —
@@ -89,7 +86,7 @@ export default function ResearchPage() {
   // r.competitorInsights (LLM-synthesized) has no brand field — pull it from the raw
   // scraped competitors saved alongside research, keyed by ASIN.
   const brandByAsin = Object.fromEntries((project.competitors ?? []).map((c) => [c.asin, c.brand]));
-   // Amazon's bucketed monthly sales text per competitor, e.g. "4K+ bought in past month".
+  // Amazon's bucketed monthly sales text per competitor, e.g. "4K+ bought in past month".
   const boughtByAsin = Object.fromEntries((project.competitors ?? []).map((c) => [c.asin, c.boughtPastMonth]));
   // Market share: each competitor's share of the analyzed set's total monthly units (lower-bound count).
   const unitsByAsin = Object.fromEntries(
@@ -445,14 +442,6 @@ export default function ResearchPage() {
 
           {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
-              {trendKeyword && meta?.keywordTrends?.[trendKeyword]?.length > 0 && (
-            <Modal onClose={() => setTrendKeyword(null)}>
-              <h2 className="text-lg font-semibold text-slate-900 mb-4 pr-8">{trendKeyword}</h2>
-              <TrendChart points={meta.keywordTrends[trendKeyword]} />
-            </Modal>
-          )}
-
-
           {r.motivations && r.motivations.length > 0 && (
             <div className={CARD}>
               <h2 className={`${ICON_LABEL} ${CARD_TITLE}`}>
@@ -490,16 +479,6 @@ export default function ResearchPage() {
                     <span className="text-sm text-right tabular-nums font-semibold text-slate-900">
                       {k.searchVolume.toLocaleString('en-US')}
                     </span>
-                    {meta?.keywordTrends?.[k.keyword]?.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setTrendKeyword(k.keyword)}
-                        title={`Search trend for "${k.keyword}"`}
-                        className="shrink-0 w-7 h-7 grid place-items-center rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                      >
-                        <LineChart size={14} />
-                      </button>
-                    )}
                   </li>
                 ))}
               </ul>
