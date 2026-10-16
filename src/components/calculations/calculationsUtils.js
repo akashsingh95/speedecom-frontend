@@ -144,17 +144,30 @@ export const MYNTRA_HIDDEN_COLUMNS = new Set([
     'mp_fee_settlement', 'return_loss', 'total_offer_amount', 'my_share'
 ]);
 
+// Snapdeal's calculations rows only ever populate: gross_sales, return_sales, total_sales,
+// orders_settlement, claim_payment, sku_wise_ads, tcs_value, tds_value, total_cost, profit_loss,
+// return_loss, total/delivered/customer_return/rto_quantity (see snapdealService.js's INSERT) —
+// everything below is a Flipkart/Meesho/Amazon-only concept that would otherwise show as a
+// confusing always-zero column instead of being hidden like the other platforms' irrelevant columns.
+export const SNAPDEAL_HIDDEN_COLUMNS = new Set([
+    'size', 'total_offer_amount', 'my_share', 'mp_fee_settlement', 'compensation', 'recovery',
+    'replacement_quantity', 'replacement_pct', 'cancel_quantity', 'refund_loss_quantity',
+    'flipkart_gst_credit', 'meesho_gst_credit', 'purchase_gst_credit', 'selling_gst_debit', 'available_gst_credit',
+    'fulfilment_source', 'meesho_return_charges',
+]);
+
 /**
  * Whether a column is visible for: the current marketplace context.
  */
-export const isColVisible = (col, { isAmazon, isMeesho, isMyntra, isMeeshoSizeDisabled }) => {
+export const isColVisible = (col, { isAmazon, isMeesho, isMyntra, isSnapdeal, isMeeshoSizeDisabled }) => {
     if (isMyntra && MYNTRA_HIDDEN_COLUMNS.has(col)) return false;
     if (isAmazon && AMAZON_HIDDEN_COLUMNS.has(col)) return false;
+    if (isSnapdeal && SNAPDEAL_HIDDEN_COLUMNS.has(col)) return false;
     if (isMeesho) {
         if (MEESHO_HIDDEN_COLUMNS.has(col)) return false;
         if (col === 'size' && isMeeshoSizeDisabled) return false;
     }
-    if (!isMeesho && !isAmazon && !isMyntra && FLIPKART_HIDDEN_COLUMNS.has(col)) return false;
+    if (!isMeesho && !isAmazon && !isMyntra && !isSnapdeal && FLIPKART_HIDDEN_COLUMNS.has(col)) return false;
     return true;
 };
 
