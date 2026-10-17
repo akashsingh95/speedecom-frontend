@@ -79,6 +79,10 @@ export const AuthProvider = ({ children }) => {
                         // When impersonating, /auth/profile returns the impersonated tenant's data,
                         // so its listingStudioEnabled is exactly what we want to show for that tenant.
                         listingStudioEnabled: isCurrentlyImpersonating ? fresh.listingStudioEnabled : (fresh.listingStudioEnabled ?? parsedUser.listingStudioEnabled),
+                        // 'none' | 'pending' | 'active' | 'suspended'. Distinguishes "never bought
+                        // Speedy Listing" from "paid, waiting on SuperAdmin approval" so the UI can
+                        // show the pending state instead of hiding the product entirely.
+                        listingStudioStatus: isCurrentlyImpersonating ? fresh.listingStudioStatus : (fresh.listingStudioStatus ?? parsedUser.listingStudioStatus),
                     };
                     localStorage.setItem('user', JSON.stringify(refreshed));
                     setUser(refreshed);
@@ -112,7 +116,8 @@ export const AuthProvider = ({ children }) => {
                         const currentPerms = JSON.stringify(currentUser.permissions || {});
                         const freshPerms = JSON.stringify(fresh.permissions || {});                        if (currentPerms !== freshPerms
                             || currentUser.fullName !== fresh.fullName
-                            || currentUser.listingStudioEnabled !== fresh.listingStudioEnabled) {
+                            || currentUser.listingStudioEnabled !== fresh.listingStudioEnabled
+                            || currentUser.listingStudioStatus !== fresh.listingStudioStatus) {
                             const refreshed = {
                                 ...currentUser,
                                 fullName: fresh.fullName ?? currentUser.fullName,
@@ -120,6 +125,7 @@ export const AuthProvider = ({ children }) => {
                                 role: fresh.role ?? currentUser.role,
                                 permissions: fresh.permissions ?? currentUser.permissions ?? {},
                                 listingStudioEnabled: fresh.listingStudioEnabled ?? currentUser.listingStudioEnabled,
+                                listingStudioStatus: fresh.listingStudioStatus ?? currentUser.listingStudioStatus,
                             };
                             localStorage.setItem('user', JSON.stringify(refreshed));
                             setUser(refreshed);
@@ -171,6 +177,7 @@ export const AuthProvider = ({ children }) => {
                 permissions: res.data.permissions || {},
                 profilePicture: res.data.profilePicture || '',
                 listingStudioEnabled: res.data.listingStudioEnabled,
+                listingStudioStatus: res.data.listingStudioStatus,
             };
 
             localStorage.setItem('user', JSON.stringify(userData));
@@ -267,7 +274,7 @@ export const AuthProvider = ({ children }) => {
         api.get('/auth/profile').then(res => {
             const fresh = res.data;
             const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-            const updated = { ...currentUser, profilePicture: fresh.profilePicture || '', listingStudioEnabled: fresh.listingStudioEnabled };
+            const updated = { ...currentUser, profilePicture: fresh.profilePicture || '', listingStudioEnabled: fresh.listingStudioEnabled, listingStudioStatus: fresh.listingStudioStatus };
             localStorage.setItem('user', JSON.stringify(updated));
             setUser(updated);
         }).catch(() => {}).finally(() => setImpersonationSyncing(false));
@@ -282,7 +289,7 @@ export const AuthProvider = ({ children }) => {
         api.get('/auth/profile').then(res => {
             const fresh = res.data;
             const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-            const updated = { ...currentUser, profilePicture: fresh.profilePicture || '', listingStudioEnabled: fresh.listingStudioEnabled };
+            const updated = { ...currentUser, profilePicture: fresh.profilePicture || '', listingStudioEnabled: fresh.listingStudioEnabled, listingStudioStatus: fresh.listingStudioStatus };
             localStorage.setItem('user', JSON.stringify(updated));
             setUser(updated);
         }).catch(() => {});

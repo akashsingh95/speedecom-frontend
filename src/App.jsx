@@ -51,7 +51,8 @@ import ListingStudioVideosPage from './pages/listingStudio/project/VideosPage';
 import ListingStudioComparisonShelfPage from './pages/listingStudio/project/ComparisonShelfPage';
 import ListingStudioAlexaReadinessPage from './pages/listingStudio/project/AlexaReadinessPage';
 import { ComingSoonPage } from './pages/listingStudio/project/ComingSoonPage';
-import { Boxes } from 'lucide-react';
+import { Boxes, Clock } from 'lucide-react';
+import DashboardLayout from './components/DashboardLayout';
 
 import { Toaster } from 'sonner';
 
@@ -121,10 +122,32 @@ const NotImpersonating = ({ children }) => {
 // tenants" model is a different shape of oversight, not covered by this page.
 const CROSS_TENANT_LISTING_STUDIO_ROLES = ['SuperAdmin', 'SBM'];
 
+// Shown to a tenant who has paid for (or been gifted) Speedy Listing but whose access a
+// SuperAdmin has not approved yet. AuthContext re-polls /auth/profile every 60s while the tab
+// is visible and on every window focus, so this screen replaces itself with the real product
+// within about a minute of approval — no logout or manual refresh.
+const ListingStudioPending = () => (
+  <DashboardLayout>
+    <div className="max-w-xl mx-auto mt-16 text-center px-4">
+      <div className="mx-auto w-14 h-14 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center">
+        <Clock size={26} className="text-amber-500" />
+      </div>
+      <h1 className="mt-6 text-xl font-semibold text-slate-900">Speedy Listing is almost ready</h1>
+      <p className="mt-3 text-sm leading-relaxed text-slate-500">
+        We've received your payment and your credits are safely in your wallet. Your access is
+        waiting on a quick approval from our team and will open automatically — you don't need to
+        log out or refresh.
+      </p>
+      <p className="mt-6 text-xs text-slate-400">
+        Need it sooner? Reach out from the Support page and we'll prioritise it.
+      </p>
+    </div>
+  </DashboardLayout>
+);
+
 // Speedy Listing: SuperAdmin/SBM have access when acting as themselves (MVP validation);
-// while impersonating (or when actually Admin), the impersonated/own tenant's
-// listingStudioEnabled applies (tenant-configurable via LISTING_STUDIO_ALLOWED_TENANT_IDS
-// on the server) — mirrors the Sidebar's own check.
+// while impersonating (or when actually Admin), the impersonated/own tenant's access status
+// applies (Tenant.listingStudio.status on the server) — mirrors the Sidebar's own check.
 const ListingStudioGuard = ({ children }) => {
   const { user, isImpersonating, impersonationSyncing } = useAuth();
   if (CROSS_TENANT_LISTING_STUDIO_ROLES.includes(user?.role) && !isImpersonating) return children;
@@ -133,6 +156,11 @@ const ListingStudioGuard = ({ children }) => {
   // it here would race that refetch. Render nothing for that brief window instead of guessing.
   if (isImpersonating && impersonationSyncing) return null;
   if ((user?.role === 'Admin' || isImpersonating) && user?.listingStudioEnabled !== false) return children;
+  // Paid/gifted but unapproved: explain the wait instead of bouncing them to the dashboard,
+  // which would read as the purchase having silently failed.
+  if ((user?.role === 'Admin' || isImpersonating) && user?.listingStudioStatus === 'pending') {
+    return <ListingStudioPending />;
+  }
   const landing = getAdminLandingPage(user?.role, user?.permissions) || '/dashboard';
   return <Navigate to={landing} replace />;
 };
@@ -222,7 +250,7 @@ function App() {
 
             {/* Shared pages */}
             <Route path="/profile" element={<ProfileSettings />} />
-            <Route path="/admin/approvals" element={<NotImpersonating><SBMPermissionGuard requiredPermission={['approveTenants', 'approveSubscriptions', 'rejectRegistrations']}><AdminApprovals /></SBMPermissionGuard></NotImpersonating>} />
+            <Route path="/admin/approvals" element={<NotImpersonating><SBMPermissionGuard requiredPermission={['approveTenants', 'approveSubscriptions', 'rejectRegistrations', 'approveListingStudioAccess']}><AdminApprovals /></SBMPermissionGuard></NotImpersonating>} />
             <Route path="/uploads" element={<Uploads />} />
             <Route path="/upload-history/:uploadId" element={<UploadDetails />} />
             <Route path="/admin/tenants" element={<NotImpersonating><SBMPermissionGuard requiredPermission="viewTenants"><SuperAdminTenants /></SBMPermissionGuard></NotImpersonating>} />
