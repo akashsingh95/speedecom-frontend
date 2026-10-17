@@ -162,21 +162,21 @@ export default function TenantToolbar({
 
                     {/* Middle: Pill Filters */}
                     <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                        <button onClick={() => { setFilter('all'); setSelectedRM('all'); }} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${filter === 'all' && selectedRM === 'all' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                        <button onClick={() => { setFilter('all'); setSelectedRM('all'); }} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors group flex items-center gap-2 ${filter === 'all' && selectedRM === 'all' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
                             All
-                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'all' && selectedRM === 'all' ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-500'}`}>{globalStats?.totalTenants || totalCount || 0}</span>
+                            <span className={`py-0.5 rounded-full text-[10px] max-w-0 -ml-2 px-0 opacity-0 overflow-hidden transition-all duration-200 group-hover:max-w-[4rem] group-hover:ml-0 group-hover:px-1.5 group-hover:opacity-100 group-focus-visible:max-w-[4rem] group-focus-visible:ml-0 group-focus-visible:px-1.5 group-focus-visible:opacity-100 ${filter === 'all' && selectedRM === 'all' ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-500'}`}>{globalStats?.totalTenants || totalCount || 0}</span>
                         </button>
-                        <button onClick={() => setFilter('active')} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${getPillStyle('active')}`}>
+                        <button onClick={() => setFilter('active')} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors group flex items-center gap-2 ${getPillStyle('active')}`}>
                             Active
-                            {globalStats?.activeCount !== undefined && <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'active' ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{globalStats.activeCount}</span>}
+                            {globalStats?.activeCount !== undefined && <span className={`py-0.5 rounded-full text-[10px] max-w-0 -ml-2 px-0 opacity-0 overflow-hidden transition-all duration-200 group-hover:max-w-[4rem] group-hover:ml-0 group-hover:px-1.5 group-hover:opacity-100 group-focus-visible:max-w-[4rem] group-focus-visible:ml-0 group-focus-visible:px-1.5 group-focus-visible:opacity-100 ${filter === 'active' ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{globalStats.activeCount}</span>}
                         </button>
-                        <button onClick={() => setFilter('inactive')} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${getPillStyle('inactive')}`}>
+                        <button onClick={() => setFilter('inactive')} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors group flex items-center gap-2 ${getPillStyle('inactive')}`}>
                             Inactive
-                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'inactive' ? 'bg-rose-200 text-rose-800' : 'bg-slate-100 text-slate-600'}`}>{inactiveCount}</span>
+                            <span className={`py-0.5 rounded-full text-[10px] max-w-0 -ml-2 px-0 opacity-0 overflow-hidden transition-all duration-200 group-hover:max-w-[4rem] group-hover:ml-0 group-hover:px-1.5 group-hover:opacity-100 group-focus-visible:max-w-[4rem] group-focus-visible:ml-0 group-focus-visible:px-1.5 group-focus-visible:opacity-100 ${filter === 'inactive' ? 'bg-rose-200 text-rose-800' : 'bg-slate-100 text-slate-600'}`}>{inactiveCount}</span>
                         </button>
-                        <button onClick={() => setFilter('lowBalance')} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${getPillStyle('lowBalance')}`}>
+                        <button onClick={() => setFilter('lowBalance')} className={`px-4 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap transition-colors group flex items-center gap-2 ${getPillStyle('lowBalance')}`}>
                             Low balance
-                            {globalStats?.lowBalanceCount !== undefined && <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'lowBalance' ? 'bg-amber-200 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{globalStats.lowBalanceCount}</span>}
+                            {globalStats?.lowBalanceCount !== undefined && <span className={`py-0.5 rounded-full text-[10px] max-w-0 -ml-2 px-0 opacity-0 overflow-hidden transition-all duration-200 group-hover:max-w-[4rem] group-hover:ml-0 group-hover:px-1.5 group-hover:opacity-100 group-focus-visible:max-w-[4rem] group-focus-visible:ml-0 group-focus-visible:px-1.5 group-focus-visible:opacity-100 ${filter === 'lowBalance' ? 'bg-amber-200 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{globalStats.lowBalanceCount}</span>}
                         </button>
 
                         {/* RMs Dropdown disguised as a pill */}
