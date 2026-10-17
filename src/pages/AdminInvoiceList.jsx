@@ -505,6 +505,19 @@ const AdminInvoiceList = () => {
         return `${tx.editableAmount} credits`;
     };
 
+    // What the Edit modal's amount field actually edits for a row, and what to call it. A Speedy
+    // Listing credit grant that was given as a rupee figure is edited in rupees — the same unit it
+    // was given in and the one the Amount column reports — and the server re-derives the credit
+    // count from it. Only a gift entered directly in coins is edited as a raw credit count.
+    const creditEditField = (tx) => {
+        if (!tx) return { label: 'Amount (₹)', value: '' };
+        if (tx.category !== 'LISTING_STUDIO') return { label: 'Amount (₹)', value: tx.amount };
+        if (tx.giftKind === 'freeImages') return { label: 'Free Images (count)', value: tx.editableAmount };
+        if (tx.giftKind === 'freeVideos') return { label: 'Free Videos (count)', value: tx.editableAmount };
+        if (tx.rupeeAmount > 0) return { label: 'Amount (₹)', value: tx.rupeeAmount };
+        return { label: 'Credits', value: tx.editableAmount };
+    };
+
     // The Amount cell, shared by the Free Trial Credits and Admin Gift tabs. Both show the rupee
     // amount on its own: a Speedy Listing row keeps its credit count in `amount` and the rupee
     // figure the admin typed in `rupeeAmount`, so the rupee figure is the one shown, and only a
@@ -3548,9 +3561,7 @@ const AdminInvoiceList = () => {
                                     <label className={`block text-sm font-semibold mb-2 ${
                                         activeTab === 'adminGift' ? 'text-purple-900' : 'text-orange-900'
                                     }`}>
-                                        {editingCredit?.category === 'LISTING_STUDIO'
-                                            ? (editingCredit?.giftKind === 'freeImages' ? 'Free Images (count)' : editingCredit?.giftKind === 'freeVideos' ? 'Free Videos (count)' : 'Credits')
-                                            : 'Amount (₹)'}
+                                        {creditEditField(editingCredit).label}
                                     </label>
                                     <input
                                         type="number"
@@ -3920,7 +3931,7 @@ const AdminInvoiceList = () => {
                                     setOpenCreditMenuId(null);
                                     setCreditMenuPosition(null);
                                     setEditingCredit(menuTx);
-                                    setEditCreditAmount(menuTx.category === 'LISTING_STUDIO' ? menuTx.editableAmount : menuTx.amount);
+                                    setEditCreditAmount(creditEditField(menuTx).value);
                                     setEditCreditNote(menuTx.note || '');
                                     setEditCreditType(menuTx.type);
                                     setEditCreditDate(getLocalDateInputValue(menuTx.transactionDate || menuTx.createdAt));
