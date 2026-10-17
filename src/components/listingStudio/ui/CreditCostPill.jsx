@@ -18,8 +18,9 @@ function formatCredits(n) {
  * free, fully paid, or split across both — this mirrors that order exactly rather than only
  * handling the single-image case. Renders nothing when a paid image remains and `imageCost` is
  * null (the rate isn't known yet, or no credit lot is currently eligible) — hidden, never guessed.
+ * `unit` names what is being charged ("image" or "video") in the split free/paid note.
  */
-export function CreditCostPill({ imageCost, freeRemaining = 0, count = 1, className = '' }) {
+export function CreditCostPill({ imageCost, freeRemaining = 0, count = 1, unit = 'image', className = '' }) {
   const freeUsed = Math.min(freeRemaining, count);
   const paidCount = count - freeUsed;
 
@@ -31,7 +32,7 @@ export function CreditCostPill({ imageCost, freeRemaining = 0, count = 1, classN
   return (
     <span className={`${BADGE_WARN} ${className}`}>
       ⚡ {formatCredits(amount)} credit{amount === 1 ? '' : 's'}
-      {freeUsed > 0 ? ` (${freeUsed} image${freeUsed === 1 ? '' : 's'} free)` : ''}
+      {freeUsed > 0 ? ` (${freeUsed} ${unit}${freeUsed === 1 ? '' : 's'} free)` : ''}
     </span>
   );
 }
