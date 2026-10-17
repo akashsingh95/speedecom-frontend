@@ -86,14 +86,22 @@ const Sidebar = () => {
             { name: 'Uploads', icon: Upload, path: '/uploads' },
             { name: 'Downloads', icon: Download, path: '/downloads' },
             { name: 'Scan Returns', icon: ScanLine, path: '/returns/scan' },
-            // Speedy Listing — tenant-configurable via LISTING_STUDIO_ALLOWED_TENANT_IDS
-            // (defaults to enabled when that env var is unset). Hidden while impersonationSyncing
-            // is true: right after startImpersonating flips isImpersonating, listingStudioEnabled
-            // still belongs to the impersonator's own account until the profile refetch resolves
-            // (see ListingStudioGuard in App.jsx, which this mirrors) — omit the item rather than
+            // Speedy Listing — per-tenant access on Tenant.listingStudio.status, surfaced as
+            // listingStudioStatus by /auth/profile. 'pending' (paid or gifted, waiting on
+            // SuperAdmin approval) still shows the item, disabled with a Pending pill: hiding it
+            // would read as a failed purchase. Hidden while impersonationSyncing is true: right
+            // after startImpersonating flips isImpersonating, the flag still belongs to the
+            // impersonator's own account until the profile refetch resolves (see
+            // ListingStudioGuard in App.jsx, which this mirrors) — omit the item rather than
             // flash it in/out on a stale value.
-            ...(user?.listingStudioEnabled !== false && !(isImpersonating && impersonationSyncing)
-              ? [{ name: 'Speedy Listing', icon: PackageOpen, path: '/listing-studio' }]
+            ...((user?.listingStudioEnabled !== false || user?.listingStudioStatus === 'pending')
+              && !(isImpersonating && impersonationSyncing)
+              ? [{
+                  name: 'Speedy Listing',
+                  icon: PackageOpen,
+                  path: '/listing-studio',
+                  pending: user?.listingStudioEnabled === false && user?.listingStudioStatus === 'pending',
+                }]
               : []),
             { name: 'Support', icon: LifeBuoy, path: '/support' }
         ];
@@ -128,6 +136,20 @@ const Sidebar = () => {
     }
 
     const NavItem = ({ item, isActive }) => (
+        item.pending ? (
+            // Awaiting approval: show where Speedy Listing will appear, but don't let them
+            // navigate into a route the API would 403 anyway.
+            <div
+                className="group flex items-center gap-3 px-4 py-3.5 text-sm font-medium rounded-full border border-transparent text-slate-400 cursor-not-allowed"
+                title="Awaiting SuperAdmin approval"
+            >
+                <item.icon size={20} strokeWidth={2} className="text-slate-300" />
+                <span>{item.name}</span>
+                <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100">
+                    Pending
+                </span>
+            </div>
+        ) : (
         <Link
             data-tour={NAV_TOUR_MAP[item.path]}
             to={item.path}
@@ -146,6 +168,7 @@ const Sidebar = () => {
                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-600 shadow-sm"></div>
             )}
         </Link>
+        )
     );
 
     return (

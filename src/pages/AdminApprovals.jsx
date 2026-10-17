@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
-import { CheckCircle, Clock, Search, ShieldCheck, CreditCard, XCircle, Loader2, Building, RefreshCw, ClipboardCheck, Users, AlertTriangle, TrendingUp, Settings, Trash2 } from 'lucide-react';
+import { CheckCircle, Clock, Search, ShieldCheck, CreditCard, XCircle, Loader2, Building, RefreshCw, ClipboardCheck, Users, AlertTriangle, TrendingUp, Settings, Trash2, PackageOpen, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -16,11 +16,13 @@ const AdminApprovals = () => {
     const canApproveTenants = user?.role === 'SuperAdmin' || user?.permissions?.approveTenants;
     const canApproveSubscriptions = user?.role === 'SuperAdmin' || user?.permissions?.approveSubscriptions;
     const canRejectRegistrations = user?.role === 'SuperAdmin' || user?.permissions?.rejectRegistrations;
+    const canApproveListingStudio = user?.role === 'SuperAdmin' || user?.permissions?.approveListingStudioAccess;
     const isSuperAdmin = user?.role === 'SuperAdmin';
 
     const [activeTab, setActiveTab] = useState(
         canApproveTenants ? 'tenants' : 
         canApproveSubscriptions ? 'subscriptions' : 
+        canApproveListingStudio ? 'listing_studio' :
         canRejectRegistrations ? 'rejected' : 'tenants'
     );
 
@@ -39,6 +41,11 @@ const AdminApprovals = () => {
     const [subsLoading, setSubsLoading] = useState(canApproveSubscriptions);
     const [subActionLoading, setSubActionLoading] = useState(null);
 
+    // Speedy Listing access State
+    const [pendingListingStudio, setPendingListingStudio] = useState([]);
+    const [listingStudioLoading, setListingStudioLoading] = useState(canApproveListingStudio);
+    const [listingStudioActionLoading, setListingStudioActionLoading] = useState(null);
+
     // Confirmation Modal State
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false,
@@ -56,16 +63,17 @@ const AdminApprovals = () => {
 
     // Redirect SBM with no approval permissions away from this page
     useEffect(() => {
-        if (user?.role === 'SBM' && !canApproveTenants && !canApproveSubscriptions && !canRejectRegistrations) {
+        if (user?.role === 'SBM' && !canApproveTenants && !canApproveSubscriptions && !canRejectRegistrations && !canApproveListingStudio) {
             navigate('/profile', { replace: true });
         }
-    }, [user, navigate, canApproveTenants, canApproveSubscriptions, canRejectRegistrations]);
+    }, [user, navigate, canApproveTenants, canApproveSubscriptions, canRejectRegistrations, canApproveListingStudio]);
 
     useEffect(() => {
         if (canApproveTenants) fetchPendingTenants();
         if (canRejectRegistrations) fetchRejectedTenants();
         if (canApproveSubscriptions) fetchPendingSubscriptions();
-    }, [canApproveTenants, canRejectRegistrations, canApproveSubscriptions]);
+        if (canApproveListingStudio) fetchPendingListingStudio();
+    }, [canApproveTenants, canRejectRegistrations, canApproveSubscriptions, canApproveListingStudio]);
 
     const fetchPendingTenants = async () => {
         try {
@@ -98,6 +106,56 @@ const AdminApprovals = () => {
         } finally {
             setSubsLoading(false);
         }
+    };
+
+    const fetchPendingListingStudio = async () => {
+        try {
+            // sendResponse sends the payload as the body itself — there is no { data } envelope.
+            const res = await api.get('/listing-studio/wallet/admin/access-requests', { params: { status: 'pending' } });
+            setPendingListingStudio(Array.isArray(res.data) ? res.data : []);
+        } catch (error) {
+            console.error('Error fetching Speedy Listing access requests', error);
+        } finally {
+            setListingStudioLoading(false);
+        }
+    };
+
+    const handleApproveListingStudio = async (id) => {
+        setListingStudioActionLoading(id);
+        try {
+            await api.post(`/listing-studio/wallet/admin/access-requests/${id}/approve`);
+            setPendingListingStudio(prev => prev.filter(r => r._id !== id));
+            toast.success('Speedy Listing access approved');
+        } catch (error) {
+            console.error('Error approving Speedy Listing access', error);
+        } finally {
+            setListingStudioActionLoading(null);
+        }
+    };
+
+    // Only gifted access can be rejected — a paid recharge is backed by a captured payment,
+    // so the server refuses it (see rejectAccessRequest on the API side) and the button is
+    // never rendered for those rows.
+    const handleRejectListingStudio = (id) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Reject Speedy Listing Access',
+            message: 'Reject this gifted Speedy Listing access? The credits already granted stay in the tenant\'s wallet — deduct them separately if that was a mistake.',
+            type: 'danger',
+            onConfirm: async () => {
+                setListingStudioActionLoading(id);
+                try {
+                    await api.post(`/listing-studio/wallet/admin/access-requests/${id}/reject`);
+                    setPendingListingStudio(prev => prev.filter(r => r._id !== id));
+                    toast.success('Speedy Listing access request rejected');
+                } catch (error) {
+                    console.error('Error rejecting Speedy Listing access', error);
+                } finally {
+                    setListingStudioActionLoading(null);
+                    closeConfirmModal();
+                }
+            }
+        });
     };
 
     const handleApproveTenant = async (id) => {
@@ -356,6 +414,21 @@ const AdminApprovals = () => {
                                         Subscription Recharges
                                         {pendingSubscriptions.length > 0 && (
                                             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'subscriptions' ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500'}`}>{pendingSubscriptions.length}</span>
+                                        )}
+                                    </button>
+                                )}
+                                {canApproveListingStudio && (
+                                    <button
+                                        onClick={() => setActiveTab('listing_studio')}
+                                        className={`flex items-center gap-2 px-4 py-4 text-sm font-semibold transition-all border-b-2 -mb-px ${activeTab === 'listing_studio'
+                                            ? 'border-brand-600 text-brand-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                            }`}
+                                    >
+                                        <PackageOpen size={16} />
+                                        Speedy Listing Access
+                                        {pendingListingStudio.length > 0 && (
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'listing_studio' ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500'}`}>{pendingListingStudio.length}</span>
                                         )}
                                     </button>
                                 )}
@@ -649,6 +722,102 @@ const AdminApprovals = () => {
                                                                     >
                                                                         <XCircle size={20} />
                                                                     </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Speedy Listing Access Tab */}
+                            {activeTab === 'listing_studio' && canApproveListingStudio && (
+                                <>
+                                    {listingStudioLoading ? (
+                                        <div className="flex flex-col items-center justify-center min-h-[300px]">
+                                            <Loader2 className="animate-spin text-brand-600 mb-4" size={40} />
+                                            <p className="text-slate-500">Loading access requests...</p>
+                                        </div>
+                                    ) : pendingListingStudio.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-4">
+                                            <div className="p-4 bg-slate-100 rounded-2xl">
+                                                <CheckCircle className="w-10 h-10 text-emerald-400" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-semibold text-slate-700">No Pending Access Requests</p>
+                                                <p className="text-sm text-slate-500 mt-1">Every tenant who recharged or was gifted Speedy Listing credits has been granted access.</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="border-b border-slate-100 bg-slate-50/70">
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Tenant</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Source</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Plan</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Credits</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Amount</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Requested At</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {pendingListingStudio.map((req) => (
+                                                    <tr key={req._id} className="group hover:bg-slate-50/50 transition-colors">
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-semibold text-slate-800">{formatTenantLabel(req.tenantId)}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            {req.source === 'gift' ? (
+                                                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-600 border border-violet-100">
+                                                                    <Gift size={13} /> Gifted
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                                                    <CreditCard size={13} /> Paid recharge
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-medium text-slate-700">{req.planTitle || '—'}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-bold text-slate-800">{req.credits ? req.credits.toLocaleString() : '—'}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-bold text-emerald-600">{req.amount ? `₹${req.amount.toLocaleString()}` : '—'}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm text-slate-500">{new Date(req.requestedAt).toLocaleString()}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            {listingStudioActionLoading === req._id ? (
+                                                                <div className="flex justify-end pr-4">
+                                                                    <Loader2 className="animate-spin text-brand-600" size={20} />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <button
+                                                                        onClick={() => handleApproveListingStudio(req._id)}
+                                                                        className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 hover:scale-105 transition-all"
+                                                                        title="Approve access"
+                                                                    >
+                                                                        <CheckCircle size={20} />
+                                                                    </button>
+                                                                    {/* Paid recharges are approve-only: the payment is already captured,
+                                                                        so rejecting would leave the tenant paid and locked out. */}
+                                                                    {req.source === 'gift' && (
+                                                                        <button
+                                                                            onClick={() => handleRejectListingStudio(req._id)}
+                                                                            className="p-2 rounded-lg text-red-500 hover:bg-red-50 hover:scale-105 transition-all"
+                                                                            title="Reject access"
+                                                                        >
+                                                                            <XCircle size={20} />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </td>
