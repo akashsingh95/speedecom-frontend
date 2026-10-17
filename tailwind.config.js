@@ -49,10 +49,15 @@ export default {
                 '0%':   { opacity: '0', transform: 'scale(0.96)' },
                 '100%': { opacity: '1', transform: 'scale(1)' },
             },
+            'fade-in': {
+                '0%':   { opacity: '0', transform: 'translateY(2px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
         },
         animation: {
             shimmer: 'shimmer 1.8s infinite linear',
             'tour-pop': 'tourPop 180ms ease-out',
+            'fade-in': 'fade-in 120ms ease-out',
         },
       },
     },
