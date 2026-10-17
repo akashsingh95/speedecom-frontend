@@ -22,4 +22,8 @@ export const premiumAplusApi = {
     ),
   regenerateSide: (id, designId, side) =>
     api.post(`${BASE}/projects/${id}/premium-aplus/${designId}/${side}/regenerate`).then((r) => r.data),
+  // Instruction edit of one side's composite — the slices under it are re-cut from the result.
+  // Queues the edit (202); poll getDesign and watch `edits[`${side}-composite`]`.
+  editAsset: (id, designId, side, body) =>
+    api.post(`${BASE}/projects/${id}/premium-aplus/${designId}/${side}/edit`, body).then((r) => r.data),
 };
