@@ -272,6 +272,7 @@ const SupportChatWidget = () => {
                   typingName={typingName}
                   onSend={handleSend}
                   onTyping={ticketId ? emitTyping : undefined}
+                  onSuggest={ticket?.handledBy === 'bot' ? (question) => handleSend(question, newClientId(), []) : undefined}
                   closedNote={ended ? 'This chat has ended.' : null}
                   placeholder={ticketId ? 'Type a message…' : 'Type your question…'}
                   emptyState={(

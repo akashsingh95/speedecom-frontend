@@ -50,6 +50,7 @@ const threadItems = (ticket) => {
       _id: m._id,
       isSeller,
       isBot: Boolean(m.bot),
+      suggestions: m.suggestions || [],
       senderName: m.bot ? 'Speedy · AI assistant' : (m.senderId?.fullName || (isSeller ? 'Seller' : 'Support Team')),
       message: m.message,
       attachments: m.attachments || [],
@@ -66,8 +67,11 @@ const threadItems = (ticket) => {
  * clientId are kept so a retry re-sends with the same clientId and is stored only once.
  * Screenshots can be attached with the clip button, pasted (Ctrl+V) or dropped on the chat,
  * and a message may be screenshots only.
+ * onSuggest(question): when given, the bot's follow-up questions under the latest answer are
+ * shown as tap-to-send chips.
+ * onSuggest rejects on failure; the chips stay so the seller can tap again.
  */
-const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, placeholder = 'Type a message…', emptyState = null }) => {
+const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, onSuggest, closedNote, placeholder = 'Type a message…', emptyState = null }) => {
   const [text, setText] = useState('');
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
@@ -106,6 +110,23 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
     return next;
   });
   const scrollToBottom = () => bottomRef.current?.scrollIntoView({ block: 'end' });
+
+  // Only the latest message can offer follow-ups, and only once its typing animation is over.
+  const lastItem = items[items.length - 1];
+  const showSuggestions = Boolean(onSuggest) && !closedNote && !sending && lastItem?.isBot
+    && lastItem.suggestions.length > 0 && !typesOut(lastItem);
+  const [tapped, setTapped] = useState(false);
+  useEffect(() => setTapped(false), [lastItem?._id]);
+  useEffect(() => { if (showSuggestions) scrollToBottom(); }, [showSuggestions]);
+  const tapSuggestion = async (question) => {
+    setTapped(true);
+    try {
+      await onSuggest(question);
+    } catch {
+      // api.js showed the error; bring the chips back so the seller can try again.
+      setTapped(false);
+    }
+  };
 
   const previews = useMemo(() => files.map((f) => ({ key: fileKey(f), name: f.name, url: URL.createObjectURL(f) })), [files]);
   useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews]);
@@ -268,6 +289,20 @@ const ChatThread = ({ ticket, viewer, typingName, onSend, onTyping, closedNote, 
             {typingName} is typing
           </div>
         ))}
+        {showSuggestions && !tapped && (
+          <div className="flex flex-col items-end gap-1.5 pt-1 animate-[fadeIn_0.25s_ease-out]" aria-label="Suggested questions">
+            {lastItem.suggestions.map((question) => (
+              <button
+                key={question}
+                type="button"
+                onClick={() => tapSuggestion(question)}
+                className="max-w-[85%] px-3 py-1.5 text-sm text-left text-brand-700 bg-white border border-brand-200 hover:bg-brand-50 hover:border-brand-300 rounded-full transition-colors"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
