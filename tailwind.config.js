@@ -41,9 +41,14 @@ export default {
                 '0%':   { transform: 'translateX(-100%)' },
                 '100%': { transform: 'translateX(200%)' },
             },
+            'fade-in': {
+                '0%':   { opacity: '0', transform: 'translateY(2px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
         },
         animation: {
             shimmer: 'shimmer 1.8s infinite linear',
+            'fade-in': 'fade-in 120ms ease-out',
         },
       },
     },
