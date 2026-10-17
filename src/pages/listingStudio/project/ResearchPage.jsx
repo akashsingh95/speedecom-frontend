@@ -103,7 +103,11 @@ export default function ResearchPage() {
   // price (project.input.price), highlighted. That field is optional and inconsistently
   // formatted (a bare number from manual campaign creation, or "USD 24.99" from ASIN import),
   // so it's parsed defensively and only shown when a numeric value can be recovered.
-  const priceCurrency = (r?.competitorInsights?.[0]?.price ?? '').match(/^[^0-9.]+/)?.[0] ?? '';
+  // Currency symbol is sniffed off the competitor price text, taking the first record that
+  // actually carries one — any single record can come back as a bare number, and sampling
+  // only the first would then leave every derived price below unprefixed.
+  const priceCurrency =
+    (r?.competitorInsights ?? []).map((c) => String(c.price ?? '').match(/^[^0-9.]+/)?.[0]).find(Boolean) ?? '';
   const ownPriceRaw = project.input?.price;
   const ownPriceValue = ownPriceRaw !== undefined ? parseFloat(String(ownPriceRaw).replace(/[^0-9.]/g, '')) : NaN;
   const priceLadder = r

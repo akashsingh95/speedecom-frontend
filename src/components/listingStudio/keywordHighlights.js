@@ -20,7 +20,13 @@ const WORD_CHAR = /[\p{L}\p{N}]/u;
 /** Every research keyword for a project that has a known monthly search volume, de-duplicated
  *  case-insensitively and sorted longest-phrase-first — match order matters: "steel water
  *  bottle" must claim its text before the shorter "water bottle" can, or the longer phrase
- *  never shows up as one highlight. */
+ *  never shows up as one highlight.
+ *
+ *  Each entry also carries `lower`, its own lower-cased keyword: the de-duplication key below is
+ *  already that exact string, and both matchers plus the usage lookups need it on every pass, so
+ *  keeping it spares them each re-deriving it. A convenience, not a measured speedup — the
+ *  matching cost here is the indexOf scan, not the casing — so the matchers still fall back to
+ *  deriving it, and an entry from somewhere other than this function keeps working. */
 export function collectKeywordVolumes(project) {
   const byKeyword = new Map();
   const add = (keyword, searchVolume) => {
@@ -29,7 +35,11 @@ export function collectKeywordVolumes(project) {
     const key = phrase.toLowerCase();
     const existing = byKeyword.get(key);
     if (!existing) {
-      byKeyword.set(key, { keyword: phrase, searchVolume: typeof searchVolume === 'number' ? searchVolume : null });
+      byKeyword.set(key, {
+        keyword: phrase,
+        lower: key,
+        searchVolume: typeof searchVolume === 'number' ? searchVolume : null,
+      });
       return;
     }
     // The first source to price a keyword wins; later ones only fill in a volume still missing.
@@ -43,6 +53,11 @@ export function collectKeywordVolumes(project) {
     .filter((entry) => entry.searchVolume !== null)
     .sort((a, b) => b.keyword.length - a.keyword.length);
 }
+
+/** An entry's lower-cased keyword. collectKeywordVolumes stores it as `lower`; anything built by
+ *  hand still matches, rather than silently finding nothing — occurrences() treats an empty
+ *  needle as "no hits", so a missing field would drop every highlight with no error at all. */
+export const keywordLower = (entry) => entry.lower ?? String(entry.keyword ?? '').toLowerCase();
 
 /** Every whole-word, case-insensitive occurrence of `needle` in `haystack` as [start, end)
  *  pairs. Both arguments must already be lower-cased. Plain indexOf rather than a RegExp: a
@@ -76,7 +91,7 @@ export function highlightSegments(text, keywords) {
   const marks = [];
 
   for (const entry of keywords) {
-    for (const [start, end] of occurrences(haystack, entry.keyword.toLowerCase())) {
+    for (const [start, end] of occurrences(haystack, keywordLower(entry))) {
       let free = true;
       for (let i = start; i < end; i += 1) {
         if (claimed[i]) {
@@ -118,9 +133,9 @@ export function countKeywordUses(texts, keywords) {
     const haystack = (typeof text === 'string' ? text : '').toLowerCase();
     if (!haystack) continue;
     for (const entry of keywords ?? []) {
-      const hits = occurrences(haystack, entry.keyword.toLowerCase()).length;
+      const key = keywordLower(entry);
+      const hits = occurrences(haystack, key).length;
       if (hits === 0) continue;
-      const key = entry.keyword.toLowerCase();
       counts.set(key, (counts.get(key) ?? 0) + hits);
     }
   }
