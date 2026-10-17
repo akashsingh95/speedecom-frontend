@@ -1933,6 +1933,7 @@ const ReturnsTab = () => {
                                     {!['in_transit', 'out_for_delivery'].includes(tableFilters.status) && <th className="text-left px-3 py-2 font-semibold">Delivered Date</th>}
                                     <th className="text-left px-3 py-2 font-semibold">Reason</th>
                                     <th className="text-left px-3 py-2 font-semibold">Status</th>
+                                    {['physically_received', 'damaged'].includes(tableFilters.status) && <th className="text-left px-3 py-2 font-semibold">Arrived At</th>}
                                     <th className="text-right px-3 py-2 font-semibold">Action</th>
                                 </tr>
                             </thead>
@@ -1960,6 +1961,11 @@ const ReturnsTab = () => {
                                             {!['in_transit', 'out_for_delivery'].includes(tableFilters.status) && <td className="px-3 py-2 whitespace-nowrap">{r.delivered_date ? fmtDateCell(r.delivered_date) : '—'}</td>}
                                             <td className="px-3 py-2 max-w-[280px] truncate text-xs" title={r.reason}>{r.reason || '—'}</td>
                                             <td className="px-3 py-2 whitespace-nowrap">{r.return_file_type || '—'}</td>
+                                            {['physically_received', 'damaged'].includes(tableFilters.status) && (
+                                                <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-500">
+                                                    {r.arrived_at ? new Date(r.arrived_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
+                                                </td>
+                                            )}
                                             <td className="px-3 py-2 text-right whitespace-nowrap">
                                                 {eligible ? (
                                                     expandedTableRows.has(r.id) ? (

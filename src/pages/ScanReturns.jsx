@@ -588,7 +588,7 @@ const ScanReturns = () => {
                 item.courier_partner || '',
                 item.type_of_return ? (/rto/i.test(item.type_of_return) ? 'RTO' : 'Customer') : '',
                 item.condition || '',
-                item.updated_at ? new Date(item.updated_at).toLocaleString('en-IN') : '',
+                item.arrived_at ? new Date(item.arrived_at).toLocaleString('en-IN') : '',
             ]);
             const date = new Date().toISOString().split('T')[0];
             const acctName = todaySelectedAccount?.name?.replace(/[^a-z0-9]/gi, '_') || 'account';
@@ -1614,8 +1614,8 @@ const ScanReturns = () => {
                                                                 )}
                                                             </td>
                                                             <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                                                                {item.updated_at
-                                                                    ? new Date(item.updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                                                                {item.arrived_at
+                                                                    ? new Date(item.arrived_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
                                                                     : '—'}
                                                             </td>
                                                         </tr>
