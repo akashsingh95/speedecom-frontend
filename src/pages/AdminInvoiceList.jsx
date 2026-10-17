@@ -505,6 +505,39 @@ const AdminInvoiceList = () => {
         return `${tx.editableAmount} credits`;
     };
 
+    // The Amount cell, shared by the Free Trial Credits and Admin Gift tabs. Both show the rupee
+    // amount on its own: a Speedy Listing row keeps its credit count in `amount` and the rupee
+    // figure the admin typed in `rupeeAmount`, so the rupee figure is the one shown, and only a
+    // gift entered in coins (which has no rupee figure) falls back to credits.
+    // showAllowance (Admin Gift): also list any free image/video allowance, since for some gift
+    // rows that allowance is the whole grant. Such a row has no amount of its own, so it gets the
+    // allowance line in place of the dash.
+    const renderCreditAmount = (tx, showAllowance) => {
+        const sign = tx.isDeduction ? '-' : '+';
+        const hasAllowance = tx.freeImages > 0 || tx.freeVideos > 0;
+        const hasValue = tx.amount > 0 || !hasAllowance;
+        const inRupees = tx.unit !== 'CREDITS' || tx.rupeeAmount > 0;
+        const allowanceShown = showAllowance && hasAllowance;
+
+        return (
+            <>
+                {hasValue && (
+                    <span className={`text-sm font-semibold whitespace-nowrap ${tx.isDeduction ? 'text-red-500' : 'text-green-600'}`}>
+                        {inRupees
+                            ? <>{sign}&#8377;{Number(tx.unit === 'CREDITS' ? tx.rupeeAmount : tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</>
+                            : `${sign}${Number(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })} credits`}
+                    </span>
+                )}
+                {!hasValue && !allowanceShown && <span className="text-sm text-slate-400">-</span>}
+                {allowanceShown && (
+                    <div className="text-xs text-slate-500 mt-0.5">
+                        {[tx.freeImages > 0 && `+${tx.freeImages} free image${tx.freeImages !== 1 ? 's' : ''}`, tx.freeVideos > 0 && `+${tx.freeVideos} free video${tx.freeVideos !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
+                    </div>
+                )}
+            </>
+        );
+    };
+
     const handleDeleteCreditTransaction = (tx) => {
         if (!tx) return;
         setOpenCreditMenuId(null);
@@ -2738,21 +2771,7 @@ const AdminInvoiceList = () => {
                                                             })()}
                                                         </td>
                                                         <td className="py-3 px-3 text-right align-middle">
-                                                            {(tx.amount > 0 || !(tx.freeImages || tx.freeVideos)) && (
-                                                                <span className={`text-sm font-semibold whitespace-nowrap ${tx.isDeduction ? 'text-red-500' : 'text-green-600'}`}>
-                                                                    {tx.unit === 'CREDITS'
-                                                                        ? `+${Number(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })} credits`
-                                                                        : <>{tx.isDeduction ? '-' : '+'}&#8377;{Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</>}
-                                                                </span>
-                                                            )}
-                                                            {tx.unit === 'CREDITS' && tx.rupeeAmount > 0 && (
-                                                                <div className="text-xs text-slate-500 mt-0.5">&#8377;{tx.rupeeAmount.toLocaleString('en-IN')} paid</div>
-                                                            )}
-                                                            {(tx.freeImages > 0 || tx.freeVideos > 0) && (
-                                                                <div className="text-xs text-slate-500 mt-0.5">
-                                                                    {[tx.freeImages > 0 && `+${tx.freeImages} free image${tx.freeImages !== 1 ? 's' : ''}`, tx.freeVideos > 0 && `+${tx.freeVideos} free video${tx.freeVideos !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
-                                                                </div>
-                                                            )}
+                                                            {renderCreditAmount(tx, activeTab === 'adminGift')}
                                                         </td>
                                                         <td className="py-3 px-3 align-middle">
                                                             <span className="text-xs text-slate-600 truncate block max-w-[110px]">{tx.note || '-'}</span>
