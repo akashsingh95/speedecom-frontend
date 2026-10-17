@@ -1,39 +1,39 @@
+/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
+   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw, Mic, ChevronRight, HelpCircle, CheckCircle2, Circle } from 'lucide-react';
+import { Mic, ChevronRight, HelpCircle, CheckCircle2, Circle, RefreshCw } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
 import { useProjectCtx } from '../../../components/listingStudio/context';
-import { StatTile, toneForValue } from '../../../components/listingStudio/ui/StatTile';
+import { toneForValue } from '../../../components/listingStudio/ui/StatTile';
 import {
   PAGE_HEAD,
   PAGE_TITLE,
   CARD_TITLE,
   MUTED,
-  SMALL,
   BTN_PRIMARY,
   BTN,
+  BTN_SMALL,
+  ICON_LABEL,
   EMPTY_STATE,
-  STAT_TILES_GRID,
-  READINESS_CATEGORIES,
-  READINESS_ROW,
+  READINESS_SUMMARY_GRID,
+  READINESS_SUMMARY_CARD,
+  READINESS_CARD_VARIANTS,
+  READINESS_CARD_LABEL,
+  READINESS_BIG_VALUE,
+  READINESS_PILL,
+  READINESS_TABLE_CARD,
+  READINESS_TABLE,
+  READINESS_TH,
+  READINESS_TD,
+  READINESS_MINI_BAR,
 } from '../../../components/listingStudio/ui/classNames';
 
-// Mirrors the 5 StatTiles the real dashboard renders once analysis completes (see the
-// readiness.* block below) — shown greyed out beforehand so the page previews its own final
-// shape instead of just saying "not analyzed yet" over blank space.
-const PLACEHOLDER_METRICS = [
-  'Your Text Coverage',
-  'Your Image Coverage',
-  'Competitor Avg Text',
-  'Competitor Avg Images',
-  'Image Coverage (After Campaign)',
-];
-
 // Ported from speed-listing's pages/project/AlexaReadinessPage.tsx — score dashboard for
-// how well the listing answers Amazon's shopping-AI questions vs. competitors. Restyled to
-// color every number by how good it actually is (green/amber/red) instead of a fixed hue per
-// metric, and clicking a column's number now surfaces a plain-language explanation of what
-// that number means, instead of only being able to expand the raw question list.
+// how well the listing answers Amazon's shopping AI questions vs. competitors. The two
+// headline numbers (text + image coverage) each get their own card that plots you against
+// the competitor average on one bar, so the gap is the thing you read first; everything
+// else lives in the per-category table below.
 
 const COLUMNS = [
   { key: 'yourText', header: 'Text', title: 'Your text coverage', body: (v) => `${v}% of this category's questions are answered by your current listing copy (title, bullets, description).` },
@@ -43,39 +43,132 @@ const COLUMNS = [
   { key: 'afterCampaignImage', header: 'After campaign', title: 'Projected coverage', body: (v) => `${v}% of this category's questions are expected to be answered once this campaign's generated visuals are live.` },
 ];
 
+// Every column — competitor ones included — is coloured by the same legend printed above
+// the table, so a number reads the same way wherever it appears: 70+ green, 40-69 amber.
+const TONE_BAR = { green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500', empty: 'bg-slate-200' };
+const TONE_TEXT = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-600', empty: 'text-slate-300' };
+const LEGEND = [
+  { tone: 'green', label: '70+ strong' },
+  { tone: 'amber', label: '40–69 partial' },
+  { tone: 'red', label: 'Under 40 gap' },
+];
+
 function clampPct(v) {
   return Math.max(0, Math.min(100, v));
 }
 
-/** One metric's bar+number for a category row. Clicking it opens a small explanation popover
- *  right below it (closes on a second click, or when another column/row is opened) — it never
- *  toggles the row's own expand/collapse, even though it lives inside the row's clickable header. */
-function MetricCell({ column, value, open, onToggle, onExpandQuestions }) {
-  const tone = toneForValue(value);
-  const barColor = { green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500' }[tone];
-  const textColor = { green: 'text-emerald-600', amber: 'text-amber-600', red: 'text-red-600' }[tone];
+function toneFor(value) {
+  if (value === null || value === undefined) return 'empty';
+  return toneForValue(value);
+}
+
+function stripes(hex) {
+  return { backgroundImage: `repeating-linear-gradient(45deg, ${hex} 0 3px, transparent 3px 6px)` };
+}
+
+function LegendSwatch({ barClass, hex, striped, marker }) {
+  if (marker) return <span className="w-[3px] h-2.5 rounded-full bg-slate-900 flex-shrink-0" />;
+  return (
+    <span
+      className={`w-2 h-2 rounded-full flex-shrink-0 ${striped ? '' : barClass}`}
+      style={striped ? stripes(hex) : undefined}
+    />
+  );
+}
+
+/** One headline coverage number: your score, the competitor average marked on the same bar,
+ *  and (for images) the striped segment this campaign's generated visuals are projected to
+ *  add. `variant` is a fixed hue per card (never the score's green/amber/red — how you're
+ *  doing is in the pill and in how far the bar falls short of the competitor marker), so the
+ *  row reads as one set of tiles like Research's. `value === null` is the pre-analysis shape. */
+function CoverageCard({ variant, label, value, competitor, projected, projectedLabel }) {
+  const v = READINESS_CARD_VARIANTS[variant];
+  const diff = value === null ? null : value - competitor;
+  const showProjected = projected !== undefined && projected !== null && value !== null && projected > value;
 
   return (
-    <div className="relative">
+    <div className={`${READINESS_SUMMARY_CARD} ${v.tile}`}>
+      <div className="flex items-start justify-between gap-2">
+        <span className={READINESS_CARD_LABEL}>{label}</span>
+        {diff !== null && (
+          <span
+            className={`${READINESS_PILL} bg-white/70 ${
+              diff < 0 ? 'text-red-600' : diff > 0 ? 'text-emerald-600' : 'text-slate-500'
+            }`}
+          >
+            {diff === 0 ? 'Matches competitors' : `${Math.abs(diff)} pts ${diff < 0 ? 'below' : 'above'} competitors`}
+          </span>
+        )}
+      </div>
+
+      <strong className={`${READINESS_BIG_VALUE} ${value === null ? 'text-slate-400' : v.text}`}>
+        {value === null ? '—' : `${value}%`}
+      </strong>
+
+      <div className="relative h-3 flex items-center">
+        <div className="relative h-2 w-full rounded-full bg-black/[0.07] overflow-hidden">
+          {showProjected && (
+            <span
+              className="absolute inset-y-0"
+              style={{ left: `${clampPct(value)}%`, width: `${clampPct(projected) - clampPct(value)}%`, ...stripes(v.hex) }}
+            />
+          )}
+          {value !== null && <span className={`absolute inset-y-0 left-0 ${v.bar}`} style={{ width: `${clampPct(value)}%` }} />}
+        </div>
+        {competitor !== null && competitor !== undefined && (
+          <span
+            className="absolute inset-y-0 w-[3px] -translate-x-1/2 rounded-full bg-slate-900"
+            style={{ left: `${clampPct(competitor)}%` }}
+            title={`Competitor avg ${competitor}%`}
+          />
+        )}
+      </div>
+
+      {value !== null && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <LegendSwatch barClass={v.bar} /> You {value}%
+          </span>
+          {showProjected && (
+            <span className="inline-flex items-center gap-1.5">
+              <LegendSwatch hex={v.hex} striped /> {projectedLabel} {projected}%
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <LegendSwatch marker /> Competitor avg {competitor}%
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One metric's number+bar inside a category row. Clicking it opens a small explanation
+ *  popover below it (closes on a second click, or when another cell is opened) — it never
+ *  toggles the row's own expand/collapse, which has its own button in the first column. */
+function MetricCell({ column, value, open, onToggle, onExpandQuestions }) {
+  const tone = toneFor(value);
+
+  return (
+    <>
       <button
         type="button"
         onClick={(e) => {
-          e.preventDefault();
           e.stopPropagation();
           onToggle();
         }}
-        className="flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-slate-100 transition-colors"
+        className="block w-[108px] max-w-full text-left rounded-md -mx-1 px-1 py-0.5 transition-colors hover:bg-slate-100"
         title={`${column.title}: ${value}%`}
       >
-        <div className="w-[60px] h-1.5 rounded-full bg-slate-100 overflow-hidden">
-          <div className={`h-full ${barColor}`} style={{ width: `${clampPct(value)}%` }} />
-        </div>
-        <span className={`text-xs font-semibold w-[26px] text-right ${textColor}`}>{value}</span>
+        <span className={`text-sm font-semibold ${TONE_TEXT[tone]}`}>{value}</span>
+        <span className={`block ${READINESS_MINI_BAR}`}>
+          <span className={`block h-full ${TONE_BAR[tone]}`} style={{ width: `${clampPct(value)}%` }} />
+        </span>
       </button>
 
       {open && (
         <div
-          className="absolute z-20 top-full right-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-3.5 text-left"
+          className="absolute z-20 top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-3.5 text-left"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-1.5 mb-1">
@@ -86,7 +179,6 @@ function MetricCell({ column, value, open, onToggle, onExpandQuestions }) {
           <button
             type="button"
             onClick={(e) => {
-              e.preventDefault();
               e.stopPropagation();
               onExpandQuestions();
             }}
@@ -96,7 +188,7 @@ function MetricCell({ column, value, open, onToggle, onExpandQuestions }) {
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -145,25 +237,34 @@ export default function AlexaReadinessPage() {
             <h1 className={PAGE_TITLE}>Alexa Shopping Readiness</h1>
             <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Beta</span>
           </div>
-          <p className={`${MUTED} mt-1`}>
-            How well your listing answers the questions Amazon&apos;s shopping AI asks about your product — compared
+          <p className={`${MUTED} mt-1 max-w-xl`}>
+            How well your listing answers the questions Amazon&apos;s shopping AI asks about your product, compared
             to your competitors.
           </p>
         </div>
-        <button className={`${BTN_PRIMARY} gap-1.5`} onClick={analyze} disabled={jobRunning || blocked}>
-          {jobRunning ? (
-            'Analyzing…'
-          ) : readiness ? (
-            <>
-              <RefreshCw size={16} /> Re-analyze
-            </>
-          ) : (
-            <>
-              <Mic size={16} /> Analyze Shopping Readiness
-            </>
-          )}
-        </button>
+        {/* After the first run the trigger stays available as a quieter secondary button:
+            the scores go stale as soon as the images or the listing copy change, and
+            re-running the analysis is the only way to refresh them. */}
+        {readiness ? (
+          <button className={`${BTN} ${BTN_SMALL}`} onClick={analyze} disabled={jobRunning || blocked}>
+            <span className={ICON_LABEL}>
+              <RefreshCw size={12} className={jobRunning ? 'animate-spin' : ''} />
+              {jobRunning ? 'Analyzing…' : 'Re-analyze'}
+            </span>
+          </button>
+        ) : (
+          <button className={`${BTN_PRIMARY} gap-1.5`} onClick={analyze} disabled={jobRunning || blocked}>
+            {jobRunning ? (
+              'Analyzing…'
+            ) : (
+              <>
+                <Mic size={16} /> Analyze Shopping Readiness
+              </>
+            )}
+          </button>
+        )}
       </div>
+
       {blocked && (
         <div className={`${EMPTY_STATE} !py-14`}>
           <span className="inline-grid w-14 h-14 rounded-2xl place-items-center mb-4 text-white shadow-sm ring-8 ring-violet-100 bg-gradient-to-br from-violet-400 to-violet-500">
@@ -188,100 +289,130 @@ export default function AlexaReadinessPage() {
         </div>
       )}
 
-      {!readiness && !blocked && (
+      {!blocked && (
         <>
-          <div className={STAT_TILES_GRID}>
-            {PLACEHOLDER_METRICS.map((label) => (
-              <StatTile key={label} tone="slate" value="—" label={label} />
-            ))}
-          </div>
-          <p className={MUTED}>Not analyzed yet — click &quot;Analyze Shopping Readiness&quot; above.</p>
-        </>
-      )}
-
-      {readiness && (
-        <>
-          <div className={STAT_TILES_GRID}>
-            <StatTile tone={toneForValue(readiness.yourTextCoverage)} value={`${readiness.yourTextCoverage}%`} progress={readiness.yourTextCoverage} label="Your Text Coverage" />
-            <StatTile tone={toneForValue(readiness.yourImageCoverage)} value={`${readiness.yourImageCoverage}%`} progress={readiness.yourImageCoverage} label="Your Image Coverage" />
-            <StatTile
-              tone={toneForValue(readiness.competitorTextCoverage)}
-              value={`${readiness.competitorTextCoverage}%`}
-              progress={readiness.competitorTextCoverage}
-              label="Competitor Avg Text"
+          {/* Shown greyed out before the first run too, so the page previews its own final
+              shape instead of saying "not analyzed yet" over blank space. */}
+          <div className={READINESS_SUMMARY_GRID}>
+            <CoverageCard
+              variant="violet"
+              label="Text coverage"
+              value={readiness ? readiness.yourTextCoverage : null}
+              competitor={readiness ? readiness.competitorTextCoverage : null}
             />
-            <StatTile
-              tone={toneForValue(readiness.competitorImageCoverage)}
-              value={`${readiness.competitorImageCoverage}%`}
-              progress={readiness.competitorImageCoverage}
-              label="Competitor Avg Images"
+            <CoverageCard
+              variant="blue"
+              label="Image coverage"
+              value={readiness ? readiness.yourImageCoverage : null}
+              competitor={readiness ? readiness.competitorImageCoverage : null}
+              projected={readiness ? readiness.afterCampaignImageCoverage : null}
+              projectedLabel="After campaign"
             />
-            <StatTile
-              tone={toneForValue(readiness.afterCampaignImageCoverage)}
-              value={`${readiness.afterCampaignImageCoverage}%`}
-              progress={readiness.afterCampaignImageCoverage}
-              label="Image Coverage (After Campaign)"
-            />
-          </div>
-          <p className={`${MUTED} ${SMALL}`}>Based on {readiness.totalQuestions} questions across all categories</p>
-
-          {/* Column legend — bare numbers in each row aren't self-explanatory, so label the columns once up top. */}
-          <div className="hidden md:flex items-center gap-3 flex-wrap ml-auto pr-1 pb-1.5 justify-end text-[11px] font-medium text-slate-400 uppercase tracking-wide">
-            {COLUMNS.map((c) => (
-              <span key={c.key} className="w-[86px] text-right">
-                {c.header}
-              </span>
-            ))}
+            <div className={`${READINESS_SUMMARY_CARD} ${READINESS_CARD_VARIANTS.green.tile}`}>
+              <span className={READINESS_CARD_LABEL}>Question set</span>
+              <div className="flex items-baseline gap-2">
+                <strong className={`${READINESS_BIG_VALUE} ${READINESS_CARD_VARIANTS.green.text}`}>
+                  {readiness ? readiness.totalQuestions : '—'}
+                </strong>
+                <span className="text-sm text-slate-500">questions</span>
+              </div>
+              <p className="text-[12px] text-slate-500 leading-snug mt-auto pt-1">
+                {readiness
+                  ? `Across ${readiness.categories.length} categories, scored on text and image coverage.`
+                  : 'Not analyzed yet — run the analysis to score your listing against your competitors.'}
+              </p>
+            </div>
           </div>
 
-          <div className={READINESS_CATEGORIES}>
-            {readiness.categories.map((c) => {
-              const isOpen = expanded.has(c.name);
-              return (
-                <div key={c.name} className={READINESS_ROW}>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleCategory(c.name)}
-                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleCategory(c.name)}
-                    className="flex items-center gap-3 flex-wrap cursor-pointer"
-                  >
-                    <ChevronRight size={16} className={`text-slate-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                    <strong className="text-slate-900">{c.name}</strong>
-                    <span className="inline-block text-[11px] px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-500">
-                      {c.questions.length} questions
-                    </span>
-                    <div className="flex gap-3 flex-wrap ml-auto">
-                      {COLUMNS.map((col) => {
-                        const key = `${c.name}:${col.key}`;
-                        return (
-                          <div key={col.key} className="w-[86px] flex justify-end">
-                            <MetricCell
-                              column={col}
-                              value={c[col.key]}
-                              open={openPopover === key}
-                              onToggle={() => setOpenPopover((cur) => (cur === key ? null : key))}
-                              onExpandQuestions={() => {
-                                setOpenPopover(null);
-                                setExpanded((s) => new Set(s).add(c.name));
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {isOpen && (
-                    <ul className="mt-2.5 ml-[28px] text-slate-500 text-[13px] list-disc">
-                      {c.questions.map((q, i) => (
-                        <li key={i}>{q}</li>
-                      ))}
-                    </ul>
-                  )}
+          {readiness && (
+            <div className={READINESS_TABLE_CARD}>
+              <div className="flex items-start justify-between gap-3 flex-wrap px-3.5 pt-4 pb-3">
+                <div>
+                  <h2 className={CARD_TITLE}>Coverage by category</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Based on {readiness.totalQuestions} questions across {readiness.categories.length} categories
+                  </p>
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex items-center gap-3 flex-wrap text-[11px] text-slate-500">
+                  {LEGEND.map((l) => (
+                    <span key={l.tone} className="inline-flex items-center gap-1.5">
+                      <LegendSwatch barClass={TONE_BAR[l.tone]} /> {l.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className={READINESS_TABLE}>
+                  <thead>
+                    <tr>
+                      <th className={`${READINESS_TH} w-[200px]`}>Category</th>
+                      {COLUMNS.map((col) => (
+                        <th key={col.key} className={READINESS_TH}>
+                          {col.header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {readiness.categories.map((c) => {
+                      const isOpen = expanded.has(c.name);
+                      return (
+                        <React.Fragment key={c.name}>
+                          <tr className="transition-colors hover:bg-slate-50/70">
+                            <td className={READINESS_TD}>
+                              <button
+                                type="button"
+                                onClick={() => toggleCategory(c.name)}
+                                className="flex items-start gap-1.5 text-left"
+                              >
+                                <ChevronRight
+                                  size={15}
+                                  className={`mt-0.5 text-slate-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                                />
+                                <span>
+                                  <strong className="block text-[13px] font-semibold text-slate-900">{c.name}</strong>
+                                  <span className="text-[11px] text-slate-400">{c.questions.length} questions</span>
+                                </span>
+                              </button>
+                            </td>
+                            {COLUMNS.map((col) => {
+                              const key = `${c.name}:${col.key}`;
+                              return (
+                                <td key={col.key} className={`${READINESS_TD} relative`}>
+                                  <MetricCell
+                                    column={col}
+                                    value={c[col.key]}
+                                    open={openPopover === key}
+                                    onToggle={() => setOpenPopover((cur) => (cur === key ? null : key))}
+                                    onExpandQuestions={() => {
+                                      setOpenPopover(null);
+                                      setExpanded((s) => new Set(s).add(c.name));
+                                    }}
+                                  />
+                                </td>
+                              );
+                            })}
+                          </tr>
+                          {isOpen && (
+                            <tr>
+                              <td className="px-3.5 pb-3 border-b border-slate-100" colSpan={COLUMNS.length + 1}>
+                                <ul className="ml-6 text-slate-500 text-[13px] list-disc">
+                                  {c.questions.map((q, i) => (
+                                    <li key={i}>{q}</li>
+                                  ))}
+                                </ul>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

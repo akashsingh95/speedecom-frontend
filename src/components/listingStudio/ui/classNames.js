@@ -79,11 +79,30 @@ export const SHELF_SUBLABEL = 'mt-0.5 max-w-[160px] overflow-hidden text-ellipsi
 export const SHELF_IMAGE_CELL = 'relative w-[140px] h-[140px] border border-slate-200 rounded-lg overflow-hidden bg-slate-100';
 export const SHELF_COUNT_BADGE = 'absolute top-1 right-1 bg-white/95 text-[11px] px-2 py-0.5 rounded-full border border-slate-200';
 
-// Alexa Readiness.
+// Alexa Readiness. STAT_TILES_GRID is shared with Research/Strategy/Campaigns; the
+// READINESS_* constants below belong to this page's summary cards + coverage table.
 export const STAT_TILES_GRID = 'grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))] my-3.5';
-export const READINESS_CATEGORIES = `${CARD} !py-1.5 !px-4.5`;
-export const READINESS_ROW = 'border-b border-slate-200 py-3 last:border-b-0';
-export const MINI_BAR_TRACK = 'w-[60px] h-1.5 rounded-full bg-slate-100 overflow-hidden';
+export const READINESS_SUMMARY_GRID = 'grid gap-3.5 mb-4 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]';
+// Structural only — the tint comes from READINESS_CARD_VARIANTS, one fixed hue per card, the
+// way Research's STAT_TILE_VARIANTS tint its tiles. Keep bg/border out of the base: two
+// Tailwind classes setting the same property have equal specificity, so a base color would
+// fight the variant (see the SERP_CHECK note above). `hex` mirrors `bar` for the striped
+// projected segment, which no Tailwind utility expresses.
+export const READINESS_SUMMARY_CARD = 'flex flex-col gap-2 rounded-2xl p-4 shadow-card';
+export const READINESS_CARD_VARIANTS = {
+  violet: { tile: 'bg-violet-50', text: 'text-violet-600', bar: 'bg-violet-500', hex: '#8b5cf6' },
+  blue: { tile: 'bg-brand-50', text: 'text-brand-600', bar: 'bg-brand-500', hex: '#0ea5e9' },
+  green: { tile: 'bg-emerald-50', text: 'text-emerald-600', bar: 'bg-emerald-500', hex: '#10b981' },
+};
+export const READINESS_CARD_LABEL = 'text-[13px] font-medium text-slate-600';
+export const READINESS_BIG_VALUE = 'text-[34px] font-bold leading-none tracking-tight';
+export const READINESS_PILL = 'text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap';
+export const READINESS_TABLE_CARD = 'bg-white border border-slate-200 rounded-2xl shadow-card mb-4';
+export const READINESS_TABLE = 'w-full border-collapse text-[13px]';
+export const READINESS_TH =
+  'text-left px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 border-b border-slate-200 whitespace-nowrap';
+export const READINESS_TD = 'px-3.5 py-3 align-middle border-b border-slate-100';
+export const READINESS_MINI_BAR = 'mt-1.5 h-1 w-full max-w-[100px] rounded-full bg-slate-100 overflow-hidden';
 
 // Shared across Research/New Campaign (and later A+/Strategy) pages.
 export const ICON_LABEL = 'inline-flex items-center gap-1.5';
