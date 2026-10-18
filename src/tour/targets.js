@@ -237,6 +237,8 @@ const groups = {
         'accountSelect',
         'typeGrid',
         'typeCardTutorial',     // renders once per card; a step anchors to the first
+        'typePrimaryTutorial',  // that card's tutorial button
+        'confirmModal',         // UploadConfirmationModal dialog
         'fileSelector',
         'queue',
     ]),

@@ -40,7 +40,7 @@ const YouTubeModal = ({ isOpen, videoUrl, title, onClose }) => {
 
     return (
         <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-center justify-center z-[10000] p-4"
             onClick={onClose}
         >
             <div

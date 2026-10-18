@@ -12,12 +12,12 @@
 //  down halfway through.
 // ─────────────────────────────────────────────────────────
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import api from '../api';
 import { TOUR, tourSelector } from './targets';
-import { TOURS, TENANT_ONBOARDING, BILLING_TOUR, MARKETPLACE_SETTINGS, getMarketplaceTourKey } from './steps';
+import { TOURS, TENANT_ONBOARDING, BILLING_TOUR, MARKETPLACE_SETTINGS, UPLOAD_ONBOARDING, getMarketplaceTourKey } from './steps';
 import TourSpotlight from './TourSpotlight';
 import WelcomeModal from './WelcomeModal';
 
@@ -98,6 +98,9 @@ export const TourProvider = ({ children }) => {
     // Cleared by navigating anywhere else.
     const endedOnRouteRef = useRef(null);
     const lastLocationPathRef = useRef(location.pathname);
+    // Actions reported before their step is on screen (a fast upload can finish
+    // while the previous step is still auto-advancing).
+    const pendingActionsRef = useRef(new Map());
 
     const [runKey, setRunKey] = useState(null);
     const [stepIndex, setStepIndex] = useState(0);
@@ -106,6 +109,8 @@ export const TourProvider = ({ children }) => {
     const [recordsLoaded, setRecordsLoaded] = useState(false);
     const [actionCompleted, setActionCompleted] = useState(false);
     const [actionMeta, setActionMeta] = useState(null);
+    const [actionError, setActionError] = useState(null);
+    const [suspended, setSuspended] = useState(false);
     const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
     const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
         try {
@@ -194,7 +199,13 @@ export const TourProvider = ({ children }) => {
 
     const run = runKey ? TOURS[runKey] : null;
     const steps = run?.steps || [];
-    const step = steps[stepIndex] || null;
+    const rawStep = steps[stepIndex] || null;
+    const step = useMemo(() => {
+        if (!rawStep?.byMarketplace) return rawStep;
+        const norm = (selectedMarketplace || '').toLowerCase();
+        const slug = Object.keys(rawStep.byMarketplace).find((key) => norm.includes(key));
+        return slug ? { ...rawStep, ...rawStep.byMarketplace[slug] } : rawStep;
+    }, [rawStep, selectedMarketplace]);
 
     // Reset or evaluate action status whenever current step changes
     useEffect(() => {
@@ -208,6 +219,7 @@ export const TourProvider = ({ children }) => {
         }
         // Action requires real completion during this tour session
         setActionCompleted(false);
+        setActionError(null);
     }, [step?.id, step?.requiresAction]);
 
     const isTenantAudience = !!user && (
@@ -324,6 +336,7 @@ export const TourProvider = ({ children }) => {
         directionRef.current = 1;
         navAttemptsRef.current = { index: -1, count: 0 };
         endedOnRouteRef.current = null;
+        pendingActionsRef.current.clear();
         if (runKey === TENANT_ONBOARDING && key !== TENANT_ONBOARDING) {
             persist(TENANT_ONBOARDING, 'completed', 5);
         }
@@ -473,7 +486,15 @@ export const TourProvider = ({ children }) => {
     }, [stepIndex, runKey, steps, isStepApplicable, selectedMarketplace, stop]);
 
     const next = useCallback(() => goTo(stepIndex + 1, 1), [goTo, stepIndex]);
-    const prev = useCallback(() => goTo(stepIndex - 1, -1), [goTo, stepIndex]);
+    const prev = useCallback(() => {
+        const backIndex = step?.backTo ? steps.findIndex((s) => s.id === step.backTo) : -1;
+        goTo(backIndex >= 0 ? backIndex : stepIndex - 1, -1);
+    }, [goTo, stepIndex, step, steps]);
+
+    const retryAfterFailure = useCallback(() => {
+        window.dispatchEvent(new CustomEvent('tour:upload_reset'));
+        prev();
+    }, [prev]);
 
     // Moves past a step that cannot be shown, in whichever direction the user
     // was travelling. This is the normal path for permission-gated and
@@ -540,6 +561,7 @@ export const TourProvider = ({ children }) => {
                 return;
             }
             const isModal = !!(
+                step?.modalSelector ||
                 found.closest('[role="dialog"], .fixed') ||
                 step?.target?.startsWith?.('marketplace.modal') ||
                 (step?.id?.startsWith?.('mp-') && !step?.isMarketplaceSelect && !step?.isCelebration)
@@ -764,7 +786,10 @@ export const TourProvider = ({ children }) => {
             localStorage.setItem(localKey('welcome_dismissed'), 'true');
         } catch { /* ignore */ }
         stop('skipped');
-    }, [stop, localKey]);
+        // stop() has no run to record here (the welcome modal opens before the
+        // tour starts), so persist the dismissal or it returns on other devices.
+        persist(TENANT_ONBOARDING, 'skipped', 0);
+    }, [stop, persist, localKey]);
 
     // Signing out mid-tour must not leave the overlay on the login screen.
     useEffect(() => {
@@ -787,7 +812,7 @@ export const TourProvider = ({ children }) => {
             if (step.autoAdvance) {
                 setTimeout(() => {
                     next();
-                }, 1200);
+                }, step.autoAdvanceDelay ?? 1200);
             }
         }
     }, [step, next, localKey]);
@@ -829,11 +854,61 @@ export const TourProvider = ({ children }) => {
             const { action, meta } = e.detail || {};
             if (step && (!step.actionType || step.actionType === action)) {
                 completeTourAction(action, meta);
+            } else if (runKey && action) {
+                pendingActionsRef.current.set(action, meta);
             }
         };
         window.addEventListener('tour:action-completed', handler);
         return () => window.removeEventListener('tour:action-completed', handler);
+    }, [step, runKey, completeTourAction]);
+
+    useEffect(() => {
+        const pending = pendingActionsRef.current;
+        if (step?.requiresAction && step.actionType && pending.has(step.actionType)) {
+            const meta = pending.get(step.actionType);
+            pending.delete(step.actionType);
+            completeTourAction(step.actionType, meta);
+        }
     }, [step, completeTourAction]);
+
+    useEffect(() => {
+        const handler = (e) => {
+            const { action, message } = e.detail || {};
+            if (step?.requiresAction && step.actionType === action) {
+                setActionError(message ? { message } : null);
+            }
+        };
+        window.addEventListener('tour:action-failed', handler);
+        return () => window.removeEventListener('tour:action-failed', handler);
+    }, [step]);
+
+    // A page modal that needs the user's full attention hides the overlay
+    // instead of stacking under it.
+    useEffect(() => {
+        const suspend = () => setSuspended(true);
+        const resume = () => setSuspended(false);
+        window.addEventListener('tour:suspend', suspend);
+        window.addEventListener('tour:resume', resume);
+        return () => {
+            window.removeEventListener('tour:suspend', suspend);
+            window.removeEventListener('tour:resume', resume);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!runKey) setSuspended(false);
+    }, [runKey]);
+
+    // Cancelling the upload confirmation sends the user back to pick another file.
+    useEffect(() => {
+        const handler = () => {
+            if (runKey === UPLOAD_ONBOARDING && step?.id === 'up-confirm') {
+                goTo(stepIndex - 1, -1);
+            }
+        };
+        window.addEventListener('tour:upload_cancelled', handler);
+        return () => window.removeEventListener('tour:upload_cancelled', handler);
+    }, [runKey, step?.id, stepIndex, goTo]);
 
     const applicableSteps = steps.filter((s) => isStepApplicable(s, selectedMarketplace));
     const currentApplicableIndex = applicableSteps.findIndex((s) => s.id === step?.id);
@@ -887,7 +962,7 @@ export const TourProvider = ({ children }) => {
                 onStartTour={handleStartFromWelcome}
                 onDismiss={handleDismissWelcome}
             />
-            {step && (
+            {step && !suspended && (
                 <TourSpotlight
                     element={element}
                     step={step}
@@ -897,14 +972,21 @@ export const TourProvider = ({ children }) => {
                     isLast={displayIndex === displayTotal - 1 || step?.isCelebration}
                     actionCompleted={actionCompleted}
                     actionMeta={actionMeta}
+                    actionError={actionError}
+                    onRetryAfterFailure={retryAfterFailure}
                     onCompleteAction={completeTourAction}
                     onBypassAction={bypassTourAction}
                     onNext={next}
                     onPrev={prev}
                     onClose={() => stop(step?.isCelebration ? 'completed' : 'skipped')}
                     onGoToDashboard={() => {
+                        const nextTour = step?.celebration?.nextTour;
                         stop('completed');
-                        navigate('/dashboard');
+                        if (nextTour) {
+                            startTour(nextTour);
+                        } else {
+                            navigate('/dashboard');
+                        }
                     }}
                 />
             )}

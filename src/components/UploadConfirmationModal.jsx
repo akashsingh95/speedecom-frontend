@@ -7,6 +7,7 @@ import {
     FileText, AlertCircle, RotateCcw, Volume2, VolumeX
 } from 'lucide-react';
 import { getMarketplaceLogo } from '../utils/marketplaceLogos';
+import { TOUR } from '../tour/targets';
 
 const COUNTDOWN = 8;
 
@@ -174,7 +175,7 @@ const UploadConfirmationModal = ({
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-[3px] flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden ring-1 ring-black/5">
+            <div data-tour={TOUR.uploads.confirmModal} className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden ring-1 ring-black/5">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 pt-6 pb-5">
