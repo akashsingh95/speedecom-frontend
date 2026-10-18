@@ -14,8 +14,16 @@ import QueueLimitModal from '../components/QueueLimitModal';
 import YouTubeModal from '../components/YouTubeModal';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
 import { TOUR } from '../tour/targets';
+import TourLauncher from '../tour/TourLauncher';
+import { useTour } from '../tour/TourProvider';
+import { UPLOAD_ONBOARDING, PRIMARY_UPLOAD_TYPES, DEFAULT_UPLOAD_FILE_LIMIT, getPrimaryUploadType, getUploadFileLimit } from '../tour/steps';
 
-const MAX_FILES_PER_UPLOAD = 5;
+const MAX_FILES_PER_UPLOAD = DEFAULT_UPLOAD_FILE_LIMIT;
+const PRIMARY_UPLOAD_TYPE_IDS = new Set(Object.values(PRIMARY_UPLOAD_TYPES));
+
+const emitTourAction = (action) => {
+    window.dispatchEvent(new CustomEvent('tour:action-completed', { detail: { action } }));
+};
 
 // Step number badge
 const StepBadge = ({ number }) => (
@@ -48,6 +56,7 @@ const YOUTUBE_TUTORIAL_LINKS = {
 const UploadTypeCard = ({ id, currentId, onClick, icon: Icon, title, subtitle, onOpenVideo }) => {
     const isSelected = currentId === id;
     const videoLink = YOUTUBE_TUTORIAL_LINKS[id] && !YOUTUBE_TUTORIAL_LINKS[id].includes('placeholder_') ? YOUTUBE_TUTORIAL_LINKS[id] : null;
+    const tutorialTarget = PRIMARY_UPLOAD_TYPE_IDS.has(id) ? TOUR.uploads.typePrimaryTutorial : TOUR.uploads.typeCardTutorial;
 
     return (
         <div className="relative group w-full h-full">
@@ -74,7 +83,7 @@ const UploadTypeCard = ({ id, currentId, onClick, icon: Icon, title, subtitle, o
                 <div className="absolute top-2 right-2 z-10 block">
                     <button
                         type="button"
-                        data-tour={TOUR.uploads.typeCardTutorial}
+                        data-tour={tutorialTarget}
                         className="text-red-400 hover:text-red-600 bg-white hover:bg-red-50 rounded-full p-1.5 shadow-sm border border-gray-200 hover:border-red-200 transition-all flex items-center justify-center"
                         title="Watch Upload Tutorial"
                         onClick={(e) => {
@@ -92,6 +101,8 @@ const UploadTypeCard = ({ id, currentId, onClick, icon: Icon, title, subtitle, o
 
 const Uploads = () => {
     const { user, isImpersonating } = useAuth();
+    const { runKey: tourRunKey, currentStep: tourStep, selectedMarketplace: tourMarketplace } = useTour() || {};
+    const isUploadTour = tourRunKey === UPLOAD_ONBOARDING;
     const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState(() => {
         return searchParams.get('tab') === 'history' ? 'history' : 'upload';
@@ -195,7 +206,47 @@ const Uploads = () => {
         setUploadType(deriveUploadType(key));
     };
 
+    // The upload tour starts from the marketplace the user just connected.
+    useEffect(() => {
+        if (!isUploadTour || !tourStep?.selectsPrimaryType || activeMarketplaces.length === 0) return;
+        const wanted = (tourMarketplace || '').toLowerCase();
+        const target = activeMarketplaces.find((m) => {
+            const key = (m.key || '').toLowerCase();
+            return key && (wanted.includes(key) || key.includes(wanted));
+        });
+        if (!target?.accounts?.length) return;
+        if (!target.accounts.some((acc) => acc._id === marketplaceId)) {
+            handleAccountSelect(target.accounts[0]._id);
+        }
+        const primaryType = getPrimaryUploadType(target.key);
+        if (primaryType) setUploadType(primaryType);
+         
+    }, [isUploadTour, tourStep?.id, activeMarketplaces]);
+
     const [costSheetUploadEnabled, setCostSheetUploadEnabled] = useState(false);
+
+    useEffect(() => {
+        if (!isUploadTour || !fileLimitModal.isOpen) return undefined;
+        window.dispatchEvent(new CustomEvent('tour:suspend'));
+        return () => window.dispatchEvent(new CustomEvent('tour:resume'));
+    }, [isUploadTour, fileLimitModal.isOpen]);
+
+    const failedUploadError = uploadQueue.state.files.find((f) => f.error)?.error || null;
+    useEffect(() => {
+        if (!isUploadTour) return;
+        window.dispatchEvent(new CustomEvent('tour:action-failed', {
+            detail: { action: 'uploadCompleted', message: failedUploadError },
+        }));
+    }, [isUploadTour, failedUploadError, tourStep?.id]);
+
+    useEffect(() => {
+        if (!isUploadTour) return undefined;
+        const clearFailed = () => {
+            uploadQueue.state.files.filter((f) => f.error).forEach((f) => uploadQueue.removeFile(f.id));
+        };
+        window.addEventListener('tour:upload_reset', clearFailed);
+        return () => window.removeEventListener('tour:upload_reset', clearFailed);
+    }, [isUploadTour, uploadQueue]);
 
     // Compute queue stats at component level — no IIFE needed
     const queueStats = calculateQueueStats(uploadQueue.state.files);
@@ -352,7 +403,7 @@ const Uploads = () => {
         if (!marketplaceId) { toast.error('Please select an account first'); return; }
         if (!uploadType) { toast.error('Please select an upload type'); return; }
 
-        const limit = uploadType === 'myntra_payments' ? 30 : MAX_FILES_PER_UPLOAD;
+        const limit = getUploadFileLimit(uploadType);
 
         if (files.length > limit) {
             setFileLimitModal({ isOpen: true, totalFiles: files.length, limit });
@@ -366,15 +417,18 @@ const Uploads = () => {
             marketplaceName: selectedMarketplace?.key || '',
             accountName: selectedAccount?.name || '',
         });
+        emitTourAction('fileSelected');
     };
 
     const handleConfirmUpload = () => {
         uploadQueue.addFiles(confirmModal.files, confirmModal.uploadType, confirmModal.marketplaceId);
         setConfirmModal({ isOpen: false, files: [], uploadType: '', marketplaceId: '', marketplaceName: '', accountName: '' });
+        emitTourAction('uploadConfirmed');
     };
 
     const handleCancelConfirm = () => {
         setConfirmModal({ isOpen: false, files: [], uploadType: '', marketplaceId: '', marketplaceName: '', accountName: '' });
+        window.dispatchEvent(new CustomEvent('tour:upload_cancelled'));
     };
 
     const handleRetry = (fileId) => uploadQueue.retryFile(fileId);
@@ -397,6 +451,7 @@ const Uploads = () => {
         if (completedCount > prevCompletedCountRef.current) {
             fetchUploadHistory();
             prevCompletedCountRef.current = completedCount;
+            if (isUploadTour) emitTourAction('uploadCompleted');
         }
     }, [uploadQueue.state.files]);
 
@@ -481,6 +536,7 @@ const Uploads = () => {
                             Uploads Management
                         </h2>
                     </div>
+                    <TourLauncher tourKey={UPLOAD_ONBOARDING} label="Guided upload tour" />
                 </header>
 
                 <main className="flex-1 w-full flex flex-col overflow-hidden relative">

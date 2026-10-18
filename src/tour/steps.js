@@ -21,7 +21,7 @@
 //               tabs without a `when` predicate per step.
 // ─────────────────────────────────────────────────────────
 
-import { TOUR } from './targets';
+import { TOUR, tourSelector } from './targets';
 
 export const TENANT_ONBOARDING = 'tenant-onboarding';
 export const MARKETPLACE_SETTINGS = 'marketplace-settings';
@@ -36,6 +36,7 @@ export const SCAN_RETURNS_TOUR = 'scan-returns';
 export const SUPPORT_TOUR = 'support';
 export const USER_MANAGEMENT_TOUR = 'user-management';
 export const BILLING_TOUR = 'billing';
+export const UPLOAD_ONBOARDING = 'upload-onboarding';
 
 export const getMarketplaceTourKey = (name) => {
     if (!name) return null;
@@ -45,6 +46,24 @@ export const getMarketplaceTourKey = (name) => {
     if (norm.includes('flipkart')) return MARKETPLACE_ONBOARDING_FLIPKART;
     if (norm.includes('myntra')) return MARKETPLACE_ONBOARDING_MYNTRA;
     return null;
+};
+
+// The one report a new tenant is walked through uploading, per marketplace key.
+export const PRIMARY_UPLOAD_TYPES = {
+    meesho: 'meesho_payments',
+    amazon: 'amazon_payments',
+    flipkart: 'payments',
+    myntra: 'myntra_payments',
+};
+
+export const DEFAULT_UPLOAD_FILE_LIMIT = 5;
+export const UPLOAD_FILE_LIMITS = { myntra_payments: 30 };
+export const getUploadFileLimit = (type) => UPLOAD_FILE_LIMITS[type] ?? DEFAULT_UPLOAD_FILE_LIMIT;
+
+export const getPrimaryUploadType = (name) => {
+    const norm = (name || '').toLowerCase();
+    const slug = Object.keys(PRIMARY_UPLOAD_TYPES).find((key) => norm.includes(key));
+    return slug ? PRIMARY_UPLOAD_TYPES[slug] : null;
 };
 
 export const TENANT_ONBOARDING_STEPS = [
@@ -208,6 +227,11 @@ export const MEESHO_ONBOARDING_STEPS = [
         route: '/settings/marketplace',
         side: 'center',
         isCelebration: true,
+        celebration: {
+            nextTour: UPLOAD_ONBOARDING,
+            primaryLabel: 'Upload Your First File ➔',
+            secondaryLabel: 'Do This Later',
+        },
         title: 'Congratulations!',
         body: "You've successfully connected Meesho to SpeedEcom!",
         lastButtonText: 'Finish Onboarding ➔',
@@ -266,6 +290,11 @@ export const AMAZON_ONBOARDING_STEPS = [
         route: '/settings/marketplace',
         side: 'center',
         isCelebration: true,
+        celebration: {
+            nextTour: UPLOAD_ONBOARDING,
+            primaryLabel: 'Upload Your First File ➔',
+            secondaryLabel: 'Do This Later',
+        },
         title: 'Congratulations!',
         body: "You've successfully connected Amazon to SpeedEcom!",
         lastButtonText: 'Finish Onboarding ➔',
@@ -324,6 +353,11 @@ export const FLIPKART_ONBOARDING_STEPS = [
         route: '/settings/marketplace',
         side: 'center',
         isCelebration: true,
+        celebration: {
+            nextTour: UPLOAD_ONBOARDING,
+            primaryLabel: 'Upload Your First File ➔',
+            secondaryLabel: 'Do This Later',
+        },
         title: 'Congratulations!',
         body: "You've successfully connected Flipkart to SpeedEcom!",
         lastButtonText: 'Finish Onboarding ➔',
@@ -382,9 +416,122 @@ export const MYNTRA_ONBOARDING_STEPS = [
         route: '/settings/marketplace',
         side: 'center',
         isCelebration: true,
+        celebration: {
+            nextTour: UPLOAD_ONBOARDING,
+            primaryLabel: 'Upload Your First File ➔',
+            secondaryLabel: 'Do This Later',
+        },
         title: 'Congratulations!',
         body: "You've successfully connected Myntra to SpeedEcom!",
         lastButtonText: 'Finish Onboarding ➔',
+    },
+];
+
+// ── Upload onboarding ────────────────────────────────────────────────────
+// Starts from the marketplace celebration step. Each requiresAction step waits
+// for the Uploads page to dispatch the matching `tour:action-completed` event.
+
+export const UPLOAD_ONBOARDING_STEPS = [
+    {
+        id: 'up-intro',
+        target: null,
+        route: '/uploads',
+        side: 'center',
+        title: 'Upload your first report',
+        body: 'Calculations are built from the reports you download from your marketplace panel. Let\'s upload the first one together; it takes about two minutes.',
+        nextButtonText: 'Let\'s start ➔',
+    },
+    {
+        id: 'up-account',
+        target: TOUR.uploads.accountSelect,
+        route: '/uploads',
+        required: true,
+        side: 'bottom',
+        selectsPrimaryType: true,
+        title: 'Pick the account',
+        body: 'Files are uploaded to one marketplace account at a time. The account you just connected is selected for you; with several accounts, always check this first.',
+    },
+    {
+        id: 'up-types',
+        target: TOUR.uploads.typeGrid,
+        route: '/uploads',
+        required: true,
+        side: 'bottom',
+        title: 'Report types for your marketplace',
+        body: 'Each card is a report your marketplace provides. Payments is the best one to start with, so it is selected for you. You can upload the others any time.',
+    },
+    {
+        id: 'up-tutorial',
+        target: TOUR.uploads.typePrimaryTutorial,
+        route: '/uploads',
+        forMarketplaces: ['meesho', 'amazon', 'flipkart'],
+        side: 'bottom',
+        title: 'Not sure where to download it?',
+        body: 'Click the play icon to watch how to download this report from your marketplace panel, then come back and continue.',
+    },
+    {
+        id: 'up-file',
+        target: TOUR.uploads.fileSelector,
+        route: '/uploads',
+        required: true,
+        side: 'top',
+        requiresAction: true,
+        actionType: 'fileSelected',
+        autoAdvance: true,
+        autoAdvanceDelay: 300,
+        actionPrompt: 'Choose the downloaded file to continue',
+        title: 'Select your file',
+        body: 'Drag the downloaded report here, or click to browse.',
+        note: 'Upload limit: up to 5 files at a time.',
+        byMarketplace: {
+            myntra: { note: 'Upload limit: up to 30 files at a time for Myntra Payments, and 5 files at a time for the other Myntra reports.' },
+        },
+    },
+    {
+        id: 'up-confirm',
+        target: TOUR.uploads.confirmModal,
+        modalSelector: tourSelector(TOUR.uploads.confirmModal),
+        route: '/uploads',
+        required: true,
+        side: 'right',
+        requiresAction: true,
+        actionType: 'uploadConfirmed',
+        autoAdvance: true,
+        actionPrompt: 'Confirm the upload to continue',
+        title: 'Is this correct?',
+        body: 'Check the account, report type and file names. If anything is wrong, press Cancel and select the correct file. Confirm becomes available after a few seconds.',
+    },
+    {
+        id: 'up-processing',
+        target: TOUR.uploads.queue,
+        route: '/uploads',
+        required: true,
+        side: 'left',
+        requiresAction: true,
+        actionType: 'uploadCompleted',
+        autoAdvance: true,
+        actionPrompt: 'Waiting for your file to finish processing',
+        backTo: 'up-file',
+        failureHelp: 'This usually means the file is not the selected report type, or the wrong account is selected. Check both, then upload the correct file.',
+        title: 'Processing your file',
+        body: 'We upload, validate and process the file. If it shows a warning, review it and approve to continue.',
+    },
+    {
+        id: 'up-congratulations',
+        target: null,
+        route: '/uploads',
+        side: 'center',
+        isCelebration: true,
+        celebration: {
+            badge: 'Upload Complete',
+            heading: 'File uploaded successfully!',
+            text: 'Congratulations on finishing this step. Your data is now flowing into SpeedEcom and will appear in your dashboard once processing completes.',
+            points: ['Report Validated', 'Dashboard Updating'],
+            secondaryLabel: 'Upload More Files',
+            primaryLabel: 'Go to Dashboard ➔',
+        },
+        title: 'You\'re all set!',
+        body: 'Your first report is in.',
     },
 ];
 
@@ -860,6 +1007,7 @@ export const TOURS = {
             requires: null,
         },
     },
+    [UPLOAD_ONBOARDING]: { key: UPLOAD_ONBOARDING, steps: UPLOAD_ONBOARDING_STEPS, autoStart: null },
     [MARKETPLACE_SETTINGS]: {
         key: MARKETPLACE_SETTINGS,
         steps: MARKETPLACE_SETTINGS_STEPS,

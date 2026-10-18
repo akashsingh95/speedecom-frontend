@@ -85,7 +85,11 @@ const place = (hole, size, preferred, step = null, viewport = null) => {
         return Math.max(minLeft, Math.min(val, maxLeft));
     };
 
-    const isMarketplaceModal = !!(
+    const stepModalEl = step?.modalSelector && typeof document !== 'undefined'
+        ? document.querySelector(step.modalSelector)
+        : null;
+
+    const isMarketplaceModal = !stepModalEl && !!(
         step?.target?.startsWith?.('marketplace.modal') ||
         (step?.id?.startsWith?.('mp-') && step?.id?.includes('-') && !step?.isMarketplaceSelect && !step?.isCelebration)
     );
@@ -98,7 +102,7 @@ const place = (hole, size, preferred, step = null, viewport = null) => {
             : null)
         : null;
 
-    const isModalTarget = !!(checkoutModalEl || isMarketplaceModal);
+    const isModalTarget = !!(checkoutModalEl || isMarketplaceModal || stepModalEl);
 
     // Non-modal centering steps
     if (!isModalTarget && (!hole || preferred === 'center' || step?.isBillingIntro || step?.isMarketplaceSelect || step?.isCelebration)) {
@@ -112,7 +116,7 @@ const place = (hole, size, preferred, step = null, viewport = null) => {
     // Modal-aware positioning: keep popover completely outside the modal dialog
     // so inputs and buttons remain visible, unclipped, and freely editable.
     if (isModalTarget) {
-        const modalEl = isMarketplaceModal
+        const modalEl = stepModalEl || (isMarketplaceModal
             ? (typeof document !== 'undefined'
                 ? (document.querySelector('[data-tour-modal="connect-marketplace"]') ||
                    document.querySelector('.connect-marketplace-modal') ||
@@ -120,7 +124,7 @@ const place = (hole, size, preferred, step = null, viewport = null) => {
                    document.querySelector('.fixed .rounded-3xl.bg-white') ||
                    document.querySelector('.fixed .bg-white.rounded-3xl'))
                 : null)
-            : checkoutModalEl;
+            : checkoutModalEl);
         const modalRect = modalEl?.getBoundingClientRect();
 
         if (modalRect && modalRect.width > 0 && modalRect.height > 0) {
@@ -282,6 +286,8 @@ const TourSpotlight = ({
     isLast,
     actionCompleted = false,
     actionMeta = null,
+    actionError = null,
+    onRetryAfterFailure,
     onCompleteAction,
     onBypassAction,
     onNext,
@@ -293,6 +299,7 @@ const TourSpotlight = ({
     const [hole, setHole] = useState(null);
 
     const isModalTarget = !!(
+        step?.modalSelector ||
         step?.target?.startsWith?.('marketplace.modal') ||
         (step?.id?.startsWith?.('mp-') && step?.id?.includes('-') && !step?.isMarketplaceSelect && !step?.isCelebration)
     );
@@ -460,6 +467,11 @@ const TourSpotlight = ({
         }
     } else if (step?.actionType === 'connect') {
         isNextDisabled = true;
+    } else if (step?.requiresAction && !actionCompleted) {
+        isNextDisabled = true;
+        actionStatus = actionError
+            ? { type: 'failed', text: actionError.message }
+            : { type: 'prompt', text: step.actionPrompt || 'Complete this step to continue' };
     }
 
     // Reliably resolves the live target element from DOM if the prop reference is stale/detached
@@ -839,7 +851,7 @@ const TourSpotlight = ({
                         <div className="flex items-center gap-2">
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold tracking-wide uppercase bg-brand-50 text-brand-700 border border-brand-200/80 shadow-xs">
                                 <Sparkles size={11} className="text-amber-500 shrink-0" />
-                                {step?.isCelebration ? 'Connection Success' : step?.isBillingIntro ? 'Billing & Credits Overview' : step?.isMarketplaceSelect ? 'Marketplace Selection' : 'Guided Onboarding'}
+                                {step?.isCelebration ? (step?.celebration?.badge || 'Connection Success') : step?.isBillingIntro ? 'Billing & Credits Overview' : step?.isMarketplaceSelect ? 'Marketplace Selection' : 'Guided Onboarding'}
                             </span>
                             <span className="text-[11px] font-bold text-slate-400">
                                 Step {index + 1} of {total}
@@ -865,6 +877,13 @@ const TourSpotlight = ({
                     <p className="text-sm text-slate-600 leading-relaxed mt-1.5">
                         {step?.body}
                     </p>
+
+                    {step?.note && (
+                        <div className="mt-3 p-3 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 flex items-start gap-2">
+                            <Info size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                            <span className="leading-snug">{step.note}</span>
+                        </div>
+                    )}
 
                     {/* ── Marketplace Selection Cards ────────────────────── */}
                     {step?.isMarketplaceSelect && (
@@ -1082,12 +1101,16 @@ const TourSpotlight = ({
                         <div className={`mt-3.5 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
                             actionStatus.type === 'valid'
                                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : actionStatus.type === 'failed'
+                                    ? 'bg-red-50 text-red-700 border border-red-200'
                                 : actionStatus.type === 'invalid'
                                     ? 'bg-amber-50 text-amber-800 border border-amber-200'
                                     : 'bg-slate-100 text-slate-700 border border-slate-200'
                         }`}>
                             {actionStatus.type === 'valid' ? (
                                 <Check size={15} className="text-emerald-600 shrink-0" />
+                            ) : actionStatus.type === 'failed' ? (
+                                <AlertCircle size={15} className="text-red-600 shrink-0" />
                             ) : actionStatus.type === 'invalid' ? (
                                 <AlertCircle size={15} className="text-amber-600 shrink-0" />
                             ) : (
@@ -1095,6 +1118,10 @@ const TourSpotlight = ({
                             )}
                             <span className="leading-snug">{actionStatus.text}</span>
                         </div>
+                    )}
+
+                    {actionStatus?.type === 'failed' && step?.failureHelp && (
+                        <p className="mt-2 text-xs text-slate-600 leading-relaxed">{step.failureHelp}</p>
                     )}
 
                     {/* ── Backend Connection Error Feedback on Connect Step ── */}
@@ -1128,21 +1155,19 @@ const TourSpotlight = ({
                             </div>
                             <div>
                                 <h4 className="text-base font-extrabold text-slate-800">
-                                    Marketplace Successfully Connected!
+                                    {step.celebration?.heading || 'Marketplace Successfully Connected!'}
                                 </h4>
                                 <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto leading-relaxed">
-                                    Your store is now linked with SpeedEcom. We have initialized your order, settlement, and return synchronization pipeline for your selected analysis period.
+                                    {step.celebration?.text || 'Your store is now linked with SpeedEcom. We have initialized your order, settlement, and return synchronization pipeline for your selected analysis period.'}
                                 </p>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left pt-1">
-                                <div className="p-2.5 rounded-lg bg-white/80 border border-emerald-100 flex items-center gap-2 text-xs font-semibold text-slate-700">
-                                    <ShieldCheck size={15} className="text-emerald-500 shrink-0" />
-                                    <span>Order Reconciliation Active</span>
-                                </div>
-                                <div className="p-2.5 rounded-lg bg-white/80 border border-emerald-100 flex items-center gap-2 text-xs font-semibold text-slate-700">
-                                    <ShieldCheck size={15} className="text-emerald-500 shrink-0" />
-                                    <span>SKU Profit Intelligence</span>
-                                </div>
+                                {(step.celebration?.points || ['Order Reconciliation Active', 'SKU Profit Intelligence']).map((point) => (
+                                    <div key={point} className="p-2.5 rounded-lg bg-white/80 border border-emerald-100 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                        <ShieldCheck size={15} className="text-emerald-500 shrink-0" />
+                                        <span>{point}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -1229,7 +1254,7 @@ const TourSpotlight = ({
                                     onClick={onClose}
                                     className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
                                 >
-                                    Stay on Marketplace
+                                    {step.celebration?.secondaryLabel || 'Stay on Marketplace'}
                                 </button>
                                 <button
                                     type="button"
@@ -1239,7 +1264,7 @@ const TourSpotlight = ({
                                     })}
                                     className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white text-xs font-extrabold shadow-md shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                                 >
-                                    <span>Go to Dashboard ➔</span>
+                                    <span>{step.celebration?.primaryLabel || 'Go to Dashboard ➔'}</span>
                                 </button>
                             </div>
                         ) : (
@@ -1272,6 +1297,15 @@ const TourSpotlight = ({
                                                 </div>
                                             )}
                                         </div>
+                                    ) : actionStatus?.type === 'failed' && onRetryAfterFailure ? (
+                                        <button
+                                            type="button"
+                                            onClick={onRetryAfterFailure}
+                                            className="flex items-center gap-1.5 text-xs font-extrabold text-white rounded-xl px-4 py-2 shadow-md bg-gradient-to-r from-brand-600 via-brand-700 to-indigo-700 hover:from-brand-500 hover:to-indigo-600 transition-all active:scale-95 cursor-pointer"
+                                        >
+                                            <RefreshCw size={14} />
+                                            <span>Upload a different file</span>
+                                        </button>
                                     ) : (
                                         <button
                                             type="button"
