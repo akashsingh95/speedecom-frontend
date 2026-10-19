@@ -619,14 +619,16 @@ const AdminApprovals = () => {
                                                         </td>
                                                         <td className="py-4 px-6">
                                                             <div className="flex items-center justify-end gap-2">
-                                                                <button
-                                                                    onClick={() => handleReviveTenant(tenant._id)}
-                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 text-[11px] font-bold uppercase rounded-lg hover:bg-blue-100 transition-all active:scale-95"
-                                                                    title="Move back to Pending Approvals"
-                                                                >
-                                                                    <RefreshCw size={13} />
-                                                                    Restore
-                                                                </button>
+                                                                {canApproveTenants && (
+                                                                    <button
+                                                                        onClick={() => handleReviveTenant(tenant._id)}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 text-[11px] font-bold uppercase rounded-lg hover:bg-blue-100 transition-all active:scale-95"
+                                                                        title="Move back to Pending Approvals"
+                                                                    >
+                                                                        <RefreshCw size={13} />
+                                                                        Restore
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={() => handleDeleteTenant(tenant._id)}
                                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-[11px] font-bold uppercase rounded-lg hover:bg-red-100 transition-all active:scale-95"
