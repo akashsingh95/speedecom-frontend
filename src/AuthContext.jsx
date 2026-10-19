@@ -121,10 +121,28 @@ export const AuthProvider = ({ children }) => {
         const silentCheck = () => {
             if (!localStorage.getItem('token')) return;
             const isCurrentlyImpersonating = !!localStorage.getItem('impersonatedTenant');
-            // Don't refresh permissions while impersonating (profile returns tenant data)
+            // While impersonating, profile returns the tenant admin's data — so don't touch the
+            // admin's own permissions/name, but do pick up the tenant's Speedy Listing access
+            // (same fields startImpersonating syncs), so an approval lands without re-impersonating.
             if (isCurrentlyImpersonating) {
-                // Still verify session is valid
-                api.get('/auth/profile').catch(() => {});
+                api.get('/auth/profile')
+                    .then((res) => {
+                        const fresh = res.data;
+                        // Impersonation ended while the request was in flight — stopImpersonating owns the refresh.
+                        if (!localStorage.getItem('impersonatedTenant')) return;
+                        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+                        if (currentUser.listingStudioEnabled !== fresh.listingStudioEnabled
+                            || currentUser.listingStudioStatus !== fresh.listingStudioStatus) {
+                            const refreshed = {
+                                ...currentUser,
+                                listingStudioEnabled: fresh.listingStudioEnabled,
+                                listingStudioStatus: fresh.listingStudioStatus,
+                            };
+                            localStorage.setItem('user', JSON.stringify(refreshed));
+                            setUser(refreshed);
+                        }
+                    })
+                    .catch(() => {});
                 return;
             }
             // Debounce: visibility + focus can fire together — only run once per 2s
