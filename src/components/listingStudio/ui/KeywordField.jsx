@@ -27,16 +27,16 @@ import { highlightSegments, keywordLower, volumeTier } from '../keywordHighlight
 const METRICS = 'block w-full px-2.5 py-2 border rounded-lg text-base leading-6 font-sans';
 
 const TIER_MARK = {
-  high: 'bg-amber-300/75 ring-1 ring-amber-400/60',
-  medium: 'bg-amber-200/70 ring-1 ring-amber-300/50',
-  low: 'bg-amber-100 ring-1 ring-amber-200/60',
+  high: 'bg-blue-300/75 ring-1 ring-blue-400/60',
+  medium: 'bg-blue-200/70 ring-1 ring-blue-300/50',
+  low: 'bg-blue-100 ring-1 ring-blue-200/60',
 };
 
 // The volume number itself carries the tier colour in the tooltip, echoing the shade of the
 // highlight the cursor is on, so the two read as the same scale rather than two colour systems.
 const TIER_VALUE = {
-  high: 'text-amber-300',
-  medium: 'text-amber-200',
+  high: 'text-blue-300',
+  medium: 'text-blue-200',
   low: 'text-slate-100',
 };
 
@@ -171,7 +171,7 @@ export function KeywordField({
                 <mark
                   key={i}
                   data-kw={i}
-                  className={`rounded-sm text-transparent ${TIER_MARK[volumeTier(segment.entry.searchVolume)]}`}
+                  className={`-mx-1 rounded-md px-1 py-0.5 box-decoration-clone text-transparent ${TIER_MARK[volumeTier(segment.entry.searchVolume)]}`}
                 >
                   {segment.text}
                 </mark>
@@ -239,7 +239,7 @@ export function KeywordField({
                   <span className="flex min-w-0 items-baseline gap-1.5">
                     <span
                       aria-hidden="true"
-                      className={`mt-0.5 h-2.5 w-4 shrink-0 rounded-sm ${TIER_MARK[volumeTier(entry.searchVolume)]}`}
+                      className={`mt-0.5 h-2.5 w-4 shrink-0 rounded-md ${TIER_MARK[volumeTier(entry.searchVolume)]}`}
                     />
                     <span className="truncate text-slate-700">{entry.keyword}</span>
                   </span>
@@ -332,16 +332,16 @@ function KeywordTooltip({ hovered, usage }) {
  *  each field's own keyword list. */
 export function KeywordHighlightLegend() {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-[11px] text-slate-600">
+    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11px] text-slate-600">
       <span className="font-semibold text-slate-700">Keywords from your research</span>
       <span className="flex items-center gap-1.5">
-        <span className={`h-2.5 w-4 rounded-sm ${TIER_MARK.high}`} /> 5,000+ / mo
+        <span className={`h-2.5 w-4 rounded-md ${TIER_MARK.high}`} /> 5,000+ / mo
       </span>
       <span className="flex items-center gap-1.5">
-        <span className={`h-2.5 w-4 rounded-sm ${TIER_MARK.medium}`} /> 1,000+ / mo
+        <span className={`h-2.5 w-4 rounded-md ${TIER_MARK.medium}`} /> 1,000+ / mo
       </span>
       <span className="flex items-center gap-1.5">
-        <span className={`h-2.5 w-4 rounded-sm ${TIER_MARK.low}`} /> under 1,000
+        <span className={`h-2.5 w-4 rounded-md ${TIER_MARK.low}`} /> under 1,000
       </span>
       <span className="text-slate-500">
         Hover a highlight for its monthly searches, or open a field&rsquo;s keyword list below it.
