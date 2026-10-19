@@ -325,9 +325,9 @@ export default function ResearchPage() {
                     <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Price</th>
                     <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Rating</th>
                     <th className="text-left font-semibold text-slate-700 py-3 px-4 w-[32%] border border-slate-200">Strengths</th>
-                    <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Bought last month</th>
+                    <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Bought past month</th>
                     <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Approx monthly sales</th>
-                    <th className="text-left font-semibold text-slate-700 py-3 px-4 w-[20%] border border-slate-200">Market Share (depends on bought last month)</th>
+                    <th className="text-left font-semibold text-slate-700 py-3 px-4 w-[20%] border border-slate-200">Market Share (depends on bought past month)</th>
                   </tr>
                 </thead>
                 <tbody>
