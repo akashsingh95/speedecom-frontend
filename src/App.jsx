@@ -62,7 +62,7 @@ const getAdminLandingPage = (role, permissions) => {
     case 'SuperAdmin': return '/admin/approvals';
     case 'SBM': {
       // Pick the first page the SBM actually has permission for
-      if (permissions?.approveTenants || permissions?.approveSubscriptions || permissions?.rejectRegistrations) return '/admin/approvals';
+      if (permissions?.approveTenants || permissions?.approveSubscriptions || permissions?.rejectRegistrations || permissions?.approveListingStudioAccess) return '/admin/approvals';
       if (permissions?.viewTenants) return '/admin/tenants';
       if (permissions?.viewPricing) return '/admin/pricing';
       if (permissions?.manageRM) return '/admin/roles';

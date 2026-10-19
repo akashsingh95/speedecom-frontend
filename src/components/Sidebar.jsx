@@ -18,7 +18,7 @@ const Sidebar = () => {
     if (['SuperAdmin', 'SBM'].includes(user?.role) && !isImpersonating) {
         menuItems = [];
         // Approvals (if SuperAdmin or SBM with any approval-related permission)
-        if (user?.role === 'SuperAdmin' || user?.permissions?.approveTenants || user?.permissions?.approveSubscriptions || user?.permissions?.rejectRegistrations) {
+        if (user?.role === 'SuperAdmin' || user?.permissions?.approveTenants || user?.permissions?.approveSubscriptions || user?.permissions?.rejectRegistrations || user?.permissions?.approveListingStudioAccess) {
             menuItems.push({ name: 'Approvals', icon: CheckCircle, path: '/admin/approvals' });
         }
         // Tenants - SuperAdmin always, SBM if they have viewTenants permission

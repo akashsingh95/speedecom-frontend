@@ -29,6 +29,7 @@ const PERMISSION_DEFS = [
     { key: 'approveTenants', label: 'Tenants', icon: Building, text: 'text-brand-600', chip: 'bg-brand-50 text-brand-700 border-brand-200' },
     { key: 'approveSubscriptions', label: 'Subscriptions', icon: Shield, text: 'text-indigo-600', chip: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
     { key: 'rejectRegistrations', label: 'Reject', icon: X, text: 'text-red-600', chip: 'bg-red-50 text-red-700 border-red-200' },
+    { key: 'approveListingStudioAccess', label: 'Speedy Listing', icon: ShieldCheck, text: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     { key: 'viewTenants', label: 'View Tenants', icon: Eye, text: 'text-cyan-600', chip: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
     { key: 'viewPricing', label: 'Pricing', icon: Eye, text: 'text-amber-600', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
     { key: 'manageRM', label: 'Manage RM', icon: User, text: 'text-teal-600', chip: 'bg-teal-50 text-teal-700 border-teal-200' },
@@ -209,6 +210,7 @@ const SBMRMManagement = () => {
         approveTenants: true,
         approveSubscriptions: true,
         rejectRegistrations: true,
+        approveListingStudioAccess: true,
         viewTenants: false,
         viewPricing: true,
         manageRM: true,
@@ -269,6 +271,7 @@ const SBMRMManagement = () => {
                     approveTenants: formData.approveTenants,
                     approveSubscriptions: formData.approveSubscriptions,
                     rejectRegistrations: formData.rejectRegistrations,
+                    approveListingStudioAccess: formData.approveListingStudioAccess,
                     viewTenants: formData.viewTenants,
                     viewPricing: formData.viewPricing,
                     manageRM: formData.manageRM,
@@ -410,6 +413,7 @@ const SBMRMManagement = () => {
             approveTenants: u.permissions?.approveTenants || false,
             approveSubscriptions: u.permissions?.approveSubscriptions || false,
             rejectRegistrations: u.permissions?.rejectRegistrations || false,
+            approveListingStudioAccess: u.permissions?.approveListingStudioAccess || false,
             viewTenants: u.permissions?.viewTenants || false,
             viewPricing: u.permissions?.viewPricing || false,
             manageRM: u.permissions?.manageRM || false,
@@ -465,7 +469,7 @@ const SBMRMManagement = () => {
         setFormData({
             fullName: '', email: '', mobileNumber: '', password: '', role: activeTab,
             approveTenants: true, approveSubscriptions: true,
-            rejectRegistrations: true, viewTenants: false, viewPricing: true, manageRM: true,
+            rejectRegistrations: true, approveListingStudioAccess: true, viewTenants: false, viewPricing: true, manageRM: true,
             giftCredits: true, deductCredits: true, suspendTenant: true, deleteUpload: true, deactivateMarketplace: true, reactivateMarketplace: false,
             exportInvoices: false, viewSupport: true,
             hasExpiry: false, expiresAt: '',
@@ -1060,6 +1064,22 @@ const SBMRMManagement = () => {
                                                 <div>
                                                     <div className="text-sm font-semibold text-slate-700">Reject Registrations</div>
                                                     <div className="text-xs text-slate-500 mt-0.5">Allow this SBM to reject pending tenant registrations.</div>
+                                                </div>
+                                            </label>
+                                            <label className={`flex items-center gap-3.5 p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
+                                                formData.approveListingStudioAccess 
+                                                    ? 'border-emerald-300 bg-emerald-50/50 ring-1 ring-emerald-200/50 shadow-sm' 
+                                                    : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                                            }`}>
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={formData.approveListingStudioAccess}
+                                                    onChange={(e) => setFormData({...formData, approveListingStudioAccess: e.target.checked})}
+                                                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                                                />
+                                                <div>
+                                                    <div className="text-sm font-semibold text-slate-700">Approve Speedy Listing Access</div>
+                                                    <div className="text-xs text-slate-500 mt-0.5">Allow this SBM to approve or reject tenants' first Speedy Listing access requests.</div>
                                                 </div>
                                             </label>
                                             <label className={`flex items-center gap-3.5 p-3.5 border rounded-xl cursor-pointer transition-all duration-200 ${
