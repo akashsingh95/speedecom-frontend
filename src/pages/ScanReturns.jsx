@@ -36,22 +36,42 @@ const VIDEO_CONSTRAINTS = {
 // iOS/Safari, Firefox and Chrome-on-Linux, which fall back to zxing-wasm below.
 const HAS_NATIVE_BD  = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
-// LINEAR FORMATS ONLY — deliberately. A courier label carries more than one symbol, and the
-// 2D one is not the AWB: the DataMatrix on a Flipkart label decodes to a courier-internal
-// manifest ("5|\MF-6930316556238868|O|STV/STV|..."). Both engines return whichever symbol
-// they happen to find first, so including QR/DataMatrix here means a scan can silently
-// submit that junk instead of the AWB. Retail formats (EAN/UPC) are excluded for the same
-// reason — they can never hold an AWB, and each extra format costs a decode pass per frame.
-const NATIVE_FORMATS = ['code_128', 'code_39', 'itf'];
+// Linear formats carry the AWB on most labels, but some couriers print it only in a 2D code:
+// the Shadowfax DataMatrix decodes to the bare AWB (e.g. "R2651166214FPL") and its linear
+// barcode is often too fine for a phone camera to resolve. So 2D formats are enabled too —
+// but a 2D symbol is only trusted when its text looks like an AWB / suborder / tracking URL.
+// The Flipkart DataMatrix decodes to a courier-internal manifest
+// ("5|\MF-6930316556238868|O|STV/STV|...") which fails that check and is ignored, so it can
+// no longer be submitted in place of the AWB. Retail formats (EAN/UPC) stay excluded: they
+// can never hold an AWB, and each extra format costs a decode pass per frame.
+const NATIVE_FORMATS = ['code_128', 'code_39', 'itf', 'data_matrix', 'qr_code'];
+const NATIVE_2D      = new Set(['data_matrix', 'qr_code']);
 
 // ZXing-cpp compiled to WebAssembly — an order of magnitude stronger than the archived
 // ZXing-js port, and the only engine available on iOS/Safari, Firefox and Chrome-on-Linux.
 const ZXING_OPTIONS = {
-    formats: ['Code128', 'Code39', 'ITF'],
+    formats: ['Code128', 'Code39', 'ITF', 'DataMatrix', 'QRCode'],
     tryHarder: true,
     tryRotate: true,   // the AWB barcode on Flipkart/Meesho labels is printed vertically
     tryInvert: true,
-    maxNumberOfSymbols: 1,
+    maxNumberOfSymbols: 4,   // a label has several symbols; decode them all, then choose
+};
+const ZXING_2D = new Set(['DataMatrix', 'QRCode']);
+
+const looksLikeAwbPayload = (text) =>
+    /^[A-Za-z0-9]{8,}$/.test(text) ||      // AWB (e.g. SF3360093307FPL, R2651166214FPL)
+    /^\d{10,}_\d+$/.test(text) ||          // Suborder with suffix
+    /^https?:\/\/\S+$/.test(text);         // Tracking link URL
+
+// `symbols` is every decoded symbol in one frame as { text, is2D }. Linear symbols win when
+// present; 2D symbols are accepted only if they look like an AWB.
+const pickScanCode = (symbols) => {
+    const clean = symbols
+        .map(s => ({ text: (s.text || '').trim(), is2D: s.is2D }))
+        .filter(s => s.text);
+    const linear = clean.find(s => !s.is2D);
+    if (linear) return linear.text;
+    return clean.find(s => s.is2D && looksLikeAwbPayload(s.text))?.text ?? null;
 };
 
 const TodayPagination = ({ page, totalPages, total, onPageChange }) => {
@@ -776,7 +796,7 @@ const ScanReturns = () => {
             const detector = new window.BarcodeDetector({ formats });
             return async (video) => {
                 const codes = await detector.detect(video);
-                return codes.find(c => c.rawValue && c.rawValue.trim())?.rawValue.trim() ?? null;
+                return pickScanCode(codes.map(c => ({ text: c.rawValue, is2D: NATIVE_2D.has(c.format) })));
             };
         };
 
@@ -794,7 +814,7 @@ const ScanReturns = () => {
                 if (canvas.height !== h) canvas.height = h;
                 ctx.drawImage(video, 0, 0, w, h);
                 const results = await readBarcodes(ctx.getImageData(0, 0, w, h), ZXING_OPTIONS);
-                return results.find(r => r.isValid && r.text && r.text.trim())?.text.trim() ?? null;
+                return pickScanCode(results.filter(r => r.isValid).map(r => ({ text: r.text, is2D: ZXING_2D.has(r.format) })));
             };
         };
 
