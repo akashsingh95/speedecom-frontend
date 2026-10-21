@@ -621,6 +621,8 @@ const PaymentsCalculations = () => {
         'profit_loss_with_ads',
         'profit_with_ads_per_delivered',
         'sku_wise_ads',
+        'monet_ads',
+        'web_ads',
         'sku_wise_ads_per_delivered',
         'return_charges_per_delivered',
         'total_quantity',
@@ -713,8 +715,8 @@ const PaymentsCalculations = () => {
 
     // useMemo wrapper for memoizedGrandProfits using the imported computeGrandProfits function
     const memoizedGrandProfits = useMemo(() => {
-        return computeGrandProfits(totalRow, { isAmazon, isMeesho });
-    }, [totalRow, isAmazon, isMeesho]);
+        return computeGrandProfits(totalRow, { isAmazon, isMeesho, isSnapdeal });
+    }, [totalRow, isAmazon, isMeesho, isSnapdeal]);
 
     // Filter columns based on visibility, preserving drag order
     const columns = (columnOrder.length > 0 ? columnOrder : allColumns)
@@ -776,6 +778,7 @@ const PaymentsCalculations = () => {
                     handleClearFilter={filters.handleClearFilter}
                     dateError={filters.dateError}
                     isAmazon={isAmazon}
+                    isSnapdeal={isSnapdeal}
                     nullDateFilter={nullDateFilter}
                     handleNullDateSelect={filters.handleNullDateSelect}
                     availableMonths={filters.availableMonths}
@@ -1049,9 +1052,9 @@ const PaymentsCalculations = () => {
                                     )}
                                 </div>
 
-                                {/* P/L View toggle */}
+                                {/* P/L View toggle — no GST-inclusive/exclusive mode exists for Myntra's fixed P&L formula */}
                                 {!isMyntra && (
-                                    <div className="flex items-center gap-2">
+                                    <div data-tour={TOUR.payments.plWithTaxToggle} className="flex items-center gap-2">
                                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">P/L View:</span>
                                         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                             <button
@@ -1076,8 +1079,13 @@ const PaymentsCalculations = () => {
                                     </div>
                                 )}
 
-                                {/* Ads Type toggle — Amazon & Flipkart only */}
-                                {(!isMeesho && !isMyntra) && <div className="flex items-center gap-2">
+                                {/* Ads Type toggle — Amazon & Flipkart only. Snapdeal has no
+                                    separate ads report (sku_wise_ads is already folded into
+                                    orders_settlement/profit_loss — see totalAdsOnlyExpr/
+                                    perSkuAdsExpr in paymentsController.js, both hard-coded to 0
+                                    for snapdeal), so this toggle has zero effect on Snapdeal's
+                                    numbers either way. Hiding it instead of leaving a dead control. */}
+                                {(!isMeesho && !isMyntra && !isSnapdeal) && <div data-tour={TOUR.payments.adsToggle} className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ads:</span>
                                     <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                         <button
@@ -1434,7 +1442,7 @@ const PaymentsCalculations = () => {
 
                                             {/* Level 0 - Total Row */}
                                             {totalRow && (() => {
-                                                const adjTotalRow = applyGstAdjustment(totalRow, { gstMode, isAmazon, isMeesho, grandProfits: memoizedGrandProfits });
+                                                const adjTotalRow = applyGstAdjustment(totalRow, { gstMode, isAmazon, isMeesho, isSnapdeal, grandProfits: memoizedGrandProfits });
                                                 return (
                                                     <tr className="bg-slate-200">
                                                         {columns.map((col, colIdx) => (
@@ -1478,7 +1486,7 @@ const PaymentsCalculations = () => {
                                                 }
 
                                                 return displayRows.map((rawRow, rowIdx) => {
-                                                    const row = applyGstAdjustment(enrichRowWithContributions(rawRow, totalRow), { gstMode, isAmazon, isMeesho, grandProfits: memoizedGrandProfits });
+                                                    const row = applyGstAdjustment(enrichRowWithContributions(rawRow, totalRow), { gstMode, isAmazon, isMeesho, isSnapdeal, grandProfits: memoizedGrandProfits });
                                                     const sku = row.sku;
                                                     const isExpanded = expandedRows[rowIdx];
                                                     const cacheKey = `${sku}-${row.size || 'NA'}`;
@@ -1541,7 +1549,7 @@ const PaymentsCalculations = () => {
                                                                                 </tr>
                                                                             )}
                                                                             {orders.map((rawOrderRow, orderIdx) => {
-                                                                                const orderRow = applyGstAdjustment(enrichRowWithContributions(rawOrderRow, totalRow), { gstMode, isAmazon, isMeesho, grandProfits: memoizedGrandProfits });
+                                                                                const orderRow = applyGstAdjustment(enrichRowWithContributions(rawOrderRow, totalRow), { gstMode, isAmazon, isMeesho, isSnapdeal, grandProfits: memoizedGrandProfits });
                                                                                 const orderId = orderRow.sku;
                                                                                 const orderKey = `${sku}_${orderId}`;
                                                                                 const isOrderExpanded = expandedOrders[orderKey];

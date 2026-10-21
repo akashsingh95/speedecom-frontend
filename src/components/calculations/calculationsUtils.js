@@ -21,6 +21,8 @@ export const COLUMN_LABELS = {
     profit_loss: 'P/L (Without Ads)',
     profit_loss_with_ads: 'P/L (With Ads)',
     sku_wise_ads: 'SKU Wise Ads',
+    monet_ads: 'Monet Ads',
+    web_ads: 'Web Ads',
     total_quantity: 'Total Qty',
     replacement_quantity: 'Replacement Qty',   // overridden per env below
     delivered_quantity: 'Delivered Qty',
@@ -108,7 +110,7 @@ export const AMAZON_NUMERIC_COLS = new Set([
 // ─── Columns hidden per marketplace platform ────────────────────────────────
 export const MEESHO_HIDDEN_COLUMNS = new Set([
     'fulfilment_source', 'mp_fee_settlement', 'profit_loss_with_ads',
-    'sku_wise_ads', 'sku_wise_ads_per_delivered', 'profit_with_ads_per_delivered',
+    'sku_wise_ads', 'monet_ads', 'web_ads', 'sku_wise_ads_per_delivered', 'profit_with_ads_per_delivered',
     'flipkart_gst_credit',
     'order_payment', 'amazon_charges_other', 'shipping_service', 'amazon_gst_credit',
     'amazon_return_charges', 'safety_reimbursement', 'reimbursement', 'seller_rewards',
@@ -119,6 +121,7 @@ export const MEESHO_HIDDEN_COLUMNS = new Set([
 
 export const FLIPKART_HIDDEN_COLUMNS = new Set([
     'meesho_gst_credit', 'meesho_return_charges', 'size', 'compensation', 'recovery',
+    'monet_ads', 'web_ads',
     'order_payment', 'amazon_charges_other', 'shipping_service', 'amazon_gst_credit',
     'amazon_return_charges', 'replacement_pct',
     'safety_reimbursement', 'reimbursement', 'seller_rewards',
@@ -130,18 +133,38 @@ export const FLIPKART_HIDDEN_COLUMNS = new Set([
 export const AMAZON_HIDDEN_COLUMNS = new Set([
     'mp_fee_settlement', 'flipkart_gst_credit', 'meesho_gst_credit',
     'meesho_return_charges', 'size', 'quantity', 'claim_payment', 'compensation', 'recovery',
+    'monet_ads', 'web_ads',
     'forward_qty', 'forward_pct', 'reverse_qty', 'reverse_pct', 'forward_auto_spf_qty', 'forward_auto_spf_pct', 'nod_qty', 'nod_amount', 'auto_spf_amount', 'royalty_charges', 'commission', 'logistics_commission', 'brand', 'total_offer_amount', 'my_share'
 ]);
 
 export const MYNTRA_HIDDEN_COLUMNS = new Set([
     'flipkart_gst_credit', 'meesho_gst_credit', 'purchase_gst_credit', 'selling_gst_debit', 'available_gst_credit',
-    'profit_loss_with_ads', 'profit_with_ads_per_delivered', 'sku_wise_ads', 'sku_wise_ads_per_delivered',
+    'profit_loss_with_ads', 'profit_with_ads_per_delivered', 'sku_wise_ads', 'monet_ads', 'web_ads', 'sku_wise_ads_per_delivered',
     'meesho_return_charges', 'amazon_return_charges', 'amazon_charges_other', 'shipping_service', 'amazon_gst_credit',
     'safety_reimbursement', 'reimbursement', 'seller_rewards', 'payment_ads', 'tds_reimbursement', 'quantity',
     'selling_fees', 'fba_fees', 'other_transaction_fees', 'other_fees', 'claim_payment', 'compensation', 'recovery',
     'delivered_quantity', 'rto_quantity', 'customer_return_quantity', 'replacement_quantity', 'cancel_quantity', 'refund_loss_quantity',
     'delivered_pct', 'rto_pct', 'return_pct', 'replacement_pct',
     'mp_fee_settlement', 'return_loss', 'total_offer_amount', 'my_share'
+]);
+
+// Snapdeal's calculations rows only ever populate: gross_sales, return_sales, total_sales,
+// orders_settlement, claim_payment, sku_wise_ads (+ its monet_ads/web_ads breakdown),
+// purchase_gst_credit, selling_gst_debit, tcs_value, tds_value, total_cost, profit_loss,
+// return_loss, total/delivered/customer_return/rto_quantity (see snapdealService.js's INSERT) —
+// everything below is a Flipkart/Meesho/Amazon-only concept that would otherwise show as a
+// confusing always-zero column instead of being hidden like the other platforms' irrelevant columns.
+export const SNAPDEAL_HIDDEN_COLUMNS = new Set([
+    'size', 'total_offer_amount', 'my_share', 'mp_fee_settlement', 'compensation', 'recovery',
+    'replacement_quantity', 'replacement_pct', 'cancel_quantity', 'refund_loss_quantity',
+    // purchase_gst_credit/selling_gst_debit ARE populated for Snapdeal (derived from the cost
+    // sheet, see snapdealService.js) — unlike the other GST columns below. available_gst_credit
+    // stays hidden: it's a compound figure that also folds in a platform-fee-GST term Snapdeal
+    // has no equivalent for (its settlement nets courier/COD/discount/GST into one lump Vendor
+    // Invoice line with no itemised fee breakdown — see Category B, diffexcel.md), so showing it
+    // alone would silently omit a term the other marketplaces include under the same label.
+    'flipkart_gst_credit', 'meesho_gst_credit', 'available_gst_credit',
+    'fulfilment_source', 'meesho_return_charges',
 ]);
 
 /**
@@ -177,6 +200,8 @@ export const BASE_COLUMNS = [
     'profit_loss_with_ads',
     'profit_with_ads_per_delivered',
     'sku_wise_ads',
+    'monet_ads',
+    'web_ads',
     'sku_wise_ads_per_delivered',
     'return_charges_per_delivered',
     'meesho_return_charges',
@@ -350,13 +375,28 @@ export const enrichRowWithContributions = (row, totalRow) => {
  * Compute memoised grand-total adjusted profits for the GST overlay.
  * Call this once (useMemo) in the page component.
  */
-export const computeGrandProfits = (totalRow, { isAmazon, isMeesho }) => {
+export const computeGrandProfits = (totalRow, { isAmazon, isMeesho, isSnapdeal }) => {
     if (!totalRow) return { grand_adj_pl_with_ads: 0, grand_adj_pl: 0 };
 
     let grand_adj_pl_with_ads = 0;
     let grand_adj_pl = 0;
 
-    if (isAmazon) {
+    if (isSnapdeal) {
+        // Same shape as Meesho below, minus a platform-fee-GST term: Snapdeal's
+        // settlement file nets courier/COD/discount/GST into one lump Vendor
+        // Invoice line (see Category B, diffexcel.md) with no itemised fee
+        // breakdown to extract a GST-on-fees component from, unlike Amazon's
+        // own marketplace fees or Meesho's 7 fee columns. purchase_gst_credit
+        // and selling_gst_debit are both derived from the cost sheet (see
+        // snapdealService.js) the same way Meesho derives its own.
+        const t_tcs = parseFloat(totalRow.tcs_value) || 0;
+        const t_tds = parseFloat(totalRow.tds_value) || 0;
+        const t_delta = (parseFloat(totalRow.purchase_gst_credit) || 0)
+            + (parseFloat(totalRow.selling_gst_debit) || 0)
+            - t_tcs - t_tds;
+        grand_adj_pl = (parseFloat(totalRow.profit_loss) || 0) + t_delta;
+        grand_adj_pl_with_ads = grand_adj_pl;
+    } else if (isAmazon) {
         const t_avail = parseFloat(totalRow.available_gst_credit) || 0;
         const t_tcs = parseFloat(totalRow.tcs_value) || 0;
         const t_tds = parseFloat(totalRow.tds_value) || 0;
@@ -392,13 +432,33 @@ export const computeGrandProfits = (totalRow, { isAmazon, isMeesho }) => {
  * Apply GST adjustment to a single row (in with_gst mode).
  * Requires grandProfits object from computeGrandProfits().
  */
-export const applyGstAdjustment = (row, { gstMode, isAmazon, isMeesho, grandProfits } = {}) => {
+export const applyGstAdjustment = (row, { gstMode, isAmazon, isMeesho, isSnapdeal, grandProfits } = {}) => {
     if (!row || gstMode !== 'with_gst') return row;
     const { grand_adj_pl_with_ads, grand_adj_pl } = grandProfits;
 
     const delivered_qty = parseFloat(row.delivered_quantity) || 0;
     const total_sales = parseFloat(row.total_sales) || 0;
     const orders_settlement = parseFloat(row.orders_settlement) || 0;
+
+    if (isSnapdeal) {
+        const pgc = parseFloat(row.purchase_gst_credit) || 0;
+        const sgd = parseFloat(row.selling_gst_debit) || 0;
+        const tcs = parseFloat(row.tcs_value) || 0;
+        const tds = parseFloat(row.tds_value) || 0;
+        const adj_pl = (parseFloat(row.profit_loss) || 0) + pgc + sgd - tcs - tds;
+        return {
+            ...row,
+            profit_loss: adj_pl,
+            profit_loss_with_ads: adj_pl,
+            profit_without_ads_per_delivered: delivered_qty > 0 ? adj_pl / delivered_qty : row.profit_without_ads_per_delivered,
+            profit_with_ads_per_delivered: delivered_qty > 0 ? adj_pl / delivered_qty : row.profit_with_ads_per_delivered,
+            profit_pct_by_sales: total_sales !== 0 ? adj_pl / total_sales : row.profit_pct_by_sales,
+            profit_pct_by_settlement: orders_settlement !== 0 ? adj_pl / orders_settlement : row.profit_pct_by_settlement,
+            ...(row.profit_contribution != null && grand_adj_pl !== 0
+                ? { profit_contribution: adj_pl / grand_adj_pl }
+                : {}),
+        };
+    }
 
     if (isAmazon) {
         const agc = parseFloat(row.amazon_gst_credit) || 0;
