@@ -28,6 +28,8 @@ const TYPE_CONFIG = {
     myntra_orders:   { label: 'Myntra Orders',     sub: 'Order data',                 Icon: Package         },
     myntra_returns_seller: { label: 'Myntra Returns', sub: 'Seller returns',          Icon: RotateCcw       },
     myntra_returns_delivery: { label: 'Myntra Returns', sub: 'Delivery returns',      Icon: RefreshCw       },
+    snapdeal_payments: { label: 'Snapdeal Payments', sub: 'Payment settlement',       Icon: DollarSign      },
+    snapdeal_orders:   { label: 'Snapdeal Orders',   sub: 'Order data',               Icon: Package         },
 };
 
 const fmtBytes = (b) => {
