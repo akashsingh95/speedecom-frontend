@@ -489,6 +489,27 @@ export default function ResearchPage() {
             </div>
           )}
 
+          {/* Below-300-searches keywords; the backend only fills this when fewer than 10 top keywords exist. */}
+          {meta?.suggestedKeywords?.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-card mb-4">
+              <h2 className={`${ICON_LABEL} ${CARD_TITLE}`}>
+                <Lightbulb size={16} className="text-amber-500" /> Suggested keywords
+              </h2>
+              <p className={`${SMALL} ${MUTED} mt-1`}>
+                Lower-volume terms — worth weaving in, but less proven demand.
+              </p>
+              <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-10">
+                {meta.suggestedKeywords.map((k) => (
+                  <li key={k.keyword} className="flex items-center gap-2.5 py-2.5 border-b border-slate-100">
+                    <span className="flex-1 min-w-0 truncate text-sm font-medium text-slate-700" title={k.keyword}>
+                      {k.keyword}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Shown only when DataForSEO produced no top keywords; otherwise the top-10 card above is the keyword list. */}
           {!(meta?.topKeywords?.length > 0) && (
 
