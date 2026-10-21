@@ -133,6 +133,7 @@ const MasterSkuCalculations = () => {
     isFlipkart,
     isAmazon,
     isMyntra,
+    isSnapdeal,
     isPlatformLoaded,
     platformType,
     resolvedMarketplaceNames,

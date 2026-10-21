@@ -89,7 +89,7 @@ const PaymentsCalculations = () => {
         currentPage, setCurrentPage, pageSize,
         sortColumn, setSortColumn, sortOrder, setSortOrder,
         isMobile,
-        isMeesho, isFlipkart, isAmazon, isMyntra, isPlatformLoaded, platformType,
+        isMeesho, isFlipkart, isAmazon, isMyntra, isSnapdeal, isPlatformLoaded, platformType,
         resolvedMarketplaceNames, isMeeshoSizeDisabled,
         visibleColumns, columnOrder, setColumnOrder, columnWidths,
         showColumnSelector,
@@ -1054,7 +1054,7 @@ const PaymentsCalculations = () => {
 
                                 {/* P/L View toggle — no GST-inclusive/exclusive mode exists for Myntra's fixed P&L formula */}
                                 {!isMyntra && (
-                                    <div data-tour={TOUR.payments.plWithTaxToggle} className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2">
                                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">P/L View:</span>
                                         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                             <button
@@ -1085,7 +1085,7 @@ const PaymentsCalculations = () => {
                                     perSkuAdsExpr in paymentsController.js, both hard-coded to 0
                                     for snapdeal), so this toggle has zero effect on Snapdeal's
                                     numbers either way. Hiding it instead of leaving a dead control. */}
-                                {(!isMeesho && !isMyntra && !isSnapdeal) && <div data-tour={TOUR.payments.adsToggle} className="flex items-center gap-2">
+                                {(!isMeesho && !isMyntra && !isSnapdeal) && <div className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ads:</span>
                                     <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                         <button
