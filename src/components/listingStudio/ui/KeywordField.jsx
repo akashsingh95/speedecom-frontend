@@ -11,8 +11,8 @@ import { highlightSegments, keywordLower, volumeTier } from '../keywordHighlight
  *  sitting exactly under the control: identical font, padding and border box, text rendered
  *  transparent, and only the matched runs carrying a background. The real glyphs the seller
  *  reads and edits are still the control's own, so typing, selection, the caret, undo and the
- *  character counters all behave exactly as they did before.
- *
+ *  character counters all behave exactly as they did before. */
+
 // Shared by the control and the backdrop: every property that decides where a glyph lands.
 // Font size and line height are pinned explicitly because @tailwindcss/forms sets 1rem/1.5rem on
 // form controls only — the backdrop div would otherwise inherit the label's text-sm and drift.
