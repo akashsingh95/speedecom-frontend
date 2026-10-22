@@ -133,31 +133,6 @@ const AdminApprovals = () => {
         }
     };
 
-    // Only gifted access can be rejected — a paid recharge is backed by a captured payment,
-    // so the server refuses it (see rejectAccessRequest on the API side) and the button is
-    // never rendered for those rows.
-    const handleRejectListingStudio = (id) => {
-        setConfirmModal({
-            isOpen: true,
-            title: 'Reject Speedy Listing Access',
-            message: 'Reject this gifted Speedy Listing access? The credits already granted stay in the tenant\'s wallet — deduct them separately if that was a mistake.',
-            type: 'danger',
-            onConfirm: async () => {
-                setListingStudioActionLoading(id);
-                try {
-                    await api.post(`/listing-studio/wallet/admin/access-requests/${id}/reject`);
-                    setPendingListingStudio(prev => prev.filter(r => r._id !== id));
-                    toast.success('Speedy Listing access request rejected');
-                } catch (error) {
-                    console.error('Error rejecting Speedy Listing access', error);
-                } finally {
-                    setListingStudioActionLoading(null);
-                    closeConfirmModal();
-                }
-            }
-        });
-    };
-
     const handleApproveTenant = async (id) => {
         try {
             await api.put(`/auth/approve-tenant/${id}`);
@@ -809,17 +784,6 @@ const AdminApprovals = () => {
                                                                     >
                                                                         <CheckCircle size={20} />
                                                                     </button>
-                                                                    {/* Paid recharges are approve-only: the payment is already captured,
-                                                                        so rejecting would leave the tenant paid and locked out. */}
-                                                                    {req.source === 'gift' && (
-                                                                        <button
-                                                                            onClick={() => handleRejectListingStudio(req._id)}
-                                                                            className="p-2 rounded-lg text-red-500 hover:bg-red-50 hover:scale-105 transition-all"
-                                                                            title="Reject access"
-                                                                        >
-                                                                            <XCircle size={20} />
-                                                                        </button>
-                                                                    )}
                                                                 </div>
                                                             )}
                                                         </td>
