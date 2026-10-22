@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { toast } from 'sonner';
 import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle, Eye, Download, Info, Trash2, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
@@ -272,8 +273,8 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
             setDeleteTarget(null);
             setDeleteConfirmText('');
         } catch (err) {
-            const msg = err?.response?.data?.message || err?.message || 'Failed to delete upload';
-            alert(`Could not delete upload: ${msg}`);
+            // The global api interceptor already toasts the error.
+            console.error('Failed to delete upload', err);
         } finally {
             setDeletingNow(false);
         }
@@ -287,8 +288,8 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
             ));
             setDlqUploadIds(prev => prev.filter(id => id !== uploadId));
         } catch (err) {
-            const msg = err?.response?.data?.message || err?.message || 'Failed to retry upload';
-            alert(`Could not retry upload: ${msg}`);
+            // The global api interceptor already toasts the error.
+            console.error('Failed to retry upload', err);
         }
     };
 
@@ -641,11 +642,10 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
                                                                     if (data.downloadUrl) {
                                                                         window.location.assign(data.downloadUrl);
                                                                     } else {
-                                                                        alert('Failed to get download link');
+                                                                        toast.error('Failed to get download link');
                                                                     }
                                                                 } catch (error) {
                                                                     console.error('Error downloading file:', error);
-                                                                    alert('Failed to get download link');
                                                                 }
                                                             }}
                                                             className={`flex items-center gap-2 px-3 py-1.5 bg-white text-slate-700 border border-slate-200 rounded-lg text-sm ${isOld ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50 transition-colors'
