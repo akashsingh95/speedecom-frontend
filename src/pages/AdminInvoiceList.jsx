@@ -502,7 +502,7 @@ const AdminInvoiceList = () => {
         if (tx.category !== 'LISTING_STUDIO') return `₹${tx.amount}`;
         if (tx.giftKind === 'freeImages') return `${tx.editableAmount} free image${tx.editableAmount === 1 ? '' : 's'}`;
         if (tx.giftKind === 'freeVideos') return `${tx.editableAmount} free video${tx.editableAmount === 1 ? '' : 's'}`;
-        return `${tx.editableAmount} credits`;
+        return `${tx.amount} credits`;
     };
 
     // What the Edit modal's amount field actually edits for a row, and what to call it. A Speedy
