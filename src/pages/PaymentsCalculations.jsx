@@ -19,6 +19,7 @@ import {
     PCT_COLS,
     AMAZON_NUMERIC_COLS,
     isColVisible,
+    SNAPDEAL_ONLY_COLUMNS,
     formatCellValue,
     getCellStyleClasses,
     enrichRowWithContributions,
@@ -653,7 +654,9 @@ const PaymentsCalculations = () => {
         'avg_settlement_per_delivered',
         'avg_purchase_per_qty',
         'meesho_return_charges',
-    ]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isMeeshoSizeDisabled }));
+        // Snapdeal-only — isColVisible hides these for every other marketplace
+        ...SNAPDEAL_ONLY_COLUMNS,
+    ]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isSnapdeal, isMeeshoSizeDisabled }));
 
     // Sync columnOrder whenever allColumns changes (marketplace switch, initial load)
     // Merges the saved localStorage order with the current valid columns

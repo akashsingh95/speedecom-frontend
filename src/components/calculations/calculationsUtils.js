@@ -54,6 +54,12 @@ export const COLUMN_LABELS = {
     available_gst_credit: 'Available GST Credit',
     meesho_gst_credit: 'Meesho GST Credit',
     meesho_return_charges: 'Return Charges',
+    // Snapdeal-only (see SNAPDEAL_ONLY_COLUMNS)
+    customer_return_amount: 'Customer Return',
+    rto_amount: 'RTO',
+    stock_out_commission: 'Stock Out Commission',
+    settlement_pct_by_sales: 'Settlement % By Sales',
+    snapdeal_gst_credit: 'Snapdeal GST Credit',
     tcs_value: 'TCS',
     tds_value: 'TDS',
     // Amazon
@@ -97,6 +103,7 @@ export const PCT_COLS = new Set([
     'forward_pct', 'reverse_pct', 'forward_auto_spf_pct',
     'profit_pct_by_sales', 'profit_pct_by_settlement',
     'sales_contribution', 'profit_contribution',
+    'settlement_pct_by_sales',
 ]);
 
 // Amazon-specific numeric columns (null → '0' not '—')
@@ -156,28 +163,48 @@ export const MYNTRA_HIDDEN_COLUMNS = new Set([
 // confusing always-zero column instead of being hidden like the other platforms' irrelevant columns.
 export const SNAPDEAL_HIDDEN_COLUMNS = new Set([
     'size', 'total_offer_amount', 'my_share', 'mp_fee_settlement', 'compensation', 'recovery',
-    'replacement_quantity', 'replacement_pct', 'cancel_quantity', 'refund_loss_quantity',
+    'replacement_quantity', 'cancel_quantity', 'refund_loss_quantity',
     // purchase_gst_credit/selling_gst_debit ARE populated for Snapdeal (derived from the cost
-    // sheet, see snapdealService.js) — unlike the other GST columns below. available_gst_credit
-    // stays hidden: it's a compound figure that also folds in a platform-fee-GST term Snapdeal
-    // has no equivalent for (its settlement nets courier/COD/discount/GST into one lump Vendor
-    // Invoice line with no itemised fee breakdown — see Category B, diffexcel.md), so showing it
-    // alone would silently omit a term the other marketplaces include under the same label.
-    'flipkart_gst_credit', 'meesho_gst_credit', 'available_gst_credit',
+    // sheet, see snapdealService.js) — unlike the other GST columns below.
+    // replacement_pct and available_gst_credit were previously hidden here. Both are now
+    // shown: the seller's reference workbook (Analysis Report) carries them as
+    // "Replacement ( % )" and "Available GST" (9,174.32 for the Aug-2026 sample), so the
+    // earlier reasoning — that Snapdeal has no platform-fee-GST term to put in
+    // available_gst_credit — is contradicted by the workbook actually computing one.
+    'flipkart_gst_credit', 'meesho_gst_credit',
     'fulfilment_source', 'meesho_return_charges',
 ]);
+
+// Snapdeal-only columns carried over from the reference workbook's Analysis Report.
+// Named per UI convention rather than verbatim: the workbook's header is "Customer Retrn"
+// (sic) and its GST/settlement headers use "Profit"/"Snapdeal" wording the UI spells
+// differently elsewhere. These are additive and gated to Snapdeal — every other
+// marketplace hides them via OTHER_MARKETPLACE_SNAPDEAL_ONLY_COLUMNS below.
+// Note customer_return_amount is the rupee amount and is deliberately SEPARATE from the
+// existing customer_return_quantity ("Return Qty"); likewise rto_amount vs rto_quantity.
+export const SNAPDEAL_ONLY_COLUMNS = [
+    'customer_return_amount',
+    'rto_amount',
+    'stock_out_commission',
+    'settlement_pct_by_sales',
+    'snapdeal_gst_credit',
+];
 
 /**
  * Whether a column is visible for: the current marketplace context.
  */
-export const isColVisible = (col, { isAmazon, isMeesho, isMyntra, isMeeshoSizeDisabled }) => {
+export const isColVisible = (col, { isAmazon, isMeesho, isMyntra, isSnapdeal, isMeeshoSizeDisabled }) => {
+    // Snapdeal-only columns: visible for Snapdeal, hidden for every other marketplace.
+    // Checked before the per-platform lists so no other platform can ever surface them.
+    if (!isSnapdeal && SNAPDEAL_ONLY_COLUMNS.includes(col)) return false;
     if (isMyntra && MYNTRA_HIDDEN_COLUMNS.has(col)) return false;
     if (isAmazon && AMAZON_HIDDEN_COLUMNS.has(col)) return false;
+    if (isSnapdeal && SNAPDEAL_HIDDEN_COLUMNS.has(col)) return false;
     if (isMeesho) {
         if (MEESHO_HIDDEN_COLUMNS.has(col)) return false;
         if (col === 'size' && isMeeshoSizeDisabled) return false;
     }
-    if (!isMeesho && !isAmazon && !isMyntra && FLIPKART_HIDDEN_COLUMNS.has(col)) return false;
+    if (!isMeesho && !isAmazon && !isMyntra && !isSnapdeal && FLIPKART_HIDDEN_COLUMNS.has(col)) return false;
     return true;
 };
 
@@ -394,8 +421,13 @@ export const computeGrandProfits = (totalRow, { isAmazon, isMeesho, isSnapdeal }
         const t_delta = (parseFloat(totalRow.purchase_gst_credit) || 0)
             + (parseFloat(totalRow.selling_gst_debit) || 0)
             - t_tcs - t_tds;
+        // The GST delta applies to BOTH figures, but they are not the same number:
+        // profit_loss is now the without-ads figure and profit_loss_with_ads the
+        // with-ads one (see profitWithoutAdsExpr in paymentsController.js). This
+        // previously set grand_adj_pl_with_ads = grand_adj_pl, which collapsed the
+        // two P/L columns into one identical value in With Tax mode.
         grand_adj_pl = (parseFloat(totalRow.profit_loss) || 0) + t_delta;
-        grand_adj_pl_with_ads = grand_adj_pl;
+        grand_adj_pl_with_ads = (parseFloat(totalRow.profit_loss_with_ads) || 0) + t_delta;
     } else if (isAmazon) {
         const t_avail = parseFloat(totalRow.available_gst_credit) || 0;
         const t_tcs = parseFloat(totalRow.tcs_value) || 0;
@@ -445,15 +477,24 @@ export const applyGstAdjustment = (row, { gstMode, isAmazon, isMeesho, isSnapdea
         const sgd = parseFloat(row.selling_gst_debit) || 0;
         const tcs = parseFloat(row.tcs_value) || 0;
         const tds = parseFloat(row.tds_value) || 0;
-        const adj_pl = (parseFloat(row.profit_loss) || 0) + pgc + sgd - tcs - tds;
+        // One GST delta, applied to each P/L figure separately. profit_loss is the
+        // without-ads figure and profit_loss_with_ads the with-ads one (see
+        // profitWithoutAdsExpr in paymentsController.js) — they are NOT the same
+        // number. Both were previously set to adj_pl, which made the two P/L columns
+        // and the two Avg P/L columns render identically in With Tax mode.
+        const gstDelta = pgc + sgd - tcs - tds;
+        const adj_pl = (parseFloat(row.profit_loss) || 0) + gstDelta;
+        const adj_pl_with_ads = (parseFloat(row.profit_loss_with_ads) || 0) + gstDelta;
         return {
             ...row,
             profit_loss: adj_pl,
-            profit_loss_with_ads: adj_pl,
+            profit_loss_with_ads: adj_pl_with_ads,
             profit_without_ads_per_delivered: delivered_qty > 0 ? adj_pl / delivered_qty : row.profit_without_ads_per_delivered,
-            profit_with_ads_per_delivered: delivered_qty > 0 ? adj_pl / delivered_qty : row.profit_with_ads_per_delivered,
-            profit_pct_by_sales: total_sales !== 0 ? adj_pl / total_sales : row.profit_pct_by_sales,
-            profit_pct_by_settlement: orders_settlement !== 0 ? adj_pl / orders_settlement : row.profit_pct_by_settlement,
+            profit_with_ads_per_delivered: delivered_qty > 0 ? adj_pl_with_ads / delivered_qty : row.profit_with_ads_per_delivered,
+            // Percentages stay on the WITH-ads figure (Rule 3) — matches the reference
+            // workbook: 66,954.40 / 336,060 = 0.19923 = its "Profit % By Sales".
+            profit_pct_by_sales: total_sales !== 0 ? adj_pl_with_ads / total_sales : row.profit_pct_by_sales,
+            profit_pct_by_settlement: orders_settlement !== 0 ? adj_pl_with_ads / orders_settlement : row.profit_pct_by_settlement,
             ...(row.profit_contribution != null && grand_adj_pl !== 0
                 ? { profit_contribution: adj_pl / grand_adj_pl }
                 : {}),

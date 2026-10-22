@@ -30,6 +30,7 @@ import {
   enrichRowWithContributions,
   getCellStyleClasses,
   isColVisible,
+  SNAPDEAL_ONLY_COLUMNS,
 } from "../components/calculations/calculationsUtils";
 
 const GST_DIVISOR = 1.18;
@@ -735,7 +736,9 @@ const MasterSkuCalculations = () => {
     'avg_settlement_per_delivered',
     'avg_purchase_per_qty',
     'meesho_return_charges',
-]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isMeeshoSizeDisabled }));
+    // Snapdeal-only — isColVisible hides these for every other marketplace
+    ...SNAPDEAL_ONLY_COLUMNS,
+]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isSnapdeal, isMeeshoSizeDisabled }));
 
   // Sync columnOrder whenever allColumns changes (marketplace switch, initial load)
   // Merges the saved localStorage order with the current valid columns
