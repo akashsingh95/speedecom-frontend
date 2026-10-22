@@ -134,9 +134,8 @@ const ListingStudioPending = () => (
       </div>
       <h1 className="mt-6 text-xl font-semibold text-slate-900">Speedy Listing is almost ready</h1>
       <p className="mt-3 text-sm leading-relaxed text-slate-500">
-        We've received your payment and your credits are safely in your wallet. Your access is
-        waiting on a quick approval from our team and will open automatically — you don't need to
-        log out or refresh.
+        Your credits are safely in your wallet. Your access is waiting on a quick approval from
+        our team and will open automatically — you don't need to log out or refresh.
       </p>
       <p className="mt-6 text-xs text-slate-400">
         Need it sooner? Reach out from the Support page and we'll prioritise it.
