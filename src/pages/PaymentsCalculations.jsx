@@ -19,6 +19,7 @@ import {
     PCT_COLS,
     AMAZON_NUMERIC_COLS,
     isColVisible,
+    SNAPDEAL_ONLY_COLUMNS,
     formatCellValue,
     getCellStyleClasses,
     enrichRowWithContributions,
@@ -653,6 +654,8 @@ const PaymentsCalculations = () => {
         'avg_settlement_per_delivered',
         'avg_purchase_per_qty',
         'meesho_return_charges',
+        // Snapdeal-only — isColVisible hides these for every other marketplace
+        ...SNAPDEAL_ONLY_COLUMNS,
     ]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isSnapdeal, isMeeshoSizeDisabled }));
 
     // Sync columnOrder whenever allColumns changes (marketplace switch, initial load)
@@ -1055,7 +1058,7 @@ const PaymentsCalculations = () => {
 
                                 {/* P/L View toggle — no GST-inclusive/exclusive mode exists for Myntra's fixed P&L formula */}
                                 {!isMyntra && (
-                                    <div data-tour={TOUR.payments.plWithTaxToggle} className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2">
                                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">P/L View:</span>
                                         <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                             <button
@@ -1086,7 +1089,7 @@ const PaymentsCalculations = () => {
                                     perSkuAdsExpr in paymentsController.js, both hard-coded to 0
                                     for snapdeal), so this toggle has zero effect on Snapdeal's
                                     numbers either way. Hiding it instead of leaving a dead control. */}
-                                {(!isMeesho && !isMyntra && !isSnapdeal) && <div data-tour={TOUR.payments.adsToggle} className="flex items-center gap-2">
+                                {(!isMeesho && !isMyntra && !isSnapdeal) && <div className="flex items-center gap-2">
                                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ads:</span>
                                     <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                                         <button
