@@ -1172,7 +1172,7 @@ const CostSheet = () => {
 
 
     const handleAmazonRefundLossToggle = (newValue) => {
-        if (newValue === true && !hasAmazonRefundLossDisabled) return;
+        if (isAmazonRefundLossMixed || (newValue === true && !hasAmazonRefundLossDisabled)) return;
         setConfirmModalConfig({
             isOpen: true,
             title: 'Change Refund-Loss Accounting?',
@@ -1203,7 +1203,7 @@ const CostSheet = () => {
     };
 
     const handleAmazonFreeReplacementCostToggle = (newValue) => {
-        if (newValue === true && hasAmazonFreeReplacementCostEnabled) return;
+        if (isAmazonFreeReplacementCostMixed || (newValue === true && hasAmazonFreeReplacementCostEnabled)) return;
         setConfirmModalConfig({
             isOpen: true,
             title: 'Change Replacement Cost Accounting?',
@@ -1384,9 +1384,20 @@ const CostSheet = () => {
         return account?.config?.amazonConsiderRefundLoss === false;
     });
 
-    const hasAmazonFreeReplacementCostEnabled = isAmazonView && marketplaceFilters.some(id => {
+    // Replacement: "On" only when ALL selected accounts have it enabled
+    const hasAmazonFreeReplacementCostEnabled = isAmazonView && marketplaceFilters.every(id => {
         const account = amazonAccounts.find(a => a._id === id);
         return account?.config?.amazonConsiderFreeReplacementCost === true;
+    });
+    const hasAmazonFreeReplacementCostAnyEnabled = isAmazonView && marketplaceFilters.some(id => {
+        const account = amazonAccounts.find(a => a._id === id);
+        return account?.config?.amazonConsiderFreeReplacementCost === true;
+    });
+    // Mixed selection (some on, some off): toggles are disabled as the intent is ambiguous
+    const isAmazonFreeReplacementCostMixed = hasAmazonFreeReplacementCostAnyEnabled && !hasAmazonFreeReplacementCostEnabled;
+    const isAmazonRefundLossMixed = isAmazonView && hasAmazonRefundLossDisabled && marketplaceFilters.some(id => {
+        const account = amazonAccounts.find(a => a._id === id);
+        return account?.config?.amazonConsiderRefundLoss !== false;
     });
 
     // Editable columns configuration
@@ -1786,8 +1797,12 @@ const CostSheet = () => {
                                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
                                 </div>
                             </span>
-                            <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
+                            <div
+                                title={isAmazonRefundLossMixed ? 'Selected accounts have different settings. Select accounts individually to change this.' : undefined}
+                                className={`inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8 ${isAmazonRefundLossMixed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
                                 <button
+                                    disabled={isAmazonRefundLossMixed}
                                     onClick={() => handleAmazonRefundLossToggle(false)}
                                     className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${hasAmazonRefundLossDisabled
                                         ? 'bg-brand-600 text-white'
@@ -1797,6 +1812,7 @@ const CostSheet = () => {
                                     Off
                                 </button>
                                 <button
+                                    disabled={isAmazonRefundLossMixed}
                                     onClick={() => handleAmazonRefundLossToggle(true)}
                                     className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${!hasAmazonRefundLossDisabled
                                         ? 'bg-brand-600 text-white'
@@ -1818,8 +1834,12 @@ const CostSheet = () => {
                                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
                                 </div>
                             </span>
-                            <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
+                            <div
+                                title={isAmazonFreeReplacementCostMixed ? 'Selected accounts have different settings. Select accounts individually to change this.' : undefined}
+                                className={`inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8 ${isAmazonFreeReplacementCostMixed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
                                 <button
+                                    disabled={isAmazonFreeReplacementCostMixed}
                                     onClick={() => handleAmazonFreeReplacementCostToggle(false)}
                                     className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${!hasAmazonFreeReplacementCostEnabled
                                         ? 'bg-brand-600 text-white'
@@ -1829,6 +1849,7 @@ const CostSheet = () => {
                                     Off
                                 </button>
                                 <button
+                                    disabled={isAmazonFreeReplacementCostMixed}
                                     onClick={() => handleAmazonFreeReplacementCostToggle(true)}
                                     className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${hasAmazonFreeReplacementCostEnabled
                                         ? 'bg-brand-600 text-white'
