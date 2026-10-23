@@ -280,10 +280,18 @@ export default function ProjectLayout() {
 
   const watchJob = useCallback(() => {
     stopPolling();
+    // getJob reports only one job, so with overlapping jobs (e.g. two A+ batches) one finishing
+    // while another still runs never shows up as "done". A drop in activeJobCount is the signal,
+    // so refresh then too — otherwise its results wait for the last job to finish.
+    let lastActiveJobCount = null;
     const tick = async () => {
       try {
         const j = await listingStudioApi.getJob(id);
         setJob(j);
+        const active = j.status === 'running' || j.status === 'queued';
+        // A non-active job is refreshed by the done branch below, so only refresh here while active.
+        if (active && lastActiveJobCount !== null && j.activeJobCount < lastActiveJobCount) void refresh();
+        lastActiveJobCount = j.activeJobCount ?? null;
         if (j.status === 'done' || j.status === 'error' || j.status === 'awaiting_selection') {
           stopPolling();
           if (j.status === 'done') {

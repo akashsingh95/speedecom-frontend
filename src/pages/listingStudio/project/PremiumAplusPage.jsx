@@ -119,6 +119,9 @@ export default function PremiumAplusPage() {
   // number of designs (only an exact-combination repeat is rejected server-side), so this is
   // always available.
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Busy only while the start request is in flight, not while designs are generating — several
+  // designs may generate at once, so another combination can be started right away.
+  const [premiumStarting, setPremiumStarting] = useState(false);
   // { images: [{ src, alt }], initialIndex } | null — a single-item array for the composite
   // view, all 6 of that side's slices (in order) for a slice click, so arrowing through the
   // gallery in ImageLightbox never needs to leave this page.
@@ -129,7 +132,10 @@ export default function PremiumAplusPage() {
   // Set right after a design finishes generating successfully — the page's visible
   // confirmation that something was generated besides the design showing up in the
   // gallery below. Cleared on dismiss or the next generation.
-  const [justGenerated, setJustGenerated] = useState(null); // { name, angleNames } | null
+  // One banner per finished design — a list, not a single slot, since several designs may
+  // generate at once and starting a new one shouldn't wipe an earlier one's banner.
+  const [justGenerated, setJustGenerated] = useState([]); // [{ id, name, angleNames }]
+  const dismissJustGenerated = (id) => setJustGenerated((prev) => prev.filter((g) => g.id !== id));
   // Tracks which `${designId}:${side}` combos already have a poll running, so the
   // resume-on-mount effect below never starts a second parallel poll for the same side.
   const resumedRef = useRef(new Set());
@@ -266,16 +272,20 @@ export default function PremiumAplusPage() {
   };
 
   const strategy = project.aplus?.strategy?.angles ? project.aplus.strategy : undefined;
-  const isGeneratingAny = (designs || []).some((d) => d.desktopGenerating || d.mobileGenerating);
 
   /** Starts a new Premium A+ design straight from this page's own picker modal.
    *  Closes the modal immediately, reloads designs so the generating tiles show up right away,
    *  and monitors both canvas sides until completion to display the success banner. */
   const generatePremiumDesign = async (selectedAngleNames) => {
-    setJustGenerated(null);
     setPickerOpen(false);
     try {
-      const created = await premiumAplusApi.startPremiumAplus(project.id, selectedAngleNames);
+      setPremiumStarting(true);
+      let created;
+      try {
+        created = await premiumAplusApi.startPremiumAplus(project.id, selectedAngleNames);
+      } finally {
+        setPremiumStarting(false);
+      }
       await loadDesigns();
       if (created?.id) {
         await Promise.all([
@@ -284,7 +294,10 @@ export default function PremiumAplusPage() {
         ]);
         const latest = await premiumAplusApi.getDesign(project.id, created.id);
         if (latest && (latest.compositePath || latest.mobileCompositePath)) {
-          setJustGenerated({ name: latest.name, angleNames: latest.sourceAngleNames ?? [] });
+          setJustGenerated((prev) => [
+            ...prev.filter((g) => g.id !== created.id),
+            { id: created.id, name: latest.name, angleNames: latest.sourceAngleNames ?? [] },
+          ]);
           toast.success(
             multiImageCreditNotificationMessage([latest.desktopBilling, latest.mobileBilling], 'Premium A+ image generation') ||
               `Premium A+ images generated${latest.name ? ` — ${latest.name}` : ''}.`,
@@ -429,25 +442,25 @@ export default function PremiumAplusPage() {
         </div>
       </div>
 
-      {justGenerated && (
-        <div className={`${JOBBAR} ${JOBBAR_SUCCESS} flex items-start justify-between gap-3`}>
+      {justGenerated.map((g) => (
+        <div key={g.id} className={`${JOBBAR} ${JOBBAR_SUCCESS} flex items-start justify-between gap-3`}>
           <span className="inline-flex items-start gap-2">
             <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
             <span>
-              <strong>{justGenerated.name}</strong> is ready
-              {justGenerated.angleNames.length > 0 && ` — covering ${justGenerated.angleNames.join(', ')}`}.
+              <strong>{g.name}</strong> is ready
+              {g.angleNames.length > 0 && ` — covering ${g.angleNames.join(', ')}`}.
             </span>
           </span>
           <button
             type="button"
-            onClick={() => setJustGenerated(null)}
+            onClick={() => dismissJustGenerated(g.id)}
             aria-label="Dismiss"
             className="flex-shrink-0 text-emerald-600 hover:text-emerald-800"
           >
             <X size={16} />
           </button>
         </div>
-      )}
+      ))}
 
       {error && <p className="text-red-600 mb-3">{error}</p>}
 
@@ -582,7 +595,7 @@ export default function PremiumAplusPage() {
                 key: 'premium',
                 label: (n) => `Generate 1 Premium A+ design covering ${n} angle${n === 1 ? '' : 's'}`,
                 onGenerate: generatePremiumDesign,
-                busy: isGeneratingAny,
+                busy: premiumStarting,
                 // Premium A+ charges 2 separate images (desktop + mobile) — free-image allowance
                 // is spent per image, so this can be fully free, fully paid, or split across both.
                 costNote: {
