@@ -266,7 +266,7 @@ const SupportPortal = () => {
                     <div className="relative overflow-hidden bg-brand-600 rounded-2xl p-7 text-white shadow-lg mb-6">
                         <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-2xl"></div>
                         <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-400/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl"></div>
-                        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div data-tour={TOUR.support.header} className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 bg-white/15 rounded-xl backdrop-blur-sm border border-white/10">
                                     <LifeBuoy size={20} className="text-white" />
@@ -286,7 +286,7 @@ const SupportPortal = () => {
                         </div>
                     </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden transition-all duration-300">
+                <div data-tour={TOUR.support.ticketList} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden transition-all duration-300">
                     <div className="px-6 py-4 border-b border-slate-100 flex flex-wrap items-center gap-3">
                         {user?.listingStudioEnabled !== false && (
                             <div role="radiogroup" aria-label="Product" className="inline-flex p-0.5 bg-slate-100 rounded-lg">
