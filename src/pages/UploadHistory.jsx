@@ -25,6 +25,7 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
     const [deleteTarget, setDeleteTarget] = useState(null);   // upload object or null
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [deletingNow, setDeletingNow] = useState(false);
+    const [deleteStep, setDeleteStep] = useState(1);          // cost sheet deletes confirm in 2 steps
 
     // Cascading filters: marketplace -> account -> type -> status
     // Default to the account currently selected in Uploads
@@ -261,17 +262,53 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
     const canDeleteUpload = (status) =>
         canDeleteUploads && !IN_FLIGHT_STATUSES.includes(status) && status !== 'deleted';
 
+    const isCostSheetDelete = deleteTarget?.uploadType === 'costsheet';
+    const COST_SHEET_DELETE_PHRASE = 'DELETE COST SHEET';
+    const deleteConfirmValue = isCostSheetDelete ? COST_SHEET_DELETE_PHRASE : deleteTarget?.uploadId;
+
+    const openDeleteModal = async (upload) => {
+        if (upload.uploadType === 'costsheet') {
+            // Refuse (e.g. cooldown) before asking for any confirmation.
+            try {
+                await api.get(`/upload/${upload.uploadId}/delete-check`);
+            } catch (err) {
+                // The global api interceptor already toasts the error.
+                console.error('Delete pre-check failed', err);
+                return;
+            }
+        }
+        setDeleteTarget(upload);
+        setDeleteConfirmText('');
+        setDeleteStep(1);
+    };
+
+    const closeDeleteModal = () => {
+        setDeleteTarget(null);
+        setDeleteConfirmText('');
+        setDeleteStep(1);
+    };
+
     const submitDelete = async () => {
         if (!deleteTarget) return;
         setDeletingNow(true);
         try {
+            if (isCostSheetDelete) {
+                // Re-check right before the backup so a refused delete never leaves a stray download.
+                await api.get(`/upload/${deleteTarget.uploadId}/delete-check`);
+                // The delete removes the file from GCS, so a failed backup must abort it.
+                const { data } = await api.get(`/upload/${deleteTarget.uploadId}/download`);
+                if (!data.downloadUrl) {
+                    alert('Could not download the cost sheet backup. Nothing was deleted.');
+                    return;
+                }
+                window.location.assign(data.downloadUrl);
+            }
             await api.delete(`/upload/${deleteTarget.uploadId}`);
             // Optimistic flip — polling will catch the row when the doc disappears.
             setUploadHistory(prev => prev.map(u =>
                 u.uploadId === deleteTarget.uploadId ? { ...u, status: 'deleting', errorMessage: null } : u
             ));
-            setDeleteTarget(null);
-            setDeleteConfirmText('');
+            closeDeleteModal();
         } catch (err) {
             // The global api interceptor already toasts the error.
             console.error('Failed to delete upload', err);
@@ -665,8 +702,7 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
                                                             e.preventDefault();
                                                             e.stopPropagation();
                                                             if (!canDeleteUpload(upload.status)) return;
-                                                            setDeleteTarget(upload);
-                                                            setDeleteConfirmText('');
+                                                            openDeleteModal(upload);
                                                         }}
                                                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border transition-colors ${canDeleteUpload(upload.status)
                                                             ? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
@@ -750,12 +786,23 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
                                 <Trash2 size={20} className="text-red-600" />
                             </div>
                             <div className="min-w-0 flex-1">
-                                <h3 className="text-lg font-bold text-slate-900">Delete upload + all derived data?</h3>
-                                <p className="mt-1 text-sm text-slate-600">
-                                    This permanently removes every row this upload produced across Postgres
-                                    (marketplace tables, calculations), the original file in GCS,
-                                    and the upload record itself. It cannot be undone.
-                                </p>
+                                <h3 className="text-lg font-bold text-slate-900">
+                                    {isCostSheetDelete ? `Delete cost sheet? (step ${deleteStep} of 2)` : 'Delete upload + all derived data?'}
+                                </h3>
+                                {isCostSheetDelete ? (
+                                    <p className="mt-1 text-sm text-slate-600">
+                                        This permanently removes the cost price rows this file added, the original
+                                        file in GCS, and the upload record. Cost prices are entered by the seller and
+                                        are not regenerated automatically. The original file is downloaded to this
+                                        browser as a backup before anything is deleted. It cannot be undone.
+                                    </p>
+                                ) : (
+                                    <p className="mt-1 text-sm text-slate-600">
+                                        This permanently removes every row this upload produced across Postgres
+                                        (marketplace tables, calculations), the original file in GCS,
+                                        and the upload record itself. It cannot be undone.
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -770,36 +817,50 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
                             <div className="font-mono text-xs text-slate-800 break-all">{deleteTarget.uploadId}</div>
                         </div>
 
-                        <label className="block mt-4 text-sm font-medium text-slate-700">
-                            Type the upload ID to confirm:
-                        </label>
-                        <input
-                            type="text"
-                            value={deleteConfirmText}
-                            onChange={(e) => setDeleteConfirmText(e.target.value)}
-                            placeholder={deleteTarget.uploadId}
-                            className="mt-1.5 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-400"
-                            autoFocus
-                        />
+                        {(!isCostSheetDelete || deleteStep === 2) && (
+                            <>
+                                <label className="block mt-4 text-sm font-medium text-slate-700">
+                                    Type <span className="font-mono font-semibold">{deleteConfirmValue}</span> to confirm:
+                                </label>
+                                <input
+                                    type="text"
+                                    value={deleteConfirmText}
+                                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                    placeholder={deleteConfirmValue}
+                                    className="mt-1.5 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-400"
+                                    autoFocus
+                                />
+                            </>
+                        )}
 
                         <div className="mt-5 flex items-center justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => { setDeleteTarget(null); setDeleteConfirmText(''); }}
+                                onClick={closeDeleteModal}
                                 disabled={deletingNow}
                                 className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 Cancel
                             </button>
+                            {isCostSheetDelete && deleteStep === 1 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setDeleteStep(2)}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                                >
+                                    Continue
+                                </button>
+                            ) : (
                             <button
                                 type="button"
                                 onClick={submitDelete}
-                                disabled={deletingNow || deleteConfirmText !== deleteTarget.uploadId}
+                                disabled={deletingNow || deleteConfirmText !== deleteConfirmValue}
                                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed rounded-lg transition-colors"
                             >
                                 {deletingNow && <Loader2 size={14} className="animate-spin" />}
-                                Delete permanently
+                                {isCostSheetDelete ? 'Download backup & delete' : 'Delete permanently'}
                             </button>
+                            )}
                         </div>
                     </div>
                 </div>
