@@ -187,6 +187,34 @@ const groups = {
         'columnsBtn',
         'columnFilter',
         'table',
+        'summary',
+        'sortControls',
+        'pagination',
+        'refundLossToggle',
+    ]),
+
+    // pages/CostSheet.jsx table headers, keyed by column key. Rendered through
+    // `TOUR.costSheetCol[col.key]`, so the keys must mirror every column the
+    // sheet can show; which ones exist depends on the marketplace.
+    costSheetCol: group('costSheetCol', [
+        'sku',
+        'account_name',
+        'style_id',
+        'size',
+        'product_name',
+        'selling_gst',
+        'date',
+        'product_cost',
+        'packaging_cost',
+        'gst_percent',
+        'packaging_gst_percent',
+        'claim',
+        'is_product_cost_with_gst',
+        'return_loss_percent',
+        'rto_packaging_loss',
+        'weight_slab',
+        'total_tax',
+        'total_cost',
     ]),
 
     // components/calculations/CalculationsHeader.jsx (shared by the SKU-wise and

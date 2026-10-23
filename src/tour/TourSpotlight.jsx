@@ -11,11 +11,22 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { X, ArrowLeft, ArrowRight, Sparkles, Zap, ShieldCheck, Clock, TrendingUp, Check, Lock, RefreshCw, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { TOUR, tourSelector } from './targets';
 import { isValidEmail } from '../components/ConnectMarketplaceModal';
+import UploadReadinessChecklist from '../components/UploadReadinessChecklist';
 
 const GAP = 14;        // space between the cut-out and the popover
 const EDGE = 20;       // popover never comes closer than this to the viewport edge
 const PAD = 8;         // how far the cut-out is inflated past the element
 const POPOVER_W = 420;
+
+/**
+ * Natural size of the popover. scrollHeight ignores a max-height cap, so a
+ * capped popover keeps reporting the height it wants rather than the height it
+ * was squeezed to, which would otherwise flip the placement on every render.
+ */
+const measurePopover = (node) => {
+    const rect = node.getBoundingClientRect();
+    return { width: rect.width, height: Math.max(rect.height, node.scrollHeight) };
+};
 
 /** Rects compare by value; this avoids a state update on every animation frame. */
 const sameRect = (a, b) => (
@@ -246,15 +257,32 @@ const place = (hole, size, preferred, step = null, viewport = null) => {
         else if (room.left) side = 'left';
         else if (room.bottom) side = 'bottom';
         else if (room.top) side = 'top';
-        else side = isPlanCard ? (spaceLeft >= spaceRight ? 'left' : 'right') : 'bottom';
+        else if (isPlanCard) side = spaceLeft >= spaceRight ? 'left' : 'right';
+        else {
+            // Nothing fits beside the target: take the roomiest side rather than
+            // sitting on top of what the step is pointing at.
+            const roomiest = [
+                { s: 'bottom', val: spaceBottom },
+                { s: 'top', val: spaceTop },
+                { s: 'right', val: spaceRight },
+                { s: 'left', val: spaceLeft },
+            ].sort((a, b) => b.val - a.val)[0];
+            side = roomiest.s;
+        }
     }
 
     if (side === 'bottom' || side === 'top') {
-        const rawTop = side === 'bottom' ? hole.top + hole.height + GAP : hole.top - GAP - size.height;
+        // A popover taller than the free space is capped (it scrolls inside)
+        // so it never covers the highlighted element.
+        const available = side === 'bottom' ? spaceBottom : spaceTop;
+        const maxHeight = size.height > available ? Math.max(available, 220) : undefined;
+        const height = maxHeight ?? size.height;
+        const rawTop = side === 'bottom' ? hole.top + hole.height + GAP : hole.top - GAP - height;
         return {
-            top: clampY(rawTop, size.height),
+            top: clampY(rawTop, height),
             left: clampX(hole.left + hole.width / 2 - size.width / 2, size.width),
             side,
+            maxHeight,
         };
     }
 
@@ -287,6 +315,7 @@ const TourSpotlight = ({
     actionCompleted = false,
     actionMeta = null,
     actionError = null,
+    readinessMarketplaceId = null,
     onRetryAfterFailure,
     onCompleteAction,
     onBypassAction,
@@ -519,12 +548,12 @@ const TourSpotlight = ({
 
         // 3. Measure popover size
         if (popoverRef.current) {
-            const popRect = popoverRef.current.getBoundingClientRect();
+            const popRect = measurePopover(popoverRef.current);
             if (popRect.width > 0 && popRect.height > 0) {
                 setSize((curr) => (
                     Math.abs(curr.height - popRect.height) < 0.5 && Math.abs(curr.width - popRect.width) < 0.5
                         ? curr
-                        : { width: popRect.width, height: popRect.height }
+                        : popRect
                 ));
             }
         }
@@ -594,18 +623,20 @@ const TourSpotlight = ({
         const node = popoverRef.current;
         if (!node) return undefined;
         const measure = () => {
-            const rect = node.getBoundingClientRect();
+            const rect = measurePopover(node);
             if (rect.width > 0 && rect.height > 0) {
                 setSize((current) => (
                     Math.abs(current.height - rect.height) < 0.5 && Math.abs(current.width - rect.width) < 0.5
                         ? current
-                        : { width: rect.width, height: rect.height }
+                        : rect
                 ));
             }
         };
         measure();
         const observer = new ResizeObserver(measure);
         observer.observe(node);
+        // A capped popover keeps its own size when content changes, so watch the content too.
+        Array.from(node.children).forEach((child) => observer.observe(child));
         return () => observer.disconnect();
     }, [step?.id, actionCompleted, step?.isBillingIntro, isNextDisabled, actionStatus?.type]);
 
@@ -676,7 +707,9 @@ const TourSpotlight = ({
 
             if (event.key === 'ArrowRight' || event.key === 'Enter') {
                 event.preventDefault();
-                if (!isNextDisabled) {
+                if (step?.isCelebration) {
+                    onGoToDashboard?.();
+                } else if (!isNextDisabled) {
                     onNext();
                 }
             }
@@ -684,7 +717,7 @@ const TourSpotlight = ({
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [onClose, onNext, onPrev, isFirst, isNextDisabled]);
+    }, [onClose, onNext, onPrev, onGoToDashboard, step?.isCelebration, isFirst, isNextDisabled]);
 
     const position = place(hole, size, step?.side || 'bottom', step, viewport);
     const progress = total > 1 ? ((index + 1) / total) * 100 : 100;
@@ -828,7 +861,11 @@ const TourSpotlight = ({
                             ? 'w-[340px] max-w-[calc(100vw-24px)]'
                             : 'w-[420px] max-w-[calc(100vw-32px)]'
                 }`}
-                style={{ top: `${position.top}px`, left: `${position.left}px` }}
+                style={{
+                    top: `${position.top}px`,
+                    left: `${position.left}px`,
+                    ...(position.maxHeight ? { maxHeight: `${position.maxHeight}px` } : {}),
+                }}
             >
                 {/* Gradient Accent Bar */}
                 <div className={`h-1.5 w-full ${
@@ -883,6 +920,10 @@ const TourSpotlight = ({
                             <Info size={15} className="text-amber-600 shrink-0 mt-0.5" />
                             <span className="leading-snug">{step.note}</span>
                         </div>
+                    )}
+
+                    {step?.showReadiness && readinessMarketplaceId && (
+                        <UploadReadinessChecklist marketplaceId={readinessMarketplaceId} compact />
                     )}
 
                     {/* ── Marketplace Selection Cards ────────────────────── */}
