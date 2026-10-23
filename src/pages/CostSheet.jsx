@@ -1474,6 +1474,19 @@ const CostSheet = () => {
 
     const visibleRowCount = costSheetData.length;
 
+    const tourTags = [
+        isMeeshoView && 'meesho',
+        showMeeshoSize && 'meesho-size',
+        isMyntraView && 'myntra',
+        isAmazonView && 'amazon',
+        isFlipkartView && 'flipkart',
+    ].filter(Boolean).join(',');
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('tour:costsheet_context', {
+            detail: { tags: tourTags ? tourTags.split(',') : [] },
+        }));
+    }, [tourTags]);
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1500,7 +1513,7 @@ const CostSheet = () => {
                             <div className="flex items-center gap-3">
                                 <h1 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Cost Sheet</h1>
                             </div>
-                            <p className="text-slate-500 text-[11px] sm:text-xs font-medium mt-0.5">
+                            <p data-tour={TOUR.costSheet.summary} className="text-slate-500 text-[11px] sm:text-xs font-medium mt-0.5">
                                 Page {currentPage} of {totalPages} • {totalRows} total SKUs • {visibleRowCount} on this page{visibleRowCount !== costSheetData.length ? ` (of ${costSheetData.length})` : ''} • {editedRows.size} unsaved changes
                             </p>
                             <div className="flex items-center flex-wrap gap-x-4 gap-y-2 mt-1.5">
@@ -1576,7 +1589,7 @@ const CostSheet = () => {
 
                             {/* Amazon Refund-Loss Toggle */}
                             {isAmazonView && (
-                                <div className="flex items-center gap-1.5 mr-1 sm:mr-2">
+                                <div data-tour={TOUR.costSheet.refundLossToggle} className="flex items-center gap-1.5 mr-1 sm:mr-2">
                                     <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
                                         Refund Loss:
                                         <Info size={13} className="text-slate-400" />
@@ -1802,6 +1815,7 @@ const CostSheet = () => {
                             <tr>
                                 {/* SKU Header Column */}
                                 <th
+                                    data-tour={TOUR.costSheetCol.sku}
                                     className="px-2.5 sm:px-3 py-2 text-left text-xs font-semibold text-white uppercase border-b border-r border-brand-500/40 sticky left-0 bg-brand-600 z-30 group"
                                     style={{
                                         width: columnWidths['sku'] || 250,
@@ -1810,7 +1824,7 @@ const CostSheet = () => {
                                 >
                                     <div className="flex items-center justify-between gap-1">
                                         <div className="flex items-center gap-2">
-                                            <div className="flex flex-col gap-0.5">
+                                            <div data-tour={TOUR.costSheet.sortControls} className="flex flex-col gap-0.5">
                                                 <button
                                                     onClick={() => handleSort('sku', 'desc')}
                                                     className={`p-0.5 rounded hover:bg-white/20 transition-colors ${sortColumn === 'sku' && sortOrder === 'desc' ? 'bg-white/30' : ''}`}
@@ -1856,6 +1870,7 @@ const CostSheet = () => {
                                     return (
                                         <th
                                             key={col.key}
+                                            data-tour={TOUR.costSheetCol[col.key]}
                                             className={`px-2.5 sm:px-3 py-2 text-left text-xs font-semibold text-white uppercase border-b border-r border-brand-500/40 whitespace-nowrap bg-brand-600 relative group ${isStickyRight ? 'z-40' : ''} ${col.key === 'total_tax' ? 'border-l border-l-brand-400 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)]' : ''}`}
                                             style={{ width: columnWidths[col.key] || 150, minWidth: columnWidths[col.key] || 150, ...stickyStyle }}
                                         >
@@ -2021,7 +2036,7 @@ const CostSheet = () => {
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (
-                    <div className="shrink-0 border-t border-slate-200 px-2.5 sm:px-4 py-2 bg-slate-50 flex flex-col sm:flex-row items-center justify-between flex-wrap gap-2">
+                    <div data-tour={TOUR.costSheet.pagination} className="shrink-0 border-t border-slate-200 px-2.5 sm:px-4 py-2 bg-slate-50 flex flex-col sm:flex-row items-center justify-between flex-wrap gap-2">
                         <div className="text-[10px] sm:text-xs text-slate-500 font-medium text-center sm:text-left">
                             Showing {((currentPage - 1) * pageLimit) + 1} to {Math.min(currentPage * pageLimit, totalRows)} of {totalRows} SKUs
                         </div>

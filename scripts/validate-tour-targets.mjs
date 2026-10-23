@@ -43,6 +43,8 @@ const NON_RENDERING = new Set([
 
 const SOURCE_EXTENSIONS = /\.(js|jsx)$/;
 const ACCESSOR = /\bTOUR\.([A-Za-z0-9_$]+)\.([A-Za-z0-9_$]+)/g;
+// `TOUR.group[expr]` renders ids by computed key; every id in the group counts as rendered.
+const DYNAMIC_ACCESSOR = /\bTOUR\.([A-Za-z0-9_$]+)\[/g;
 const LITERAL_ATTR = /data-tour\s*=\s*["']([^"']+)["']/g;
 
 const collectFiles = (dir) => {
@@ -94,6 +96,16 @@ const main = async () => {
             const bucket = isRenderer ? renderedBy : steppedBy;
             if (!bucket.has(id)) bucket.set(id, []);
             bucket.get(id).push(where(match.index));
+        }
+
+        if (isRenderer) {
+            for (const match of content.matchAll(DYNAMIC_ACCESSOR)) {
+                for (const id of declared) {
+                    if (!id.startsWith(`${match[1]}.`)) continue;
+                    if (!renderedBy.has(id)) renderedBy.set(id, []);
+                    renderedBy.get(id).push(where(match.index));
+                }
+            }
         }
 
         for (const match of content.matchAll(LITERAL_ATTR)) {

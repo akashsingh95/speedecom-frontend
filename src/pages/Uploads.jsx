@@ -6,7 +6,7 @@ import { useAuth } from '../AuthContext';
 import { FileSpreadsheet, DollarSign, Loader2, CheckCircle, XCircle, Clock, FileText, RotateCcw, AlertCircle, Package, TrendingUp, RefreshCw, FileBarChart, Trash2, Upload, ShieldCheck, Settings, PlayCircle } from 'lucide-react';
 import FileSelector from '../components/FileSelector';
 import UploadQueue, { calculateQueueStats } from '../components/UploadQueue';
-import { useUploadQueue } from '../hooks/useUploadQueue';
+import { useUploadQueue, ACTIVE_STAGES } from '../hooks/useUploadQueue';
 import { toast } from 'sonner';
 import UploadHistoryTab from './UploadHistory';
 import UploadConfirmationModal from '../components/UploadConfirmationModal';
@@ -226,10 +226,16 @@ const Uploads = () => {
     const [costSheetUploadEnabled, setCostSheetUploadEnabled] = useState(false);
 
     useEffect(() => {
-        if (!isUploadTour || !fileLimitModal.isOpen) return undefined;
+        if (!isUploadTour || !marketplaceId) return;
+        window.dispatchEvent(new CustomEvent('tour:upload_account', { detail: { marketplaceId } }));
+    }, [isUploadTour, marketplaceId]);
+
+    useEffect(() => {
+        const modalOpen = fileLimitModal.isOpen || (confirmModal.isOpen && tourStep?.isSecondaryUpload);
+        if (!isUploadTour || !modalOpen) return undefined;
         window.dispatchEvent(new CustomEvent('tour:suspend'));
         return () => window.dispatchEvent(new CustomEvent('tour:resume'));
-    }, [isUploadTour, fileLimitModal.isOpen]);
+    }, [isUploadTour, fileLimitModal.isOpen, confirmModal.isOpen, tourStep?.isSecondaryUpload]);
 
     const failedUploadError = uploadQueue.state.files.find((f) => f.error)?.error || null;
     useEffect(() => {
@@ -247,6 +253,18 @@ const Uploads = () => {
         window.addEventListener('tour:upload_reset', clearFailed);
         return () => window.removeEventListener('tour:upload_reset', clearFailed);
     }, [isUploadTour, uploadQueue]);
+
+    // When TourProvider determines the next required file type (e.g. after Flipkart
+    // Orders complete, it asks us to switch to Payments), pre-select that type so
+    // the user can immediately pick and upload the file without manual switching.
+    useEffect(() => {
+        if (!isUploadTour) return undefined;
+        const handler = ({ detail }) => {
+            if (detail?.uploadType) setUploadType(detail.uploadType);
+        };
+        window.addEventListener('tour:set-upload-type', handler);
+        return () => window.removeEventListener('tour:set-upload-type', handler);
+    }, [isUploadTour]);
 
     // Compute queue stats at component level — no IIFE needed
     const queueStats = calculateQueueStats(uploadQueue.state.files);
@@ -269,6 +287,7 @@ const Uploads = () => {
 
     // Track previous completed count to avoid spamming fetchUploadHistory
     const prevCompletedCountRef = useRef(0);
+    const tourCompletionPendingRef = useRef(false);
 
     useEffect(() => {
         fetchFeatureFlags();
@@ -448,12 +467,26 @@ const Uploads = () => {
     // Fetch upload history only when completed count increases (not on every state change)
     useEffect(() => {
         const completedCount = uploadQueue.state.files.filter(f => f.stage === 'completed').length;
-        if (completedCount > prevCompletedCountRef.current) {
+        const previousCompletedCount = prevCompletedCountRef.current;
+        // Always track the current count: clearing completed files lowers it, and
+        // a stale high-water mark would hide every later completion.
+        prevCompletedCountRef.current = completedCount;
+        if (completedCount > previousCompletedCount) {
             fetchUploadHistory();
-            prevCompletedCountRef.current = completedCount;
-            if (isUploadTour) emitTourAction('uploadCompleted');
+            tourCompletionPendingRef.current = true;
         }
-    }, [uploadQueue.state.files]);
+        // Report to the tour only once the whole batch has settled, so it never
+        // celebrates while other files are still uploading or processing.
+        const batchSettled = !uploadQueue.state.files.some((f) => ACTIVE_STAGES.has(f.stage));
+        if (tourCompletionPendingRef.current && batchSettled) {
+            tourCompletionPendingRef.current = false;
+            if (isUploadTour) {
+                window.dispatchEvent(new CustomEvent('tour:action-completed', {
+                    detail: { action: 'uploadCompleted', meta: { marketplaceId } },
+                }));
+            }
+        }
+    }, [uploadQueue.state.files, isUploadTour, marketplaceId]);
 
     const filteredHistory = filterType === 'all'
         ? uploadHistory

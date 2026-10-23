@@ -30,9 +30,35 @@ export const useTour = () => useContext(TourContext);
 // the sidebar); optional ones fail fast so skipping is not perceptible.
 const WAIT_REQUIRED_MS = 6000;
 const WAIT_OPTIONAL_MS = 1200;
+const PENDING_ACTION_TTL_MS = 5000;
+const READINESS_POLL_MS = 3000;
+// The Uploads page only reports once its own queue has settled, so a server
+// record that still says "in progress" after this many polls is stale.
+const READINESS_IN_PROGRESS_POLLS = 10;
 
 /** Scopes localStorage keys per user to guarantee zero cross-account state bleed. */
 export const getTourKey = (key, userId) => (userId ? `tour:${userId}:${key}` : `tour:${key}`);
+
+/**
+ * Scrolls the nearest horizontally scrollable ancestor so `el` sits clear of the
+ * columns pinned at either edge. Pinned (sticky) targets are already in view.
+ */
+const scrollHorizontallyIntoView = (el, inset = {}) => {
+    if (window.getComputedStyle(el).position === 'sticky') return;
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+        const { overflowX } = window.getComputedStyle(node);
+        if ((overflowX === 'auto' || overflowX === 'scroll') && node.scrollWidth > node.clientWidth) break;
+        node = node.parentElement;
+    }
+    if (!node || node === document.body) return;
+    const container = node.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    const minLeft = container.left + (inset.left || 0);
+    const maxRight = container.right - (inset.right || 0);
+    if (rect.left < minLeft) node.scrollLeft -= minLeft - rect.left;
+    else if (rect.right > maxRight) node.scrollLeft += rect.right - maxRight;
+};
 
 /** Resolves once the element is in the DOM and laid out, or null on timeout. */
 const waitForElement = (selector, timeout, token) => new Promise((resolve) => {
@@ -101,6 +127,8 @@ export const TourProvider = ({ children }) => {
     // Actions reported before their step is on screen (a fast upload can finish
     // while the previous step is still auto-advancing).
     const pendingActionsRef = useRef(new Map());
+    // Bumped to cancel an in-flight upload-readiness poll.
+    const readinessRunRef = useRef(0);
 
     const [runKey, setRunKey] = useState(null);
     const [stepIndex, setStepIndex] = useState(0);
@@ -111,6 +139,9 @@ export const TourProvider = ({ children }) => {
     const [actionMeta, setActionMeta] = useState(null);
     const [actionError, setActionError] = useState(null);
     const [suspended, setSuspended] = useState(false);
+    const [readinessMarketplaceId, setReadinessMarketplaceId] = useState(null);
+    const [costSheetTags, setCostSheetTags] = useState([]);
+    const [secondaryUploadLabel, setSecondaryUploadLabel] = useState(null);
     const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
     const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
         try {
@@ -185,27 +216,44 @@ export const TourProvider = ({ children }) => {
         return () => window.removeEventListener('tour:select_marketplace', handler);
     }, [handleSetSelectedMarketplace]);
 
+    useEffect(() => {
+        const handler = (e) => setCostSheetTags(e.detail?.tags || []);
+        window.addEventListener('tour:costsheet_context', handler);
+        return () => window.removeEventListener('tour:costsheet_context', handler);
+    }, []);
+
     const isStepApplicable = useCallback((s, mp) => {
         if (!s) return false;
+        // Steps tied to what the Cost Sheet is currently showing (marketplace, size-wise).
+        if (s.forTags && !s.forTags.some((tag) => costSheetTags.includes(tag))) return false;
         // If Meesho password step is requested but password field is not in DOM (auto-sync is disabled), skip it
         if (s.id === 'mp-meesho-password') {
             return !!document.querySelector(tourSelector(TOUR.marketplace.modalPassword));
         }
+        // Reached only through the readiness check, never by stepping forward.
+        if (s.isSecondaryUpload) return false;
         if (!s.forMarketplaces || s.forMarketplaces.length === 0) return true;
         if (!mp) return true;
         const norm = mp.toLowerCase();
         return s.forMarketplaces.some((m) => norm.includes(m.toLowerCase()));
-    }, []);
+    }, [costSheetTags]);
 
     const run = runKey ? TOURS[runKey] : null;
     const steps = run?.steps || [];
     const rawStep = steps[stepIndex] || null;
     const step = useMemo(() => {
+        if (rawStep?.isSecondaryUpload && secondaryUploadLabel) {
+            return {
+                ...rawStep,
+                title: `Upload your ${secondaryUploadLabel} report`,
+                body: `Your Cost Sheet also needs the ${secondaryUploadLabel} report. Its type is already selected above; choose the file in the box below.`,
+            };
+        }
         if (!rawStep?.byMarketplace) return rawStep;
         const norm = (selectedMarketplace || '').toLowerCase();
         const slug = Object.keys(rawStep.byMarketplace).find((key) => norm.includes(key));
         return slug ? { ...rawStep, ...rawStep.byMarketplace[slug] } : rawStep;
-    }, [rawStep, selectedMarketplace]);
+    }, [rawStep, selectedMarketplace, secondaryUploadLabel]);
 
     // Reset or evaluate action status whenever current step changes
     useEffect(() => {
@@ -337,6 +385,7 @@ export const TourProvider = ({ children }) => {
         navAttemptsRef.current = { index: -1, count: 0 };
         endedOnRouteRef.current = null;
         pendingActionsRef.current.clear();
+        readinessRunRef.current += 1;
         if (runKey === TENANT_ONBOARDING && key !== TENANT_ONBOARDING) {
             persist(TENANT_ONBOARDING, 'completed', 5);
         }
@@ -599,6 +648,7 @@ export const TourProvider = ({ children }) => {
                     }
                 }
             }
+            if (step.scrollInset) scrollHorizontallyIntoView(found, step.scrollInset);
             setElement(found);
         });
 
@@ -801,21 +851,92 @@ export const TourProvider = ({ children }) => {
         }
     }, [user, runKey]);
 
+    const goToStepId = useCallback((id) => {
+        const index = steps.findIndex((s) => s.id === id);
+        if (index < 0) return false;
+        directionRef.current = 1;
+        setActionCompleted(false);
+        setActionError(null);
+        setElement(null);
+        setStepIndex(index);
+        return true;
+    }, [steps]);
+
+    // After an upload completes, decide between "more files needed" and "done".
+    // Files still processing are waited for so a user who queued every required
+    // report is not asked to upload one again.
+    const advanceAfterUpload = useCallback(async (marketplaceId) => {
+        const run = ++readinessRunRef.current;
+        setReadinessMarketplaceId(marketplaceId || null);
+        const finish = () => {
+            if (!goToStepId('up-congratulations')) next();
+        };
+        if (!marketplaceId) {
+            finish();
+            return;
+        }
+        for (let attempt = 0; attempt <= READINESS_IN_PROGRESS_POLLS; attempt += 1) {
+            let readiness = null;
+            try {
+                const { data } = await api.get(`/upload/readiness/${marketplaceId}`, { skipErrorToast: true });
+                readiness = data?.data ?? data;
+            } catch {
+                if (run === readinessRunRef.current) finish();
+                return;
+            }
+            if (run !== readinessRunRef.current) return;
+            if (!readiness) {
+                finish();
+                return;
+            }
+            if (!readiness.hasInProgress || attempt >= READINESS_IN_PROGRESS_POLLS) {
+                if (readiness.isReady) {
+                    finish();
+                    return;
+                }
+                const missing = (readiness.requiredTypes || []).find((r) => !r.completed);
+                if (!missing) {
+                    finish();
+                    return;
+                }
+                setSecondaryUploadLabel(missing.label);
+                window.dispatchEvent(new CustomEvent('tour:set-upload-type', { detail: { uploadType: missing.type } }));
+                goToStepId('up-secondary');
+                return;
+            }
+            await new Promise((resolve) => { setTimeout(resolve, READINESS_POLL_MS); });
+            if (run !== readinessRunRef.current) return;
+        }
+        setActionCompleted(true);
+    }, [goToStepId, next]);
+
+    useEffect(() => {
+        readinessRunRef.current += 1;
+    }, [step?.id, runKey]);
+
     const completeTourAction = useCallback((actionType, meta) => {
         if (!step) return;
         if (!step.actionType || step.actionType === actionType) {
-            setActionCompleted(true);
+            const waitsForReadiness = step.checksReadiness && runKey === UPLOAD_ONBOARDING;
+            if (!waitsForReadiness) setActionCompleted(true);
             if (meta) setActionMeta(meta);
             try {
                 if (actionType) localStorage.setItem(localKey(`action:${actionType}_done`), 'true');
             } catch { /* ignore */ }
+
+            if (step.checksReadiness && actionType === 'uploadCompleted' && runKey === UPLOAD_ONBOARDING) {
+                advanceAfterUpload(meta?.marketplaceId);
+                return;
+            }
+
             if (step.autoAdvance) {
                 setTimeout(() => {
-                    next();
+                    if (step.advanceTo) goToStepId(step.advanceTo);
+                    else next();
                 }, step.autoAdvanceDelay ?? 1200);
             }
         }
-    }, [step, next, localKey]);
+    }, [step, next, goToStepId, runKey, localKey, advanceAfterUpload]);
 
     // Auto-advance forward ONLY if user was on /dashboard and actively navigated forward to /subscription
     useEffect(() => {
@@ -855,7 +976,7 @@ export const TourProvider = ({ children }) => {
             if (step && (!step.actionType || step.actionType === action)) {
                 completeTourAction(action, meta);
             } else if (runKey && action) {
-                pendingActionsRef.current.set(action, meta);
+                pendingActionsRef.current.set(action, { meta, at: Date.now() });
             }
         };
         window.addEventListener('tour:action-completed', handler);
@@ -865,9 +986,9 @@ export const TourProvider = ({ children }) => {
     useEffect(() => {
         const pending = pendingActionsRef.current;
         if (step?.requiresAction && step.actionType && pending.has(step.actionType)) {
-            const meta = pending.get(step.actionType);
+            const { meta, at } = pending.get(step.actionType);
             pending.delete(step.actionType);
-            completeTourAction(step.actionType, meta);
+            if (Date.now() - at < PENDING_ACTION_TTL_MS) completeTourAction(step.actionType, meta);
         }
     }, [step, completeTourAction]);
 
@@ -881,6 +1002,14 @@ export const TourProvider = ({ children }) => {
         window.addEventListener('tour:action-failed', handler);
         return () => window.removeEventListener('tour:action-failed', handler);
     }, [step]);
+
+    useEffect(() => {
+        const handler = (e) => {
+            if (e.detail?.marketplaceId) setReadinessMarketplaceId(e.detail.marketplaceId);
+        };
+        window.addEventListener('tour:upload_account', handler);
+        return () => window.removeEventListener('tour:upload_account', handler);
+    }, []);
 
     // A page modal that needs the user's full attention hides the overlay
     // instead of stacking under it.
@@ -911,7 +1040,8 @@ export const TourProvider = ({ children }) => {
     }, [runKey, step?.id, stepIndex, goTo]);
 
     const applicableSteps = steps.filter((s) => isStepApplicable(s, selectedMarketplace));
-    const currentApplicableIndex = applicableSteps.findIndex((s) => s.id === step?.id);
+    const displayStepId = step?.displayAs || step?.id;
+    const currentApplicableIndex = applicableSteps.findIndex((s) => s.id === displayStepId);
     const displayIndex = currentApplicableIndex >= 0 ? currentApplicableIndex : stepIndex;
     const displayTotal = applicableSteps.length > 0 ? applicableSteps.length : steps.length;
 
@@ -973,6 +1103,7 @@ export const TourProvider = ({ children }) => {
                     actionCompleted={actionCompleted}
                     actionMeta={actionMeta}
                     actionError={actionError}
+                    readinessMarketplaceId={readinessMarketplaceId}
                     onRetryAfterFailure={retryAfterFailure}
                     onCompleteAction={completeTourAction}
                     onBypassAction={bypassTourAction}
@@ -981,9 +1112,12 @@ export const TourProvider = ({ children }) => {
                     onClose={() => stop(step?.isCelebration ? 'completed' : 'skipped')}
                     onGoToDashboard={() => {
                         const nextTour = step?.celebration?.nextTour;
+                        const primaryRoute = step?.celebration?.primaryRoute;
                         stop('completed');
                         if (nextTour) {
                             startTour(nextTour);
+                        } else if (primaryRoute) {
+                            navigate(primaryRoute);
                         } else {
                             navigate('/dashboard');
                         }

@@ -53,7 +53,7 @@ export const PRIMARY_UPLOAD_TYPES = {
     meesho: 'meesho_payments',
     amazon: 'amazon_payments',
     flipkart: 'payments',
-    myntra: 'myntra_payments',
+    myntra: 'myntra_orders',
 };
 
 export const DEFAULT_UPLOAD_FILE_LIMIT = 5;
@@ -457,8 +457,9 @@ export const UPLOAD_ONBOARDING_STEPS = [
         route: '/uploads',
         required: true,
         side: 'bottom',
+        showReadiness: true,
         title: 'Report types for your marketplace',
-        body: 'Each card is a report your marketplace provides. Payments is the best one to start with, so it is selected for you. You can upload the others any time.',
+        body: 'Your Cost Sheet is built from the reports listed below, so each of them must be uploaded and processed. The first one is already selected for you.',
     },
     {
         id: 'up-tutorial',
@@ -480,6 +481,7 @@ export const UPLOAD_ONBOARDING_STEPS = [
         autoAdvance: true,
         autoAdvanceDelay: 300,
         actionPrompt: 'Choose the downloaded file to continue',
+        showReadiness: true,
         title: 'Select your file',
         body: 'Drag the downloaded report here, or click to browse.',
         note: 'Upload limit: up to 5 files at a time.',
@@ -509,12 +511,35 @@ export const UPLOAD_ONBOARDING_STEPS = [
         side: 'left',
         requiresAction: true,
         actionType: 'uploadCompleted',
-        autoAdvance: true,
+        checksReadiness: true,
+        showReadiness: true,
         actionPrompt: 'Waiting for your file to finish processing',
         backTo: 'up-file',
         failureHelp: 'This usually means the file is not the selected report type, or the wrong account is selected. Check both, then upload the correct file.',
         title: 'Processing your file',
         body: 'We upload, validate and process the file. If it shows a warning, review it and approve to continue.',
+    },
+    // Entered only by TourProvider when the readiness check finds a required
+    // report still missing; never reached through Next (see isStepApplicable).
+    {
+        id: 'up-secondary',
+        target: TOUR.uploads.fileSelector,
+        route: '/uploads',
+        required: true,
+        side: 'top',
+        requiresAction: true,
+        actionType: 'uploadConfirmed',
+        autoAdvance: true,
+        autoAdvanceDelay: 300,
+        advanceTo: 'up-processing',
+        showReadiness: true,
+        isSecondaryUpload: true,
+        displayAs: 'up-processing',
+        actionPrompt: 'Choose the file and confirm the upload to continue',
+        backTo: 'up-file',
+        failureHelp: 'This usually means the file is not the selected report type, or the wrong account is selected. Check both, then upload the correct file.',
+        title: 'One more file needed',
+        body: 'Your Cost Sheet needs one more report. Its type is already selected above; choose the file in the box below.',
     },
     {
         id: 'up-congratulations',
@@ -523,17 +548,19 @@ export const UPLOAD_ONBOARDING_STEPS = [
         side: 'center',
         isCelebration: true,
         celebration: {
-            badge: 'Upload Complete',
-            heading: 'File uploaded successfully!',
-            text: 'Congratulations on finishing this step. Your data is now flowing into SpeedEcom and will appear in your dashboard once processing completes.',
-            points: ['Report Validated', 'Dashboard Updating'],
+            badge: 'All Required Files Uploaded',
+            heading: 'Your data is ready!',
+            text: 'All required reports have been processed. Open the Cost Sheet to fill in your product costs — that is what unlocks accurate profit and loss calculations.',
+            points: ['Reports Validated', 'Cost Sheet Seeded', 'Ready for Calculations'],
             secondaryLabel: 'Upload More Files',
-            primaryLabel: 'Go to Dashboard ➔',
+            primaryLabel: 'Go to Cost Sheet ➔',
+            nextTour: COST_SHEET_TOUR,
         },
         title: 'You\'re all set!',
-        body: 'Your first report is in.',
+        body: 'Your reports are in. Fill in your product costs to start seeing real P&L.',
     },
 ];
+
 
 // ── Page tours ───────────────────────────────────────────────────────────
 // Scoped to a single screen, unlike the onboarding tour that walks across
@@ -724,6 +751,21 @@ export const PAYMENTS_STEPS = [
     },
 ];
 
+// Pinned columns (SKU on the left, Total Tax / Total Cost on the right) cover
+// part of the table, so a scrolled-to column must land clear of them.
+const COST_SHEET_SCROLL_INSET = { left: 290, right: 260 };
+
+const costSheetColumnStep = (key, id, title, body, extra = {}) => ({
+    id,
+    target: TOUR.costSheetCol[key],
+    route: '/cost-sheet',
+    side: 'bottom',
+    scrollInset: COST_SHEET_SCROLL_INSET,
+    title,
+    body,
+    ...extra,
+});
+
 export const COST_SHEET_STEPS = [
     {
         id: 'cs-header',
@@ -731,40 +773,76 @@ export const COST_SHEET_STEPS = [
         route: '/cost-sheet',
         required: true,
         side: 'bottom',
-        title: 'The cost sheet',
-        body: 'Your own costs, per SKU — what you paid for the product, packaging, shipping. Calculations use these to turn revenue into actual profit, so an empty cost sheet means profit figures you cannot trust.',
+        title: 'Your Cost Sheet',
+        body: 'This is where you set the costs behind your Profit & Loss: what each SKU costs you, plus GST and loss settings. Calculations use these values, so fill them in before you calculate.',
     },
+    costSheetColumnStep('sku', 'cs-sku', 'SKU', 'The product identifier from your marketplace. Each row holds the costs for one SKU, and this column stays pinned while you scroll sideways.'),
+    costSheetColumnStep('account_name', 'cs-account-name', 'Account Name', 'The marketplace account this SKU belongs to. It is read-only, and costs are kept separately for each account.'),
+
+    // ── Marketplace-specific columns and settings ─────────────────────────
+    costSheetColumnStep('size', 'cs-size-meesho', 'Size', 'Size-wise calculation is on for your Meesho account, so every size of a SKU has its own row and its own cost. Sizes are filled in from your Sales reports and cannot be edited here.', { forTags: ['meesho-size'] }),
+    costSheetColumnStep('style_id', 'cs-style-myntra', 'Style ID', 'Myntra\'s identifier for the style. Together with the SKU and size it identifies each row. It is read-only.', { forTags: ['myntra'] }),
+    costSheetColumnStep('size', 'cs-size-myntra', 'Size', 'Costs are kept per size for each Myntra style, so every size has its own row. It is read-only.', { forTags: ['myntra'] }),
     {
-        id: 'cs-account-filter',
-        target: TOUR.costSheet.accountFilter,
+        id: 'cs-amazon-refund-loss',
+        target: TOUR.costSheet.refundLossToggle,
         route: '/cost-sheet',
         side: 'bottom',
-        title: 'Scope it to an account',
-        body: 'Costs are held per marketplace account, since the same SKU can cost you differently depending on where it ships from.',
+        forTags: ['amazon'],
+        title: 'Consider Refund-Loss',
+        body: 'On counts the product cost of Refund-Loss orders (refunded but not returned to you) in Total Cost and profit; Off leaves them out. Replacement and free-replacement orders always have their product cost counted, whatever this says.',
+        note: 'Changing it asks for confirmation, applies to the selected accounts, and needs a recalculation to take effect.',
     },
-    {
-        id: 'cs-table',
-        target: TOUR.costSheet.table,
-        route: '/cost-sheet',
-        side: 'top',
-        title: 'Edit it like a spreadsheet',
-        body: 'Editable cells behave the way you expect: type into one, drag to fill a range, paste a column straight from Excel, and undo with the usual shortcut.',
-    },
+    costSheetColumnStep('product_name', 'cs-product-name', 'Product Name', 'Give every variant of the same product the same name, for example each colour and size of one kurta. Master-SKU calculations group SKUs by this name to show profit per product.'),
+
+    // ── Common cost fields ────────────────────────────────────────────────
+    costSheetColumnStep('date', 'cs-date', 'Date', 'The date this cost takes effect from. Each order is matched with the cost that was in effect on its date.'),
+    costSheetColumnStep('product_cost', 'cs-product-cost', 'Product Cost', 'What you pay for one unit. This is the main input for profit; while it is empty, your profit figures cannot be trusted.'),
+    costSheetColumnStep('packaging_cost', 'cs-packaging-cost', 'Packaging Cost', 'Packaging expense per unit. It is added to the product cost to get the total cost.'),
+    costSheetColumnStep('gst_percent', 'cs-gst-percent', 'GST %', 'The GST rate that applies to the product cost.'),
+    costSheetColumnStep('packaging_gst_percent', 'cs-packaging-gst-percent', 'Packaging GST %', 'The GST rate that applies to the packaging cost.'),
+    costSheetColumnStep('is_product_cost_with_gst', 'cs-cost-with-gst', 'Is Cost with GST?', 'Choose y if the costs you typed already include GST, or n if GST should be added on top. This changes how Total Tax and Total Cost are worked out.'),
+    costSheetColumnStep('claim', 'cs-claim', 'Claim Amount', 'Used in calculations to decide when a marketplace reimbursement counts as a claim for a lost or damaged item.'),
+    costSheetColumnStep('return_loss_percent', 'cs-return-loss', 'Return Loss %', 'The share of the total cost counted as a loss on returned orders.'),
+    costSheetColumnStep('rto_packaging_loss', 'cs-rto-packaging-loss', 'RTO Packaging Loss', 'The packaging amount lost per unit when an order comes back as RTO (return to origin).'),
+    costSheetColumnStep('total_tax', 'cs-total-tax', 'Total Tax', 'Worked out for you from the costs, GST rates and the "with GST" setting. It is read-only.', { side: 'left' }),
+    costSheetColumnStep('total_cost', 'cs-total-cost', 'Total Cost', 'The cost per unit used in profit and loss: product cost plus packaging, plus GST when your costs were entered without it. It is read-only.', { side: 'left' }),
+
+    // ── Filtering, sorting and layout ─────────────────────────────────────
     {
         id: 'cs-column-filter',
         target: TOUR.costSheet.columnFilter,
         route: '/cost-sheet',
         side: 'bottom',
-        title: 'Filter specific columns',
-        body: 'Click this filter icon on any column to drill down to specific SKUs, product names, or any other data points you need to focus on.',
+        title: 'Filter by several values at once',
+        body: 'Click the filter icon on any column. Search for values, tick as many as you like (Select All and Clear Selection help), then Apply. Reset removes that column\'s filter.',
+        note: 'Works for SKUs, sizes, product names, dates and every other column.',
+    },
+    {
+        id: 'cs-sort',
+        target: TOUR.costSheet.sortControls,
+        route: '/cost-sheet',
+        side: 'right',
+        title: 'Sort any column',
+        body: 'Use the up and down arrows in a column header to sort from highest to lowest or the other way round.',
     },
     {
         id: 'cs-columns',
         target: TOUR.costSheet.columnsBtn,
         route: '/cost-sheet',
         side: 'bottom',
-        title: 'Customize your view',
-        body: 'Add missing columns, hide ones you do not need, and drag them into whatever order makes data entry fastest for you.',
+        title: 'Add & Arrange Columns',
+        body: 'Show or hide columns and drag them into the order that suits you. SKU, Total Tax and Total Cost stay pinned. Your layout is remembered in this browser.',
+    },
+
+    // ── Toolbar ───────────────────────────────────────────────────────────
+    {
+        id: 'cs-account-filter',
+        target: TOUR.costSheet.accountFilter,
+        route: '/cost-sheet',
+        side: 'bottom',
+        title: 'Filter Accounts',
+        body: 'Choose which connected accounts the sheet shows. The columns and settings you see follow the marketplace of the accounts you pick.',
     },
     {
         id: 'cs-export',
@@ -772,23 +850,58 @@ export const COST_SHEET_STEPS = [
         route: '/cost-sheet',
         side: 'bottom',
         title: 'Export to Excel',
-        body: 'Prefer working in a spreadsheet? Export your current view, fill in the costs offline, and paste them straight back into the grid.',
+        body: 'Prefer a spreadsheet? Export the current view, fill in the costs offline, and paste them back into the grid.',
     },
     {
         id: 'cs-save',
         target: TOUR.costSheet.saveBtn,
         route: '/cost-sheet',
         side: 'left',
-        title: 'Nothing saves on its own',
-        body: 'Edits stay local until you press this — the header counts your unsaved changes.',
+        title: 'Save your changes',
+        body: 'Edits stay in your browser until you press Save, and the button shows how many are waiting. Save before changing accounts or pages; you will be warned if there are unsaved edits.',
     },
     {
         id: 'cs-calculate',
         target: TOUR.costSheet.calculateBtn,
         route: '/cost-sheet',
         side: 'bottom',
-        title: 'Run the numbers',
-        body: 'Once your costs are saved, hit calculate. This runs your updated figures against all your orders to produce your final profit and loss numbers.',
+        title: 'Calculate',
+        body: 'Once your costs are saved, run the calculation. It applies your figures to all your orders to produce the final profit and loss.',
+    },
+
+    // ── Table ─────────────────────────────────────────────────────────────
+    {
+        id: 'cs-table',
+        target: TOUR.costSheet.table,
+        route: '/cost-sheet',
+        side: 'top',
+        title: 'Edit it like a spreadsheet',
+        body: 'Type into a cell, drag to fill a range, paste a column straight from Excel, and undo with the usual shortcut. Shaded columns such as Account Name, Total Tax and Total Cost cannot be edited.',
+    },
+    {
+        id: 'cs-summary',
+        target: TOUR.costSheet.summary,
+        route: '/cost-sheet',
+        side: 'bottom',
+        title: 'Where you are',
+        body: 'The current page, the total number of SKUs, and how many edits are still unsaved.',
+    },
+    {
+        id: 'cs-pagination',
+        target: TOUR.costSheet.pagination,
+        route: '/cost-sheet',
+        side: 'top',
+        title: 'Moving between pages',
+        body: 'Large sheets are split into pages. Use these controls to move around; if you have unsaved edits you will be asked what to do with them first.',
+    },
+    {
+        id: 'cs-finish',
+        target: null,
+        route: '/cost-sheet',
+        side: 'center',
+        title: 'Fill in your costs, then calculate',
+        body: 'Enter at least the Product Cost for every SKU, press Save, then Calculate. You can replay this tour any time from the compass button.',
+        lastButtonText: 'Start filling in costs',
     },
 ];
 
@@ -1021,11 +1134,17 @@ export const TOURS = {
         },
     },
 
+    [COST_SHEET_TOUR]: {
+        key: COST_SHEET_TOUR,
+        steps: COST_SHEET_STEPS,
+        // First visit only; hasSeen() covers both finishing and closing it.
+        autoStart: { roles: ['Admin', 'User'], routes: ['/cost-sheet'], requires: null },
+    },
+
     // Launcher-only from here down. A tenant who has just been walked through
     // onboarding should not meet a fresh overlay on every page they open next;
     // these wait to be asked for, via the button in each page header.
     [PAYMENTS_TOUR]: { key: PAYMENTS_TOUR, steps: PAYMENTS_STEPS, autoStart: null },
-    [COST_SHEET_TOUR]: { key: COST_SHEET_TOUR, steps: COST_SHEET_STEPS, autoStart: null },
     [DOWNLOADS_TOUR]: { key: DOWNLOADS_TOUR, steps: DOWNLOADS_STEPS, autoStart: null },
     [SCAN_RETURNS_TOUR]: { key: SCAN_RETURNS_TOUR, steps: SCAN_RETURNS_STEPS, autoStart: null },
     [SUPPORT_TOUR]: { key: SUPPORT_TOUR, steps: SUPPORT_STEPS, autoStart: null },
