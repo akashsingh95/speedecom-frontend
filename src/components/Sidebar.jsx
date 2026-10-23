@@ -109,21 +109,9 @@ const Sidebar = () => {
         }
     }
 
+    // Awaiting approval (item.pending) still links through: ListingStudioGuard renders the
+    // ListingStudioPending screen for that route, which explains the wait.
     const NavItem = ({ item, isActive }) => (
-        item.pending ? (
-            // Awaiting approval: show where Speedy Listing will appear, but don't let them
-            // navigate into a route the API would 403 anyway.
-            <div
-                className="group flex items-center gap-3 px-4 py-3.5 text-sm font-medium rounded-full border border-transparent text-slate-400 cursor-not-allowed"
-                title="Awaiting SuperAdmin approval"
-            >
-                <item.icon size={20} strokeWidth={2} className="text-slate-300" />
-                <span>{item.name}</span>
-                <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100">
-                    Pending
-                </span>
-            </div>
-        ) : (
         <Link
             to={item.path}
             className={`group flex items-center gap-3 px-4 py-3.5 text-sm font-medium rounded-full transition-all duration-200 ${isActive
@@ -137,11 +125,17 @@ const Sidebar = () => {
                 className={`transition-colors duration-200 ${isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600'}`}
             />
             <span className={isActive ? 'font-semibold tracking-wide' : ''}>{item.name}</span>
-            {isActive && (
+            {item.pending ? (
+                <span
+                    className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100"
+                    title="Awaiting SuperAdmin approval"
+                >
+                    Pending
+                </span>
+            ) : isActive && (
                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-600 shadow-sm"></div>
             )}
         </Link>
-        )
     );
 
     return (

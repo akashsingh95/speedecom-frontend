@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
-import { CheckCircle, Clock, Search, ShieldCheck, CreditCard, XCircle, Loader2, Building, RefreshCw, ClipboardCheck, Users, AlertTriangle, TrendingUp, Settings, Trash2, PackageOpen, Gift } from 'lucide-react';
+import { CheckCircle, Clock, Search, ShieldCheck, CreditCard, XCircle, Loader2, Building, RefreshCw, ClipboardCheck, Users, AlertTriangle, TrendingUp, Settings, Trash2, PackageOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +44,8 @@ const AdminApprovals = () => {
     // Speedy Listing access State
     const [pendingListingStudio, setPendingListingStudio] = useState([]);
     const [listingStudioLoading, setListingStudioLoading] = useState(canApproveListingStudio);
+    // Kept apart from an empty list: a failed fetch must not read as "nothing to approve".
+    const [listingStudioError, setListingStudioError] = useState(false);
     const [listingStudioActionLoading, setListingStudioActionLoading] = useState(null);
 
     // Confirmation Modal State
@@ -109,12 +111,15 @@ const AdminApprovals = () => {
     };
 
     const fetchPendingListingStudio = async () => {
+        setListingStudioLoading(true);
+        setListingStudioError(false);
         try {
             // sendResponse sends the payload as the body itself — there is no { data } envelope.
             const res = await api.get('/listing-studio/wallet/admin/access-requests', { params: { status: 'pending' } });
             setPendingListingStudio(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error('Error fetching Speedy Listing access requests', error);
+            setListingStudioError(true);
         } finally {
             setListingStudioLoading(false);
         }
@@ -718,6 +723,22 @@ const AdminApprovals = () => {
                                             <Loader2 className="animate-spin text-brand-600 mb-4" size={40} />
                                             <p className="text-slate-500">Loading access requests...</p>
                                         </div>
+                                    ) : listingStudioError ? (
+                                        <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-4">
+                                            <div className="p-4 bg-red-50 rounded-2xl">
+                                                <AlertTriangle className="w-10 h-10 text-red-400" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-semibold text-slate-700">Couldn't load access requests</p>
+                                                <p className="text-sm text-slate-500 mt-1">Pending requests may exist — this is not an empty queue.</p>
+                                            </div>
+                                            <button
+                                                onClick={fetchPendingListingStudio}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                            >
+                                                <RefreshCw size={14} /> Retry
+                                            </button>
+                                        </div>
                                     ) : pendingListingStudio.length === 0 ? (
                                         <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-4">
                                             <div className="p-4 bg-slate-100 rounded-2xl">
@@ -725,7 +746,7 @@ const AdminApprovals = () => {
                                             </div>
                                             <div className="text-center">
                                                 <p className="font-semibold text-slate-700">No Pending Access Requests</p>
-                                                <p className="text-sm text-slate-500 mt-1">Every tenant who recharged or was gifted Speedy Listing credits has been granted access.</p>
+                                                <p className="text-sm text-slate-500 mt-1">Every tenant who recharged Speedy Listing credits has been granted access.</p>
                                             </div>
                                         </div>
                                     ) : (
@@ -733,7 +754,6 @@ const AdminApprovals = () => {
                                             <thead>
                                                 <tr className="border-b border-slate-100 bg-slate-50/70">
                                                     <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Tenant</th>
-                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Source</th>
                                                     <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Plan</th>
                                                     <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Credits</th>
                                                     <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Amount</th>
@@ -746,17 +766,6 @@ const AdminApprovals = () => {
                                                     <tr key={req._id} className="group hover:bg-slate-50/50 transition-colors">
                                                         <td className="py-4 px-6">
                                                             <span className="text-sm font-semibold text-slate-800">{formatTenantLabel(req.tenantId)}</span>
-                                                        </td>
-                                                        <td className="py-4 px-6">
-                                                            {req.source === 'gift' ? (
-                                                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-600 border border-violet-100">
-                                                                    <Gift size={13} /> Gifted
-                                                                </span>
-                                                            ) : (
-                                                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                                                    <CreditCard size={13} /> Paid recharge
-                                                                </span>
-                                                            )}
                                                         </td>
                                                         <td className="py-4 px-6">
                                                             <span className="text-sm font-medium text-slate-700">{req.planTitle || '—'}</span>
