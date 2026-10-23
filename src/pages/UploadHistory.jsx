@@ -263,8 +263,7 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
         canDeleteUploads && !IN_FLIGHT_STATUSES.includes(status) && status !== 'deleted';
 
     const isCostSheetDelete = deleteTarget?.uploadType === 'costsheet';
-    const COST_SHEET_DELETE_PHRASE = 'DELETE COST SHEET';
-    const deleteConfirmValue = isCostSheetDelete ? COST_SHEET_DELETE_PHRASE : deleteTarget?.uploadId;
+    const deleteConfirmValue = deleteTarget?.uploadId;
 
     const openDeleteModal = async (upload) => {
         if (upload.uploadType === 'costsheet') {
@@ -295,13 +294,21 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
             if (isCostSheetDelete) {
                 // Re-check right before the backup so a refused delete never leaves a stray download.
                 await api.get(`/upload/${deleteTarget.uploadId}/delete-check`);
-                // The delete removes the file from GCS, so a failed backup must abort it.
-                const { data } = await api.get(`/upload/${deleteTarget.uploadId}/download`);
-                if (!data.downloadUrl) {
-                    alert('Could not download the cost sheet backup. Nothing was deleted.');
+                // The delete removes the file from storage within milliseconds, so the whole file
+                // must be received here first. A failed fetch aborts before the delete is sent.
+                const { data: backup } = await api.get(`/upload/${deleteTarget.uploadId}/file`, { responseType: 'blob' });
+                if (!backup?.size) {
+                    alert('The cost sheet backup was empty. Nothing was deleted.');
                     return;
                 }
-                window.location.assign(data.downloadUrl);
+                const backupUrl = URL.createObjectURL(backup);
+                const link = document.createElement('a');
+                link.href = backupUrl;
+                link.download = (deleteTarget.fileName || 'cost_sheet_backup.xlsx').split('/').pop();
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(backupUrl), 10000);
             }
             await api.delete(`/upload/${deleteTarget.uploadId}`);
             // Optimistic flip — polling will catch the row when the doc disappears.
