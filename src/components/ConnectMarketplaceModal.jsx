@@ -8,6 +8,8 @@ import MonthYearPicker from './MonthYearPicker';
 import ConfirmModal from './ConfirmModal';
 import { useAuth } from '../AuthContext';
 
+const normalizeMobile = (value) => (value || '').replace(/[\s-]/g, '').replace(/^(\+91|91|0)(?=\d{10}$)/, '');
+
 const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountData, mode, accountPassword, bypassPassword = false, supportedSignInTypes = ['email', 'phone', 'oauth'], onBack, onAutoSyncChange }) => {
     const { user } = useAuth();
     const canToggleAutoSync = ['SuperAdmin', 'SBM'].includes(user?.role);
@@ -146,7 +148,10 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
 
             if (formData.signInType === 'email') {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(formData.email)) throw new Error('Invalid Email Address');
+                const isMobile = marketplaceName === 'Meesho' && /^[6-9]\d{9}$/.test(normalizeMobile(formData.email));
+                if (!isMobile && !emailRegex.test(formData.email)) {
+                    throw new Error(marketplaceName === 'Meesho' ? 'Enter a valid email address or 10-digit mobile number' : 'Invalid Email Address');
+                }
             }
 
             if (mode === 'add' && marketplaceName === 'Meesho' && showAutoSyncFields) {
@@ -203,7 +208,9 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                 name: marketplaceName,
                 credentials: {
                     signInType: formData.signInType,
-                    email: formData.signInType === 'email' ? formData.email : undefined,
+                    email: formData.signInType === 'email'
+                        ? (marketplaceName === 'Meesho' && /^[6-9]\d{9}$/.test(normalizeMobile(formData.email)) ? normalizeMobile(formData.email) : formData.email)
+                        : undefined,
                     phone: formData.signInType === 'phone' ? formData.phone : undefined,
                     password: encryptedPassword || undefined,
                     // If the user selected a sub-account, use that, otherwise use what was in formData
@@ -427,14 +434,14 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
 
                             <div className="space-y-1.5">
                                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">
-                                    {formData.signInType === 'phone' ? 'Phone Number' : 'Email Address'}
+                                    {formData.signInType === 'phone' ? 'Phone Number' : marketplaceName === 'Meesho' ? 'Email or Mobile Number' : 'Email Address'}
                                 </label>
                                 <input
-                                    type={formData.signInType === 'phone' ? 'tel' : 'email'}
+                                    type={formData.signInType === 'phone' ? 'tel' : marketplaceName === 'Meesho' ? 'text' : 'email'}
                                     name={formData.signInType === 'phone' ? 'phone' : 'email'}
                                     value={formData.signInType === 'phone' ? (formData.phone || '') : formData.email}
                                     onChange={handleChange}
-                                    placeholder={formData.signInType === 'phone' ? '10-digit number' : 'name@example.com'}
+                                    placeholder={formData.signInType === 'phone' ? '10-digit number' : marketplaceName === 'Meesho' ? 'name@example.com or 10-digit mobile' : 'name@example.com'}
                                     className="w-full text-sm text-slate-800 bg-white border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 px-4 py-3 rounded-xl outline-none placeholder:text-slate-300 transition-all shadow-sm"
                                 />
                             </div>
@@ -537,10 +544,10 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                         /* ── ADD MODE: credential input ── */
                         <div>
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">{marketplaceName === 'Meesho' ? 'Email or Mobile Number' : 'Email Address'}</label>
                                 <input
-                                    type="email" name="email" value={formData.email} onChange={handleChange}
-                                    placeholder="name@example.com"
+                                    type={marketplaceName === 'Meesho' ? 'text' : 'email'} name="email" value={formData.email} onChange={handleChange}
+                                    placeholder={marketplaceName === 'Meesho' ? 'name@example.com or 10-digit mobile' : 'name@example.com'}
                                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none transition-all placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
                                 />
                             </div>
