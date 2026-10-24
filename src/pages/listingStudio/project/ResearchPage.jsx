@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Search, CheckCircle2, BarChart3, ThumbsUp, AlertTriangle, Lightbulb, LayoutGrid, Heart, ExternalLink, Star, Users, Leaf, DollarSign, Brain, ZoomIn } from 'lucide-react';
 import { listingStudioApi } from '../../../components/listingStudio/api';
 import { amazonUrl } from '../../../components/listingStudio/helpers';
@@ -46,12 +46,26 @@ function AsinLink({ asin, marketplace, className = '' }) {
 
 // Ported from speed-listing's pages/project/ResearchPage.tsx — trigger + results view
 // for the market-research pipeline (Bright Data scrape + OpenAI synthesis).
+
+/** Turns Amazon's bucketed sales text into a unit count, using the lower bound ("4K+" -> 4000,
+ *  "1.5K+" -> 1500, "2,000+" -> 2000). Returns undefined when there's no usable number. */
+function parseBoughtCount(text) {
+  const m = String(text ?? '').match(/([\d.,]+)\s*([KkMm])?\+?/);
+  if (!m) return undefined;
+  const base = parseFloat(m[1].replace(/,/g, ''));
+  if (!isFinite(base)) return undefined;
+  const multiplier = { k: 1_000, m: 1_000_000 }[(m[2] || '').toLowerCase()] ?? 1;
+  return base * multiplier;
+}
+
+
 export default function ResearchPage() {
   const { project, job, jobRunning, watchJob, setResearchContinue } = useProjectCtx();
   const r = project.research;
   const meta = project.researchMeta;
   const isAwaitingSelection = job?.status === 'awaiting_selection';
   const [lightboxSrc, setLightboxSrc] = useState(null);
+
 
   // A concept's A+ overlay image lives at modules[].images[].path, keyed by module type/slot —
   // same lookup AplusPage uses, kept local here since this is the only other place a concept's
@@ -72,18 +86,27 @@ export default function ResearchPage() {
   // r.competitorInsights (LLM-synthesized) has no brand field — pull it from the raw
   // scraped competitors saved alongside research, keyed by ASIN.
   const brandByAsin = Object.fromEntries((project.competitors ?? []).map((c) => [c.asin, c.brand]));
-  // Market share proxy: each competitor's share of reviews among the analyzed competitor
-  // set (reviewsCount isn't in r.competitorInsights, only on the raw stored competitors).
-  const reviewsCountByAsin = Object.fromEntries((project.competitors ?? []).map((c) => [c.asin, c.reviewsCount]));
-  const totalCompetitorReviews = r
-    ? r.competitorInsights.reduce((sum, c) => sum + (reviewsCountByAsin[c.asin] || 0), 0)
+  // Amazon's bucketed monthly sales text per competitor, e.g. "4K+ bought in past month".
+  const boughtByAsin = Object.fromEntries((project.competitors ?? []).map((c) => [c.asin, c.boughtPastMonth]));
+  // Market share: each competitor's share of the analyzed set's total monthly units (lower-bound count).
+  const unitsByAsin = Object.fromEntries(
+    (project.competitors ?? []).map((c) => [c.asin, parseBoughtCount(c.boughtPastMonth) ?? 0]),
+  );
+  // Numeric price per ASIN, from the saved competitors (r.competitorInsights stores it as text with a currency sign).
+  const priceByAsin = Object.fromEntries((project.competitors ?? []).map((c) => [c.asin, Number(c.price)]));
+  const totalCompetitorUnits = r
+    ? r.competitorInsights.reduce((sum, c) => sum + (unitsByAsin[c.asin] || 0), 0)
     : 0;
 
   // Pricing card's price-ladder strip — competitor prices plus this project's own planned
   // price (project.input.price), highlighted. That field is optional and inconsistently
   // formatted (a bare number from manual campaign creation, or "USD 24.99" from ASIN import),
   // so it's parsed defensively and only shown when a numeric value can be recovered.
-  const priceCurrency = (r?.competitorInsights?.[0]?.price ?? '').match(/^[^0-9.]+/)?.[0] ?? '';
+  // Currency symbol is sniffed off the competitor price text, taking the first record that
+  // actually carries one — any single record can come back as a bare number, and sampling
+  // only the first would then leave every derived price below unprefixed.
+  const priceCurrency =
+    (r?.competitorInsights ?? []).map((c) => String(c.price ?? '').match(/^[^0-9.]+/)?.[0]).find(Boolean) ?? '';
   const ownPriceRaw = project.input?.price;
   const ownPriceValue = ownPriceRaw !== undefined ? parseFloat(String(ownPriceRaw).replace(/[^0-9.]/g, '')) : NaN;
   const priceLadder = r
@@ -302,7 +325,9 @@ export default function ResearchPage() {
                     <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Price</th>
                     <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Rating</th>
                     <th className="text-left font-semibold text-slate-700 py-3 px-4 w-[32%] border border-slate-200">Strengths</th>
-                    <th className="text-left font-semibold text-slate-700 py-3 px-4 w-[20%] border border-slate-200">Market Share (depends on reviews)</th>
+                    <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Bought past month</th>
+                    <th className="text-left font-semibold text-slate-700 py-3 px-4 border border-slate-200">Approx monthly sales</th>
+                    <th className="text-left font-semibold text-slate-700 py-3 px-4 w-[20%] border border-slate-200">Market Share (depends on bought past month)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -329,9 +354,19 @@ export default function ResearchPage() {
                         </ul>
                       </td>
                       <td className="py-4 px-4 border border-slate-200">
+                        {boughtByAsin[c.asin] ? boughtByAsin[c.asin].replace(/\s*bought.*$/i, '') : <span className={MUTED}>—</span>}
+                      </td>
+                      <td className="py-4 px-4 text-slate-700 whitespace-nowrap border border-slate-200 tabular-nums">
                         {(() => {
-                          const count = reviewsCountByAsin[c.asin];
-                          const pct = count && totalCompetitorReviews > 0 ? (count / totalCompetitorReviews) * 100 : null;
+                          const units = unitsByAsin[c.asin];
+                          const price = priceByAsin[c.asin];
+                          return units && price > 0 ? `${priceCurrency}${Math.round(units * price).toLocaleString('en-US')}` : <span className={MUTED}>—</span>;
+                        })()}
+                      </td>
+                      <td className="py-4 px-4 border border-slate-200">
+                        {(() => {
+                          const units = unitsByAsin[c.asin];
+                          const pct = units && totalCompetitorUnits > 0 ? (units / totalCompetitorUnits) * 100 : null;
                           return pct === null ? <span className={MUTED}>—</span> : <span className="text-slate-700 font-medium">{pct.toFixed(1)}%</span>;
                         })()}
                       </td>
@@ -433,6 +468,51 @@ export default function ResearchPage() {
             </div>
           )}
 
+          {meta?.topKeywords?.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-card mb-4">
+              <h2 className={`${ICON_LABEL} ${CARD_TITLE}`}>
+                <Search size={16} className="text-brand-600" /> Top keywords by monthly searches
+              </h2>
+              <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-10">
+                {meta.topKeywords.map((k, i) => (
+                  <li key={k.keyword} className="flex items-center gap-2.5 py-2.5 border-b border-slate-100">
+                    <span className="w-5 text-sm font-semibold text-slate-400 tabular-nums">{i + 1}</span>
+                    <span className="flex-1 min-w-0 truncate text-sm font-medium text-slate-800" title={k.keyword}>
+                      {k.keyword}
+                    </span>
+                    <span className="text-sm text-right tabular-nums font-semibold text-slate-900">
+                      {k.searchVolume.toLocaleString('en-US')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Below-300-searches keywords; the backend only fills this when fewer than 10 top keywords exist. */}
+          {meta?.suggestedKeywords?.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-card mb-4">
+              <h2 className={`${ICON_LABEL} ${CARD_TITLE}`}>
+                <Lightbulb size={16} className="text-amber-500" /> Suggested keywords
+              </h2>
+              <p className={`${SMALL} ${MUTED} mt-1`}>
+                Lower-volume terms — worth weaving in, but less proven demand.
+              </p>
+              <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-10">
+                {meta.suggestedKeywords.map((k) => (
+                  <li key={k.keyword} className="flex items-center gap-2.5 py-2.5 border-b border-slate-100">
+                    <span className="flex-1 min-w-0 truncate text-sm font-medium text-slate-700" title={k.keyword}>
+                      {k.keyword}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Shown only when DataForSEO produced no top keywords; otherwise the top-10 card above is the keyword list. */}
+          {!(meta?.topKeywords?.length > 0) && (
+
           <div className="bg-brand-50 border border-brand-100 rounded-2xl p-5 shadow-card mb-4">
             <h2 className={`${ICON_LABEL} ${CARD_TITLE}`}>
               <Search size={16} className="text-brand-600" /> Keywords &amp; guidance
@@ -458,13 +538,14 @@ export default function ResearchPage() {
                           {k.keyword}
                         </span>
                       </td>
-                      <td className="py-3.5 align-top text-slate-700">{k.rationale}</td>
+                      <td className="py-3.5 align-top text-slate-700">{k.rationale || <span className="text-slate-400">—</span>}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
+           )}
 
           {buyerPsychologyText && (
             <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4 shadow-card mb-4">

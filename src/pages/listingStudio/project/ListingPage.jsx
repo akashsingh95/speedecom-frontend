@@ -1,14 +1,15 @@
 /* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Image as ImageIcon, X, Pencil, Eye } from 'lucide-react';
+import { Image as ImageIcon, X, Pencil, Eye, Highlighter } from 'lucide-react';
 import { toast } from 'sonner';
 import { listingStudioApi, byteLen, uploadImagesViaSignedUrl } from '../../../components/listingStudio/api';
 import { validateUploadFiles } from '../../../components/listingStudio/helpers';
 import { useProjectCtx } from '../../../components/listingStudio/context';
 import { Toast } from '../../../components/listingStudio/ui/Toast';
-import { FormField } from '../../../components/listingStudio/ui/FormField';
+import { KeywordField, KeywordHighlightLegend } from '../../../components/listingStudio/ui/KeywordField';
+import { collectKeywordVolumes, countKeywordUses } from '../../../components/listingStudio/keywordHighlights';
 import { GeneratedImageModal } from '../../../components/listingStudio/ui/GeneratedImageModal';
 import { ImageLightbox } from '../../../components/listingStudio/ui/ImageLightbox';
 import { AmazonPreviewPanel, sortedGeneratedImages } from '../../../components/listingStudio/AmazonPreviewPanel';
@@ -53,6 +54,19 @@ export default function ListingPage({ startInPreview = false }) {
   const [draft, setDraft] = useState(project.listing ?? null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [highlightKeywords, setHighlightKeywords] = useState(true);
+
+  // The research keywords this project was built from, and how often each one survived into the
+  // copy currently in the editor — recomputed from the draft, so the counts track live edits.
+  const keywords = useMemo(() => collectKeywordVolumes(project), [project]);
+  const keywordUsage = useMemo(
+    () =>
+      countKeywordUses(
+        draft ? [draft.title, ...draft.bullets, draft.description, draft.backendKeywords] : [],
+        keywords,
+      ),
+    [draft, keywords],
+  );
 
   useEffect(() => {
     if (project.listing && !dirty) setDraft(JSON.parse(JSON.stringify(project.listing)));
@@ -284,20 +298,41 @@ export default function ListingPage({ startInPreview = false }) {
             <h2 className={`${CARD_TITLE} flex items-center gap-2`}>
               Listing copy {dirty && <span className="text-[11px] px-2 py-0.5 rounded-full border border-amber-600 bg-amber-50 text-amber-600">unsaved</span>}
             </h2>
-            <button type="button" className={BTN_PRIMARY} onClick={() => void saveListing()} disabled={!dirty || saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
+            <div className="flex items-center gap-2">
+              {keywords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setHighlightKeywords((on) => !on)}
+                  aria-pressed={highlightKeywords}
+                  title="Shade the research keywords found in this copy"
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    highlightKeywords
+                      ? 'border-blue-300 bg-blue-100 text-blue-800 hover:bg-blue-200'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Highlighter size={15} /> {highlightKeywords ? 'Keywords on' : 'Keywords off'}
+                </button>
+              )}
+              <button type="button" className={BTN_PRIMARY} onClick={() => void saveListing()} disabled={!dirty || saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
           </div>
-          <FormField
+          {highlightKeywords && keywords.length > 0 && <KeywordHighlightLegend />}
+          <KeywordField
             label="Title"
             value={draft.title}
             onChange={(e) => setField('title', e.target.value)}
             counter={{ value: draft.title.length, max: 200 }}
             invalid={draft.title.length > 200}
+            keywords={keywords}
+            highlight={highlightKeywords}
+            usage={keywordUsage}
           />
           <span className={`${MUTED} text-xs`}>Bullets</span>
           {draft.bullets.map((b, i) => (
-            <FormField
+            <KeywordField
               key={i}
               label=""
               multiline
@@ -306,16 +341,22 @@ export default function ListingPage({ startInPreview = false }) {
               onChange={(e) => setBullet(i, e.target.value)}
               counter={{ value: b.length, max: 250 }}
               invalid={b.length > 250}
+              keywords={keywords}
+              highlight={highlightKeywords}
+              usage={keywordUsage}
             />
           ))}
-          <FormField
+          <KeywordField
             label="Description"
             multiline
             rows={5}
             value={draft.description}
             onChange={(e) => setField('description', e.target.value)}
+            keywords={keywords}
+            highlight={highlightKeywords}
+            usage={keywordUsage}
           />
-          <FormField
+          <KeywordField
             label="Backend search terms"
             multiline
             rows={2}
@@ -323,6 +364,9 @@ export default function ListingPage({ startInPreview = false }) {
             onChange={(e) => setField('backendKeywords', e.target.value)}
             counter={{ value: byteLen(draft.backendKeywords), max: 249 }}
             invalid={byteLen(draft.backendKeywords) > 249}
+            keywords={keywords}
+            highlight={highlightKeywords}
+            usage={keywordUsage}
           />
         </div>
       )}
