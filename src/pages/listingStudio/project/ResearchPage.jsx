@@ -496,7 +496,7 @@ export default function ResearchPage() {
                 <Lightbulb size={16} className="text-amber-500" /> Suggested keywords
               </h2>
               <p className={`${SMALL} ${MUTED} mt-1`}>
-                Lower-volume terms — worth weaving in, but less proven demand.
+                Lower-volume terms — worth weaving in.
               </p>
               <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-10">
                 {meta.suggestedKeywords.map((k) => (
