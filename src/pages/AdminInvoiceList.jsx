@@ -496,13 +496,66 @@ const AdminInvoiceList = () => {
         }
     }, [editingCredit, editCreditAmount, editCreditNote, editCreditType, editCreditSelectedTenant, editCreditDate, creditPagination.page, debouncedCreditSearch, creditTypeFilter, creditStartDate, creditEndDate, creditAmountMin, creditAmountMax, creditStatusFilter, creditVerifiedFilter]);
 
-    // Reconciliation rows are always ₹; Listing Studio rows are credits, or a raw free-image/
-    // free-video count for gift rows that never touch the credit lot at all.
-    const describeCreditAmount = (tx) => {
-        if (tx.category !== 'LISTING_STUDIO') return `₹${tx.amount}`;
-        if (tx.giftKind === 'freeImages') return `${tx.editableAmount} free image${tx.editableAmount === 1 ? '' : 's'}`;
-        if (tx.giftKind === 'freeVideos') return `${tx.editableAmount} free video${tx.editableAmount === 1 ? '' : 's'}`;
-        return `${tx.editableAmount} credits`;
+    // A credit row's amount as { unit, value }, for the Amount cell and the Delete/Cancel dialogs.
+    // The server decides ₹ vs credits (displayAmount/displayUnit — the same figure it sorts,
+    // filters and exports by); this only renders it. Free image/video gift rows have no amount of
+    // their own, so they describe their count instead.
+    const getRowAmount = (tx) => {
+        if (tx.giftKind === 'freeImages') return { unit: 'FREE_IMAGES', value: tx.editableAmount };
+        if (tx.giftKind === 'freeVideos') return { unit: 'FREE_VIDEOS', value: tx.editableAmount };
+        return { unit: tx.displayUnit, value: tx.displayAmount };
+    };
+
+    // What the Edit modal's amount field edits. Not getRowAmount: the server decides which unit it
+    // reads a submitted amount in (editableUnit/editableAmount), and for a Speedy Listing row that
+    // is not always the unit the Amount column shows it in.
+    const getRowEditAmount = (tx) => (tx.category === 'LISTING_STUDIO'
+        ? { unit: tx.editableUnit, value: tx.editableAmount }
+        : { unit: 'INR', value: tx.amount });
+
+    const CREDIT_UNIT_LABEL = { INR: 'Amount (₹)', CREDITS: 'Credits', FREE_IMAGES: 'Free Images (count)', FREE_VIDEOS: 'Free Videos (count)' };
+
+    const formatRowAmount = ({ unit, value }) => {
+        const n = Number(value);
+        if (unit === 'INR') return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        if (unit === 'FREE_IMAGES') return `${n} free image${n === 1 ? '' : 's'}`;
+        if (unit === 'FREE_VIDEOS') return `${n} free video${n === 1 ? '' : 's'}`;
+        return `${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })} credits`;
+    };
+
+    const describeCreditAmount = (tx) => formatRowAmount(getRowAmount(tx));
+
+    const creditEditField = (tx) => {
+        if (!tx) return { label: CREDIT_UNIT_LABEL.INR, value: '' };
+        const { unit, value } = getRowEditAmount(tx);
+        return { label: CREDIT_UNIT_LABEL[unit], value };
+    };
+
+    // The Amount cell, shared by the Free Trial Credits and Admin Gift tabs; the figure itself
+    // comes from getRowAmount. showAllowance (Admin Gift): also list any free image/video
+    // allowance, since for some gift rows that allowance is the whole grant. Such a row has no
+    // amount of its own, so it gets the allowance line in place of the dash.
+    const renderCreditAmount = (tx, showAllowance) => {
+        const sign = tx.isDeduction ? '-' : '+';
+        const hasAllowance = tx.freeImages > 0 || tx.freeVideos > 0;
+        const hasValue = tx.amount > 0 || !hasAllowance;
+        const allowanceShown = showAllowance && hasAllowance;
+
+        return (
+            <>
+                {hasValue && (
+                    <span className={`text-sm font-semibold whitespace-nowrap ${tx.isDeduction ? 'text-red-500' : 'text-green-600'}`}>
+                        {sign}{describeCreditAmount(tx)}
+                    </span>
+                )}
+                {!hasValue && !allowanceShown && <span className="text-sm text-slate-400">-</span>}
+                {allowanceShown && (
+                    <div className="text-xs text-slate-500 mt-0.5">
+                        {[tx.freeImages > 0 && `+${tx.freeImages} free image${tx.freeImages !== 1 ? 's' : ''}`, tx.freeVideos > 0 && `+${tx.freeVideos} free video${tx.freeVideos !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
+                    </div>
+                )}
+            </>
+        );
     };
 
     const handleDeleteCreditTransaction = (tx) => {
@@ -2738,21 +2791,7 @@ const AdminInvoiceList = () => {
                                                             })()}
                                                         </td>
                                                         <td className="py-3 px-3 text-right align-middle">
-                                                            {(tx.amount > 0 || !(tx.freeImages || tx.freeVideos)) && (
-                                                                <span className={`text-sm font-semibold whitespace-nowrap ${tx.isDeduction ? 'text-red-500' : 'text-green-600'}`}>
-                                                                    {tx.unit === 'CREDITS'
-                                                                        ? `+${Number(tx.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })} credits`
-                                                                        : <>{tx.isDeduction ? '-' : '+'}&#8377;{Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</>}
-                                                                </span>
-                                                            )}
-                                                            {tx.unit === 'CREDITS' && tx.rupeeAmount > 0 && (
-                                                                <div className="text-xs text-slate-500 mt-0.5">&#8377;{tx.rupeeAmount.toLocaleString('en-IN')} paid</div>
-                                                            )}
-                                                            {(tx.freeImages > 0 || tx.freeVideos > 0) && (
-                                                                <div className="text-xs text-slate-500 mt-0.5">
-                                                                    {[tx.freeImages > 0 && `+${tx.freeImages} free image${tx.freeImages !== 1 ? 's' : ''}`, tx.freeVideos > 0 && `+${tx.freeVideos} free video${tx.freeVideos !== 1 ? 's' : ''}`].filter(Boolean).join(' · ')}
-                                                                </div>
-                                                            )}
+                                                            {renderCreditAmount(tx, activeTab === 'adminGift')}
                                                         </td>
                                                         <td className="py-3 px-3 align-middle">
                                                             <span className="text-xs text-slate-600 truncate block max-w-[110px]">{tx.note || '-'}</span>
@@ -3529,9 +3568,7 @@ const AdminInvoiceList = () => {
                                     <label className={`block text-sm font-semibold mb-2 ${
                                         activeTab === 'adminGift' ? 'text-purple-900' : 'text-orange-900'
                                     }`}>
-                                        {editingCredit?.category === 'LISTING_STUDIO'
-                                            ? (editingCredit?.giftKind === 'freeImages' ? 'Free Images (count)' : editingCredit?.giftKind === 'freeVideos' ? 'Free Videos (count)' : 'Credits')
-                                            : 'Amount (₹)'}
+                                        {creditEditField(editingCredit).label}
                                     </label>
                                     <input
                                         type="number"
@@ -3901,7 +3938,7 @@ const AdminInvoiceList = () => {
                                     setOpenCreditMenuId(null);
                                     setCreditMenuPosition(null);
                                     setEditingCredit(menuTx);
-                                    setEditCreditAmount(menuTx.category === 'LISTING_STUDIO' ? menuTx.editableAmount : menuTx.amount);
+                                    setEditCreditAmount(creditEditField(menuTx).value);
                                     setEditCreditNote(menuTx.note || '');
                                     setEditCreditType(menuTx.type);
                                     setEditCreditDate(getLocalDateInputValue(menuTx.transactionDate || menuTx.createdAt));
