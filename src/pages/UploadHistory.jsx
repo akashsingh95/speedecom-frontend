@@ -252,7 +252,9 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
             myntra_payments: 'Myntra Payments',
             myntra_orders: 'Myntra Orders',
             myntra_returns_seller: 'Myntra Returns (Seller)',
-            myntra_returns_delivery: 'Myntra Returns (Delivery)'
+            myntra_returns_delivery: 'Myntra Returns (Delivery)',
+            snapdeal_orders: 'Snapdeal Orders',
+            snapdeal_payments: 'Snapdeal Payments'
         };
         return typeLabels[type] || type;
     };
