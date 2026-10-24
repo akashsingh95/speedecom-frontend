@@ -1,12 +1,13 @@
 /* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
    JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronDown, Check, ExternalLink, History, Inbox, Palette, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Check, ExternalLink, History, Inbox, Palette, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
 import { listingStudioApi } from '../../components/listingStudio/api';
 import { amazonUrl, campaignStatus, formatRelativeTime, marketplaceCode } from '../../components/listingStudio/helpers';
 import { useTenantOptions } from '../../components/listingStudio/useTenantOptions';
+import { TenantCombobox } from '../../components/listingStudio/TenantCombobox';
 import { usePaginatedProjects } from '../../components/listingStudio/useProjects';
 import { Modal } from '../../components/listingStudio/ui/Modal';
 import { StatTile } from '../../components/listingStudio/ui/StatTile';
@@ -45,28 +46,25 @@ export default function ProjectsPage() {
   const { user, isImpersonating } = useAuth();
   const isCrossTenant = (user?.role === 'SuperAdmin' || user?.role === 'SBM') && !isImpersonating;
   const [error, setError] = useState('');
-  const [tenantIdSearch, setTenantIdSearch] = useState('');
-  const [showTenantDropdown, setShowTenantDropdown] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [matchedTenant, setMatchedTenant] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [nameSearch, setNameSearch] = useState('');
   const [debouncedNameSearch, setDebouncedNameSearch] = useState('');
-  const optionRefs = useRef([]);
   const [page, setPage] = useState(1);
   const navigate = useNavigate();
 
-  // Only tenants with a numeric tenantId assigned can be searched by it.
+  // The filter only offers tenants that have received Speedy Listing credits and have a
+  // numeric tenantId to search by. tenantById keeps every tenant, since free-allowance
+  // campaigns from uncredited tenants still need their card badge.
   const tenantOptionsRaw = useTenantOptions();
-  const tenantOptions = tenantOptionsRaw.filter((t) => t.tenantId != null);
-  const tenantById = new Map(tenantOptionsRaw.map((t) => [t.id, t]));
-  const matchedTenant = tenantOptions.find((t) => String(t.tenantId) === tenantIdSearch.trim());
-  const query = tenantIdSearch.trim().toLowerCase();
-  const filteredTenantOptions = query
-    ? tenantOptions.filter((t) => String(t.tenantId).includes(query) || t.name.toLowerCase().includes(query))
-    : tenantOptions;
+  const tenantOptions = useMemo(
+    () => tenantOptionsRaw.filter((t) => t.tenantId != null && t.listingStudioCredited),
+    [tenantOptionsRaw]
+  );
+  const tenantById = useMemo(() => new Map(tenantOptionsRaw.map((t) => [t.id, t])), [tenantOptionsRaw]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedNameSearch(nameSearch.trim()), 300);
@@ -94,14 +92,6 @@ export default function ProjectsPage() {
   useEffect(() => {
     if (fetchError) setError(fetchError);
   }, [fetchError]);
-
-  useEffect(() => {
-    setHighlightedIndex(-1);
-  }, [tenantIdSearch, showTenantDropdown]);
-
-  useEffect(() => {
-    optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [highlightedIndex]);
 
   const requestDelete = (e, project) => {
     e.preventDefault();
@@ -154,27 +144,6 @@ export default function ProjectsPage() {
     }
   };
 
-  const selectTenant = (t) => {
-    setTenantIdSearch(String(t.tenantId));
-    setShowTenantDropdown(false);
-  };
-
-  const onTenantSearchKeyDown = (e) => {
-    if (!showTenantDropdown || filteredTenantOptions.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightedIndex((i) => (i + 1) % filteredTenantOptions.length);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightedIndex((i) => (i <= 0 ? filteredTenantOptions.length - 1 : i - 1));
-    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
-      e.preventDefault();
-      selectTenant(filteredTenantOptions[highlightedIndex]);
-    } else if (e.key === 'Escape') {
-      setShowTenantDropdown(false);
-    }
-  };
-
   return (
     <div>
       <div className={PAGE_HEAD}>
@@ -223,54 +192,7 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {tenantOptions.length > 0 && (
-        <div className="flex items-center gap-2.5 -mt-2 mb-4">
-          <div className="relative w-[260px]">
-            <input
-              type="text"
-              placeholder="Search by tenant ID…"
-              value={tenantIdSearch}
-              className={`${FIELD_INPUT} w-full pr-8`}
-              onChange={(e) => {
-                setTenantIdSearch(e.target.value);
-                setShowTenantDropdown(true);
-              }}
-              onFocus={() => setShowTenantDropdown(true)}
-              onBlur={() => setTimeout(() => setShowTenantDropdown(false), 120)}
-              onKeyDown={onTenantSearchKeyDown}
-            />
-            <ChevronDown size={16} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-            {showTenantDropdown && filteredTenantOptions.length > 0 && (
-              <div
-                className="absolute top-[calc(100%+4px)] left-0 right-0 z-30 bg-white border border-slate-200 rounded-lg shadow-md max-h-[280px] overflow-y-auto p-1"
-                onMouseDown={(e) => e.preventDefault()}
-              >
-                {filteredTenantOptions.map((t, i) => (
-                  <button
-                    key={t.id}
-                    ref={(el) => (optionRefs.current[i] = el)}
-                    type="button"
-                    className={`flex items-baseline gap-2 w-full text-left px-2.5 py-2 rounded-md text-[13px] text-slate-900 ${
-                      i === highlightedIndex ? 'bg-brand-50' : 'hover:bg-brand-50'
-                    }`}
-                    onMouseEnter={() => setHighlightedIndex(i)}
-                    onClick={() => selectTenant(t)}
-                  >
-                    <span className="font-semibold text-brand-600 flex-shrink-0">#{t.tenantId}</span>
-                    <span className="text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap">{t.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {tenantIdSearch && !matchedTenant && <p className="text-slate-500 text-xs">No tenant with that ID — showing all tenants.</p>}
-          {matchedTenant && (
-            <button type="button" className={BTN} onClick={() => setTenantIdSearch('')}>
-              Clear ({matchedTenant.name})
-            </button>
-          )}
-        </div>
-      )}
+      {tenantOptions.length > 0 && <TenantCombobox options={tenantOptions} onChange={setMatchedTenant} />}
 
       {error && <p className="text-red-600">{error}</p>}
 
