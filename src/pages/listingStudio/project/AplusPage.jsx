@@ -49,6 +49,10 @@ export default function AplusPage() {
   // number of times (no "already used" lock, removed by design), so this is always available,
   // never gated on whether a concept already exists for a given angle.
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Busy only while the start request is in flight, not for the whole job: 'aplus' isn't an
+  // exclusive job kind (models/Job.js EXCLUSIVE_KINDS), so another batch for other angles can be
+  // started while one is still generating.
+  const [aplusStarting, setAplusStarting] = useState(false);
   const strategy = project.aplus?.strategy?.angles ? project.aplus.strategy : undefined;
   // Concept ids currently generating their image-text-overlay — a Set, not a single flag,
   // since generation is deliberately unguarded server-side (pipeline/moduleImage.js: "a
@@ -147,9 +151,14 @@ export default function AplusPage() {
    *  project-level job bar shows progress, and the new concept(s) appear via the existing
    *  polling machinery once done, no extra polling needed here. */
   const generateConcepts = async (selectedAngleNames) => {
-    await listingStudioApi.startAplus(project.id, selectedAngleNames);
-    watchJob();
-    setPickerOpen(false);
+    setAplusStarting(true);
+    try {
+      await listingStudioApi.startAplus(project.id, selectedAngleNames);
+      watchJob();
+      setPickerOpen(false);
+    } finally {
+      setAplusStarting(false);
+    }
   };
 
   const generateOverlay = async (concept) => {
@@ -502,7 +511,7 @@ useEffect(() => {
                 key: 'standard',
                 label: (n) => `Generate A+ content for ${n} angle${n === 1 ? '' : 's'}`,
                 onGenerate: generateConcepts,
-                busy: jobRunning,
+                busy: aplusStarting,
                 costNote: {
                   type: 'deferred',
                   imageCost: creditRates?.imageCost ?? null,

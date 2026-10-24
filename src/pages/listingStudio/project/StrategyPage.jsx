@@ -38,13 +38,17 @@ import {
 /** Ported from speed-listing's pages/project/StrategyPage.tsx. */
 export default function StrategyPage() {
   const navigate = useNavigate();
-  const { project, job, jobRunning, watchJob, creditRates } = useProjectCtx();
+  const { project, jobRunning, watchJob, creditRates } = useProjectCtx();
   // Older stored projects still have the previous {positioning, toneOfVoice, ...} shape.
   const strategy = project.aplus?.strategy?.angles ? project.aplus.strategy : undefined;
 
   const researchDone = !!project.research;
 
   const [premiumStarting, setPremiumStarting] = useState(false);
+  // Busy only while the start request is in flight, not for the whole job: 'aplus' isn't an
+  // exclusive job kind (models/Job.js EXCLUSIVE_KINDS), so another batch for other angles can be
+  // started while one is still generating.
+  const [aplusStarting, setAplusStarting] = useState(false);
 
   const generate = async () => {
     try {
@@ -56,8 +60,13 @@ export default function StrategyPage() {
   };
 
   const generateMore = async (selectedAngleNames) => {
-    await listingStudioApi.startAplus(project.id, selectedAngleNames);
-    watchJob();
+    setAplusStarting(true);
+    try {
+      await listingStudioApi.startAplus(project.id, selectedAngleNames);
+      watchJob();
+    } finally {
+      setAplusStarting(false);
+    }
   };
 
   const generatePremiumAplus = async (selectedAngleNames) => {
@@ -204,7 +213,7 @@ export default function StrategyPage() {
                 key: 'standard',
                 label: (n) => `Generate A+ content for ${n} angle${n === 1 ? '' : 's'}`,
                 onGenerate: generateMore,
-                busy: jobRunning && job?.kind === 'aplus',
+                busy: aplusStarting,
                 costNote: {
                   type: 'deferred',
                   imageCost: creditRates?.imageCost ?? null,
