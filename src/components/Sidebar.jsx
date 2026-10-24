@@ -18,7 +18,7 @@ const Sidebar = () => {
     if (['SuperAdmin', 'SBM'].includes(user?.role) && !isImpersonating) {
         menuItems = [];
         // Approvals (if SuperAdmin or SBM with any approval-related permission)
-        if (user?.role === 'SuperAdmin' || user?.permissions?.approveTenants || user?.permissions?.approveSubscriptions || user?.permissions?.rejectRegistrations) {
+        if (user?.role === 'SuperAdmin' || user?.permissions?.approveTenants || user?.permissions?.approveSubscriptions || user?.permissions?.rejectRegistrations || user?.permissions?.approveListingStudioAccess) {
             menuItems.push({ name: 'Approvals', icon: CheckCircle, path: '/admin/approvals' });
         }
         // Tenants - SuperAdmin always, SBM if they have viewTenants permission
@@ -60,14 +60,22 @@ const Sidebar = () => {
             { name: 'Uploads', icon: Upload, path: '/uploads' },
             { name: 'Downloads', icon: Download, path: '/downloads' },
             { name: 'Scan Returns', icon: ScanLine, path: '/returns/scan' },
-            // Speedy Listing — tenant-configurable via LISTING_STUDIO_ALLOWED_TENANT_IDS
-            // (defaults to enabled when that env var is unset). Hidden while impersonationSyncing
-            // is true: right after startImpersonating flips isImpersonating, listingStudioEnabled
-            // still belongs to the impersonator's own account until the profile refetch resolves
-            // (see ListingStudioGuard in App.jsx, which this mirrors) — omit the item rather than
+            // Speedy Listing — per-tenant access on Tenant.listingStudio.status, surfaced as
+            // listingStudioStatus by /auth/profile. 'pending' (paid or gifted, waiting on
+            // SuperAdmin approval) still shows the item, disabled with a Pending pill: hiding it
+            // would read as a failed purchase. Hidden while impersonationSyncing is true: right
+            // after startImpersonating flips isImpersonating, the flag still belongs to the
+            // impersonator's own account until the profile refetch resolves (see
+            // ListingStudioGuard in App.jsx, which this mirrors) — omit the item rather than
             // flash it in/out on a stale value.
-            ...(user?.listingStudioEnabled !== false && !(isImpersonating && impersonationSyncing)
-              ? [{ name: 'Speedy Listing', icon: PackageOpen, path: '/listing-studio' }]
+            ...((user?.listingStudioEnabled !== false || user?.listingStudioStatus === 'pending')
+              && !(isImpersonating && impersonationSyncing)
+              ? [{
+                  name: 'Speedy Listing',
+                  icon: PackageOpen,
+                  path: '/listing-studio',
+                  pending: user?.listingStudioEnabled === false && user?.listingStudioStatus === 'pending',
+                }]
               : []),
             { name: 'Support', icon: LifeBuoy, path: '/support' }
         ];
@@ -101,6 +109,8 @@ const Sidebar = () => {
         }
     }
 
+    // Awaiting approval (item.pending) still links through: ListingStudioGuard renders the
+    // ListingStudioPending screen for that route, which explains the wait.
     const NavItem = ({ item, isActive }) => (
         <Link
             to={item.path}
@@ -115,7 +125,14 @@ const Sidebar = () => {
                 className={`transition-colors duration-200 ${isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600'}`}
             />
             <span className={isActive ? 'font-semibold tracking-wide' : ''}>{item.name}</span>
-            {isActive && (
+            {item.pending ? (
+                <span
+                    className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100"
+                    title="Awaiting SuperAdmin approval"
+                >
+                    Pending
+                </span>
+            ) : isActive && (
                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-600 shadow-sm"></div>
             )}
         </Link>

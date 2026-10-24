@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import DashboardLayout from '../components/DashboardLayout';
-import { CheckCircle, Clock, Search, ShieldCheck, CreditCard, XCircle, Loader2, Building, RefreshCw, ClipboardCheck, Users, AlertTriangle, TrendingUp, Settings, Trash2 } from 'lucide-react';
+import { CheckCircle, Clock, Search, ShieldCheck, CreditCard, XCircle, Loader2, Building, RefreshCw, ClipboardCheck, Users, AlertTriangle, TrendingUp, Settings, Trash2, PackageOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -16,11 +16,13 @@ const AdminApprovals = () => {
     const canApproveTenants = user?.role === 'SuperAdmin' || user?.permissions?.approveTenants;
     const canApproveSubscriptions = user?.role === 'SuperAdmin' || user?.permissions?.approveSubscriptions;
     const canRejectRegistrations = user?.role === 'SuperAdmin' || user?.permissions?.rejectRegistrations;
+    const canApproveListingStudio = user?.role === 'SuperAdmin' || user?.permissions?.approveListingStudioAccess;
     const isSuperAdmin = user?.role === 'SuperAdmin';
 
     const [activeTab, setActiveTab] = useState(
         canApproveTenants ? 'tenants' : 
         canApproveSubscriptions ? 'subscriptions' : 
+        canApproveListingStudio ? 'listing_studio' :
         canRejectRegistrations ? 'rejected' : 'tenants'
     );
 
@@ -39,6 +41,13 @@ const AdminApprovals = () => {
     const [subsLoading, setSubsLoading] = useState(canApproveSubscriptions);
     const [subActionLoading, setSubActionLoading] = useState(null);
 
+    // Speedy Listing access State
+    const [pendingListingStudio, setPendingListingStudio] = useState([]);
+    const [listingStudioLoading, setListingStudioLoading] = useState(canApproveListingStudio);
+    // Kept apart from an empty list: a failed fetch must not read as "nothing to approve".
+    const [listingStudioError, setListingStudioError] = useState(false);
+    const [listingStudioActionLoading, setListingStudioActionLoading] = useState(null);
+
     // Confirmation Modal State
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false,
@@ -56,16 +65,17 @@ const AdminApprovals = () => {
 
     // Redirect SBM with no approval permissions away from this page
     useEffect(() => {
-        if (user?.role === 'SBM' && !canApproveTenants && !canApproveSubscriptions && !canRejectRegistrations) {
+        if (user?.role === 'SBM' && !canApproveTenants && !canApproveSubscriptions && !canRejectRegistrations && !canApproveListingStudio) {
             navigate('/profile', { replace: true });
         }
-    }, [user, navigate, canApproveTenants, canApproveSubscriptions, canRejectRegistrations]);
+    }, [user, navigate, canApproveTenants, canApproveSubscriptions, canRejectRegistrations, canApproveListingStudio]);
 
     useEffect(() => {
         if (canApproveTenants) fetchPendingTenants();
         if (canRejectRegistrations) fetchRejectedTenants();
         if (canApproveSubscriptions) fetchPendingSubscriptions();
-    }, [canApproveTenants, canRejectRegistrations, canApproveSubscriptions]);
+        if (canApproveListingStudio) fetchPendingListingStudio();
+    }, [canApproveTenants, canRejectRegistrations, canApproveSubscriptions, canApproveListingStudio]);
 
     const fetchPendingTenants = async () => {
         try {
@@ -97,6 +107,34 @@ const AdminApprovals = () => {
             console.error('Error fetching pending subscriptions', error);
         } finally {
             setSubsLoading(false);
+        }
+    };
+
+    const fetchPendingListingStudio = async () => {
+        setListingStudioLoading(true);
+        setListingStudioError(false);
+        try {
+            // sendResponse sends the payload as the body itself — there is no { data } envelope.
+            const res = await api.get('/listing-studio/wallet/admin/access-requests', { params: { status: 'pending' } });
+            setPendingListingStudio(Array.isArray(res.data) ? res.data : []);
+        } catch (error) {
+            console.error('Error fetching Speedy Listing access requests', error);
+            setListingStudioError(true);
+        } finally {
+            setListingStudioLoading(false);
+        }
+    };
+
+    const handleApproveListingStudio = async (id) => {
+        setListingStudioActionLoading(id);
+        try {
+            await api.post(`/listing-studio/wallet/admin/access-requests/${id}/approve`);
+            setPendingListingStudio(prev => prev.filter(r => r._id !== id));
+            toast.success('Speedy Listing access approved');
+        } catch (error) {
+            console.error('Error approving Speedy Listing access', error);
+        } finally {
+            setListingStudioActionLoading(null);
         }
     };
 
@@ -359,6 +397,21 @@ const AdminApprovals = () => {
                                         )}
                                     </button>
                                 )}
+                                {canApproveListingStudio && (
+                                    <button
+                                        onClick={() => setActiveTab('listing_studio')}
+                                        className={`flex items-center gap-2 px-4 py-4 text-sm font-semibold transition-all border-b-2 -mb-px ${activeTab === 'listing_studio'
+                                            ? 'border-brand-600 text-brand-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                            }`}
+                                    >
+                                        <PackageOpen size={16} />
+                                        Speedy Listing Access
+                                        {pendingListingStudio.length > 0 && (
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'listing_studio' ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500'}`}>{pendingListingStudio.length}</span>
+                                        )}
+                                    </button>
+                                )}
                                 {(isSuperAdmin || user?.role === 'SBM') && (
                                     <button
                                         onClick={() => setActiveTab('system_tools')}
@@ -546,14 +599,16 @@ const AdminApprovals = () => {
                                                         </td>
                                                         <td className="py-4 px-6">
                                                             <div className="flex items-center justify-end gap-2">
-                                                                <button
-                                                                    onClick={() => handleReviveTenant(tenant._id)}
-                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 text-[11px] font-bold uppercase rounded-lg hover:bg-blue-100 transition-all active:scale-95"
-                                                                    title="Move back to Pending Approvals"
-                                                                >
-                                                                    <RefreshCw size={13} />
-                                                                    Restore
-                                                                </button>
+                                                                {canApproveTenants && (
+                                                                    <button
+                                                                        onClick={() => handleReviveTenant(tenant._id)}
+                                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 text-[11px] font-bold uppercase rounded-lg hover:bg-blue-100 transition-all active:scale-95"
+                                                                        title="Move back to Pending Approvals"
+                                                                    >
+                                                                        <RefreshCw size={13} />
+                                                                        Restore
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={() => handleDeleteTenant(tenant._id)}
                                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-[11px] font-bold uppercase rounded-lg hover:bg-red-100 transition-all active:scale-95"
@@ -648,6 +703,95 @@ const AdminApprovals = () => {
                                                                         title="Reject"
                                                                     >
                                                                         <XCircle size={20} />
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Speedy Listing Access Tab */}
+                            {activeTab === 'listing_studio' && canApproveListingStudio && (
+                                <>
+                                    {listingStudioLoading ? (
+                                        <div className="flex flex-col items-center justify-center min-h-[300px]">
+                                            <Loader2 className="animate-spin text-brand-600 mb-4" size={40} />
+                                            <p className="text-slate-500">Loading access requests...</p>
+                                        </div>
+                                    ) : listingStudioError ? (
+                                        <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-4">
+                                            <div className="p-4 bg-red-50 rounded-2xl">
+                                                <AlertTriangle className="w-10 h-10 text-red-400" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-semibold text-slate-700">Couldn't load access requests</p>
+                                                <p className="text-sm text-slate-500 mt-1">Pending requests may exist — this is not an empty queue.</p>
+                                            </div>
+                                            <button
+                                                onClick={fetchPendingListingStudio}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                            >
+                                                <RefreshCw size={14} /> Retry
+                                            </button>
+                                        </div>
+                                    ) : pendingListingStudio.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-4">
+                                            <div className="p-4 bg-slate-100 rounded-2xl">
+                                                <CheckCircle className="w-10 h-10 text-emerald-400" />
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="font-semibold text-slate-700">No Pending Access Requests</p>
+                                                <p className="text-sm text-slate-500 mt-1">Every tenant who recharged Speedy Listing credits has been granted access.</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="border-b border-slate-100 bg-slate-50/70">
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Tenant</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Plan</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Credits</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Amount</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-left">Requested At</th>
+                                                    <th className="py-3.5 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {pendingListingStudio.map((req) => (
+                                                    <tr key={req._id} className="group hover:bg-slate-50/50 transition-colors">
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-semibold text-slate-800">{formatTenantLabel(req.tenantId)}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-medium text-slate-700">{req.planTitle || '—'}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-bold text-slate-800">{req.credits ? req.credits.toLocaleString() : '—'}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm font-bold text-emerald-600">{req.amount ? `₹${req.amount.toLocaleString()}` : '—'}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <span className="text-sm text-slate-500">{new Date(req.requestedAt).toLocaleString()}</span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            {listingStudioActionLoading === req._id ? (
+                                                                <div className="flex justify-end pr-4">
+                                                                    <Loader2 className="animate-spin text-brand-600" size={20} />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <button
+                                                                        onClick={() => handleApproveListingStudio(req._id)}
+                                                                        className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 hover:scale-105 transition-all"
+                                                                        title="Approve access"
+                                                                    >
+                                                                        <CheckCircle size={20} />
                                                                     </button>
                                                                 </div>
                                                             )}
