@@ -38,6 +38,8 @@ export const isValidEmail = (email) => {
     return true;
 };
 
+const normalizeMobile = (value) => (value || '').replace(/[\s-]/g, '').replace(/^(\+91|91|0)(?=\d{10}$)/, '');
+
 const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountData, mode, accountPassword, bypassPassword = false, supportedSignInTypes = ['email', 'phone', 'oauth'], onBack, onAutoSyncChange }) => {
     const { user } = useAuth();
     const canToggleAutoSync = ['SuperAdmin', 'SBM'].includes(user?.role);
@@ -225,6 +227,14 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                 throw new Error('Please select an Analysis Start Date');
             }
 
+            if (formData.signInType === 'email') {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                const isMobile = marketplaceName === 'Meesho' && /^[6-9]\d{9}$/.test(normalizeMobile(formData.email));
+                if (!isMobile && !emailRegex.test(formData.email)) {
+                    throw new Error(marketplaceName === 'Meesho' ? 'Enter a valid email address or 10-digit mobile number' : 'Invalid Email Address');
+                }
+            }
+
             if (mode === 'add' && marketplaceName === 'Meesho' && showAutoSyncFields) {
                 if (!formData.password) throw new Error('Please enter your Meesho Supplier Panel Password to enable auto-sync');
 
@@ -279,7 +289,9 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                 name: marketplaceName,
                 credentials: {
                     signInType: formData.signInType,
-                    email: formData.signInType === 'email' ? formData.email : undefined,
+                    email: formData.signInType === 'email'
+                        ? (marketplaceName === 'Meesho' && /^[6-9]\d{9}$/.test(normalizeMobile(formData.email)) ? normalizeMobile(formData.email) : formData.email)
+                        : undefined,
                     phone: formData.signInType === 'phone' ? formData.phone : undefined,
                     password: encryptedPassword || undefined,
                     // If the user selected a sub-account, use that, otherwise use what was in formData
@@ -512,14 +524,14 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
 
                             <div className="space-y-1.5">
                                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider ml-1">
-                                    {formData.signInType === 'phone' ? 'Phone Number' : 'Email Address'}
+                                    {formData.signInType === 'phone' ? 'Phone Number' : marketplaceName === 'Meesho' ? 'Email or Mobile Number' : 'Email Address'}
                                 </label>
                                 <input
-                                    type={formData.signInType === 'phone' ? 'tel' : 'email'}
+                                    type={formData.signInType === 'phone' ? 'tel' : marketplaceName === 'Meesho' ? 'text' : 'email'}
                                     name={formData.signInType === 'phone' ? 'phone' : 'email'}
                                     value={formData.signInType === 'phone' ? (formData.phone || '') : formData.email}
                                     onChange={handleChange}
-                                    placeholder={formData.signInType === 'phone' ? '10-digit number' : 'name@example.com'}
+                                    placeholder={formData.signInType === 'phone' ? '10-digit number' : marketplaceName === 'Meesho' ? 'name@example.com or 10-digit mobile' : 'name@example.com'}
                                     className={`w-full text-sm text-slate-800 bg-white border ${
                                         formData.signInType !== 'phone' && formData.email && !isValidEmail(formData.email)
                                             ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/10'
@@ -632,13 +644,13 @@ const ConnectMarketplaceModal = ({ marketplaceName, onClose, onSuccess, accountD
                         /* ── ADD MODE: credential input ── */
                         <div>
                             <div data-tour={TOUR.marketplace.modalEmail}>
-                                <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">{marketplaceName === 'Meesho' ? 'Email or Mobile Number' : 'Email Address'}</label>
                                 <input
-                                    type="email"
+                                    type={marketplaceName === 'Meesho' ? 'text' : 'email'}
                                     name="email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    placeholder="name@example.com"
+                                    placeholder={marketplaceName === 'Meesho' ? 'name@example.com or 10-digit mobile' : 'name@example.com'}
                                     className={`w-full px-3.5 py-2 text-sm rounded-xl border ${
                                         formData.email && !isValidEmail(formData.email)
                                             ? 'border-amber-400 focus:border-amber-500 focus:ring-amber-500/10'
