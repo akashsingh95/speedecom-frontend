@@ -58,8 +58,8 @@ export const COLUMN_LABELS = {
     customer_return_amount: 'Customer Return',
     rto_amount: 'RTO',
     stock_out_commission: 'Stock Out Commission',
+    penalty: 'Penalty',
     settlement_pct_by_sales: 'Settlement % By Sales',
-    snapdeal_gst_credit: 'Snapdeal GST Credit',
     tcs_value: 'TCS',
     tds_value: 'TDS',
     // Amazon
@@ -186,8 +186,8 @@ export const SNAPDEAL_ONLY_COLUMNS = [
     'customer_return_amount',
     'rto_amount',
     'stock_out_commission',
+    'penalty',
     'settlement_pct_by_sales',
-    'snapdeal_gst_credit',
 ];
 
 /**
