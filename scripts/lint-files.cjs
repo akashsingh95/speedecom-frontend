@@ -8,7 +8,7 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-const result = spawnSync('npx', ['eslint', '--fix', '--max-warnings', '0', ...files], {
+const result = spawnSync('npx', ['eslint', '--fix', ...files], {
   stdio: 'inherit',
 });
 

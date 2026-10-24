@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- this client's eslint config lacks react/jsx-uses-vars, so
-   JSX-only usage of these imports false-positives as unused (see ListingStudioPlansManager.jsx). */
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import CostSheetNotGeneratedModal from '../components/CostSheetNotGeneratedModal';
@@ -8,6 +6,7 @@ import api from '../api';
 
 import { Save, ArrowLeft, Loader2, AlertCircle, AlertTriangle, CheckCircle, Search, X, Plus, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Filter, Info, Calculator, Download, Check, Store } from 'lucide-react';
 import { toast } from 'sonner';
+import ConfirmModal from '../components/ConfirmModal';
 import ExportButton from '../components/ExportButton';
 import MarketplaceAccountSelector from '../components/MarketplaceAccountSelector';
 import Tooltip from '../components/Tooltip';
@@ -73,6 +72,8 @@ const CostSheet = () => {
     const startWidth = useRef(0);
     const [canCalculate, setCanCalculate] = useState(true);
     const [canCalculateReason, setCanCalculateReason] = useState('');
+    const [creditBalance, setCreditBalance] = useState(null);
+    const [confirmModalConfig, setConfirmModalConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
     const [missingModal, setMissingModal] = useState({ open: false, count: 0, skus: [] });
     const [notGeneratedModal, setNotGeneratedModal] = useState(false);
@@ -1170,28 +1171,66 @@ const CostSheet = () => {
     };
 
 
-    const handleAmazonRefundLossToggle = async (newValue) => {
-        if (newValue === true && !hasAmazonRefundLossDisabled) return;
-        const confirmChange = window.confirm(
-            `This will update the "Consider Refund-Loss in Total Cost" setting for the selected Amazon accounts.\nYou will need to recalculate payments to see the effect on profit/loss. Continue?`
-        );
-        if (!confirmChange) return;
+    const handleAmazonRefundLossToggle = (newValue) => {
+        if (isAmazonRefundLossMixed || (newValue === true && !hasAmazonRefundLossDisabled)) return;
+        setConfirmModalConfig({
+            isOpen: true,
+            title: 'Change Refund-Loss Accounting?',
+            message: newValue ? 'You are enabling Refund-Loss accounting for this Amazon account. The system will start deducting Product Costs for lost refunds.' : 'You are disabling Refund-Loss accounting for this Amazon account. The system will stop deducting Product Costs for lost refunds.',
+            details: [
+                { label: 'Impact', value: 'This will directly affect your Net P/L calculation.' },
+                { label: 'Action Required', value: 'You MUST click "calculate" after saving to apply these changes to your historical data.' }
+            ],
+            confirmText: newValue ? 'Enable Accounting' : 'Disable Accounting',
+            onConfirm: async () => {
+                setFiltering(true);
+                try {
+                    const updatePromises = marketplaceFilters.map(id =>
+                        api.put(`/marketplaces/${id}/config`, {
+                            config: { amazonConsiderRefundLoss: newValue }
+                        })
+                    );
+                    await Promise.all(updatePromises);
+                    toast.success(`Refund-Loss accounting ${newValue ? 'enabled' : 'disabled'} successfully.`);
+                    await fetchMarketplaces();
+                } catch (error) {
+                    toast.error(error.response?.data?.message || 'Failed to update setting');
+                } finally {
+                    setFiltering(false);
+                }
+            }
+        });
+    };
 
-        setFiltering(true);
-        try {
-            const updatePromises = marketplaceFilters.map(id =>
-                api.put(`/marketplaces/${id}/config`, {
-                    config: { amazonConsiderRefundLoss: newValue }
-                })
-            );
-            await Promise.all(updatePromises);
-            toast.success(`Setting updated for ${marketplaceFilters.length} Amazon account(s)`);
-            await fetchMarketplaces();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to update setting');
-        } finally {
-            setFiltering(false);
-        }
+    const handleAmazonFreeReplacementCostToggle = (newValue) => {
+        if (isAmazonFreeReplacementCostMixed || (newValue === true && hasAmazonFreeReplacementCostEnabled)) return;
+        setConfirmModalConfig({
+            isOpen: true,
+            title: 'Change Replacement Cost Accounting?',
+            message: newValue ? 'You are enabling Replacement Cost accounting. The system will start deducting Product Costs for Replacement orders.' : 'You are disabling Replacement Cost accounting. The system will stop double-counting Product Costs for Replacements.',
+            details: [
+                { label: 'Impact', value: 'This will directly affect your Net P/L calculation.' },
+                { label: 'Action Required', value: 'You MUST click "calculate" after saving to apply these changes to your historical data.' }
+            ],
+            confirmText: newValue ? 'Enable Accounting' : 'Disable Accounting',
+            onConfirm: async () => {
+                setFiltering(true);
+                try {
+                    const updatePromises = marketplaceFilters.map(id =>
+                        api.put(`/marketplaces/${id}/config`, {
+                            config: { amazonConsiderFreeReplacementCost: newValue }
+                        })
+                    );
+                    await Promise.all(updatePromises);
+                    toast.success(`Replacement accounting ${newValue ? 'enabled' : 'disabled'} successfully.`);
+                    await fetchMarketplaces();
+                } catch (error) {
+                    toast.error(error.response?.data?.message || 'Failed to update setting');
+                } finally {
+                    setFiltering(false);
+                }
+            }
+        });
     };
 
     const handleClearFilters = () => {
@@ -1343,6 +1382,22 @@ const CostSheet = () => {
     const hasAmazonRefundLossDisabled = isAmazonView && marketplaceFilters.some(id => {
         const account = amazonAccounts.find(a => a._id === id);
         return account?.config?.amazonConsiderRefundLoss === false;
+    });
+
+    // Replacement: "On" only when ALL selected accounts have it enabled
+    const hasAmazonFreeReplacementCostEnabled = isAmazonView && marketplaceFilters.every(id => {
+        const account = amazonAccounts.find(a => a._id === id);
+        return account?.config?.amazonConsiderFreeReplacementCost === true;
+    });
+    const hasAmazonFreeReplacementCostAnyEnabled = isAmazonView && marketplaceFilters.some(id => {
+        const account = amazonAccounts.find(a => a._id === id);
+        return account?.config?.amazonConsiderFreeReplacementCost === true;
+    });
+    // Mixed selection (some on, some off): toggles are disabled as the intent is ambiguous
+    const isAmazonFreeReplacementCostMixed = hasAmazonFreeReplacementCostAnyEnabled && !hasAmazonFreeReplacementCostEnabled;
+    const isAmazonRefundLossMixed = isAmazonView && hasAmazonRefundLossDisabled && marketplaceFilters.some(id => {
+        const account = amazonAccounts.find(a => a._id === id);
+        return account?.config?.amazonConsiderRefundLoss !== false;
     });
 
     // Editable columns configuration
@@ -1573,40 +1628,6 @@ const CostSheet = () => {
                     </div>
 
                     <div className="flex items-center gap-1.5 sm:gap-2 relative flex-wrap justify-end w-full sm:w-auto">
-                        {/* Amazon Refund-Loss Toggle */}
-                        {isAmazonView && (
-                            <div className="flex items-center gap-1.5 mr-1 sm:mr-2">
-                                <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
-                                    Refund Loss:
-                                    <Info size={13} className="text-slate-400" />
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
-                                        consider refund-loss quantity in total-cost
-                                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
-                                    </div>
-                                </span>
-                                <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8">
-                                    <button
-                                        onClick={() => handleAmazonRefundLossToggle(false)}
-                                        className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${hasAmazonRefundLossDisabled
-                                            ? 'bg-brand-600 text-white'
-                                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                                            }`}
-                                    >
-                                        Off
-                                    </button>
-                                    <button
-                                        onClick={() => handleAmazonRefundLossToggle(true)}
-                                        className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${!hasAmazonRefundLossDisabled
-                                            ? 'bg-brand-600 text-white'
-                                            : 'bg-white text-slate-600 hover:bg-slate-50'
-                                            }`}
-                                    >
-                                        On
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Filter Dropdown */}
                         <MarketplaceAccountSelector
                             variant="popover"
@@ -1762,6 +1783,85 @@ const CostSheet = () => {
                         })()}
                     </div>
                 </div>
+
+                {/* Amazon Toggles */}
+                {isAmazonView && (
+                    <div className="flex items-center gap-6 mt-3 px-1">
+                        {/* Amazon Refund-Loss Toggle */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
+                                Refund Loss:
+                                <Info size={13} className="text-slate-400" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
+                                    consider refund-loss quantity in total-cost
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
+                                </div>
+                            </span>
+                            <div
+                                title={isAmazonRefundLossMixed ? 'Selected accounts have different settings. Select accounts individually to change this.' : undefined}
+                                className={`inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8 ${isAmazonRefundLossMixed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                <button
+                                    disabled={isAmazonRefundLossMixed}
+                                    onClick={() => handleAmazonRefundLossToggle(false)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${hasAmazonRefundLossDisabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    Off
+                                </button>
+                                <button
+                                    disabled={isAmazonRefundLossMixed}
+                                    onClick={() => handleAmazonRefundLossToggle(true)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${!hasAmazonRefundLossDisabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    On
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Amazon Free-Replacement Cost Toggle */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 group relative cursor-help">
+                                Replacement:
+                                <Info size={13} className="text-slate-400" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[200px] bg-slate-800 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-tight shadow-lg normal-case">
+                                    consider replacement & free-replacement quantity in total-cost
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[4px] border-transparent border-t-slate-800"></div>
+                                </div>
+                            </span>
+                            <div
+                                title={isAmazonFreeReplacementCostMixed ? 'Selected accounts have different settings. Select accounts individually to change this.' : undefined}
+                                className={`inline-flex rounded-lg border border-slate-200 overflow-hidden shadow-sm h-7 sm:h-8 ${isAmazonFreeReplacementCostMixed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                <button
+                                    disabled={isAmazonFreeReplacementCostMixed}
+                                    onClick={() => handleAmazonFreeReplacementCostToggle(false)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold transition-colors flex items-center ${!hasAmazonFreeReplacementCostEnabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    Off
+                                </button>
+                                <button
+                                    disabled={isAmazonFreeReplacementCostMixed}
+                                    onClick={() => handleAmazonFreeReplacementCostToggle(true)}
+                                    className={`px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-bold border-l border-slate-200 transition-colors flex items-center ${hasAmazonFreeReplacementCostEnabled
+                                        ? 'bg-brand-600 text-white'
+                                        : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    On
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Alerts */}
                 {error && (
@@ -2274,6 +2374,17 @@ const CostSheet = () => {
                 </div>,
                 document.body
             )}
+            {/* Confirm Modal */}
+            <ConfirmModal
+                isOpen={confirmModalConfig.isOpen}
+                onClose={() => setConfirmModalConfig({ ...confirmModalConfig, isOpen: false })}
+                onConfirm={confirmModalConfig.onConfirm}
+                title={confirmModalConfig.title}
+                message={confirmModalConfig.message}
+                details={confirmModalConfig.details}
+                confirmText={confirmModalConfig.confirmText || "Continue"}
+                cancelText="Cancel"
+            />
         </div>
     );
 };
