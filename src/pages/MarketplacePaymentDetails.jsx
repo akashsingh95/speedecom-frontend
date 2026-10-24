@@ -67,6 +67,19 @@ const PLATFORM_CONFIG = {
             { key: 'payment_date', label: 'Payment Date', align: 'left', format: 'date', sticky: true, left: 0, width: 130 },
             { key: 'settlement', label: 'Settlement', align: 'right', format: 'currency', bold: true, sticky: true, left: 130, width: 140 }
         ]
+    },
+    snapdeal: {
+        title: 'Snapdeal Payment Details',
+        exportType: 'snapdeal_payment_details',
+        columns: [
+            { key: 'payment_date', label: 'Payment Date', align: 'left', format: 'date', sticky: true, left: 0, width: 130 },
+            { key: 'settlement', label: 'Settlement', align: 'right', format: 'currency', bold: true, sticky: true, left: 130, width: 140 },
+            { key: 'orders_settlement', label: 'Orders Settlement', align: 'right', format: 'currency' },
+            { key: 'claim_payment', label: 'Compensation', align: 'right', format: 'currency' },
+            { key: 'sku_wise_ads', label: 'SKU Wise Ads', align: 'right', format: 'currency' },
+            { key: 'tcs_value', label: 'TCS', align: 'right', format: 'currency' },
+            { key: 'tds_value', label: 'TDS', align: 'right', format: 'currency' }
+        ]
     }
 };
 

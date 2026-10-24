@@ -924,6 +924,7 @@ const MasterSkuCalculations = () => {
             isFlipkart={isFlipkart}
             isAmazon={isAmazon}
             isMyntra={isMyntra}
+            isSnapdeal={isSnapdeal}
             isMeeshoSizeDisabled={isMeeshoSizeDisabled}
             funnelData={funnelData}
             adsMode={adsMode}
@@ -1170,8 +1171,8 @@ const MasterSkuCalculations = () => {
               </div>
             )}
 
-            {/* Ads Type toggle & Amazon & Flipkart only */}
-            {(!isMeesho && !isMyntra) && (
+            {/* Ads Type toggle — Amazon & Flipkart only (the only 2 platforms with a separate "payment ads" breakdown) */}
+            {(isAmazon || isFlipkart) && (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                   Ads:

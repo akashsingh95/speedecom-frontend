@@ -844,6 +844,7 @@ const PaymentsCalculations = () => {
                             isFlipkart={isFlipkart}
                         isAmazon={isAmazon}
                         isMyntra={isMyntra}
+                        isSnapdeal={isSnapdeal}
                         isMeeshoSizeDisabled={isMeeshoSizeDisabled}
                         funnelData={funnelData}
                         adsMode={adsMode}

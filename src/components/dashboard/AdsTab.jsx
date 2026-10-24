@@ -50,7 +50,7 @@ const AdsTab = ({ viewMode = 'grid', filterData: sharedFilterData, hasMarketplac
             // Default priority: 1. Flipkart, 2. Amazon, 3. First available non-disabled
             const selectableData = allData.filter(mp => {
                 const key = String(mp.key || mp.name || '').toLowerCase();
-                return !key.includes('meesho') && !key.includes('myntra');
+                return !key.includes('meesho') && !key.includes('myntra') && !key.includes('snapdeal');
             });
             const flipkartMp = selectableData.find(m => String(m.key || m.name || '').toLowerCase() === 'flipkart');
             const amazonMp = selectableData.find(m => String(m.key || m.name || '').toLowerCase() === 'amazon');
@@ -207,7 +207,7 @@ const AdsTab = ({ viewMode = 'grid', filterData: sharedFilterData, hasMarketplac
                             accountSelection="multiple"
                             variant="popover"
                             buttonLabel="Filter Accounts"
-                            disabledMarketplaces={['meesho', 'myntra']}
+                            disabledMarketplaces={['meesho', 'myntra', 'snapdeal']}
                             availableMarketplaces={listAvailableMarketplaces}
                             selectedMarketplaceKey={listSelectedMarketplaceKey}
                             selectedAccountIds={listMktFilters}
