@@ -266,7 +266,7 @@ const ListingStudioSubscriptionTab = () => {
                 order_id: orderId,
                 handler: async (response) => {
                     try {
-                        await api.post(verifyPath, {
+                        const verifyBody = {
                             razorpay_order_id: response.razorpay_order_id,
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature: response.razorpay_signature,
@@ -278,7 +278,27 @@ const ListingStudioSubscriptionTab = () => {
                             buyerPan: gstForm.pan,
                             buyerStateCode: gstForm.stateCode,
                             buyerPhone: gstForm.phone,
-                        });
+                        };
+                        // The server marks a response `retryable` while the payment isn't settled yet
+                        // (not yet authorized, or authorized but the capture isn't confirmed) — retry a
+                        // few times silently before letting the last attempt's error toast through.
+                        const MAX_VERIFY_ATTEMPTS = 4;
+                        for (let attempt = 1; ; attempt++) {
+                            const isLastAttempt = attempt === MAX_VERIFY_ATTEMPTS;
+                            try {
+                                await api.post(verifyPath, verifyBody, { skipErrorToast: !isLastAttempt });
+                                break;
+                            } catch (err) {
+                                // 409 (not yet authorized) or 502 (authorized but capture not confirmed yet)
+                                const retryable = !!err?.response?.data?.retryable;
+                                if (!retryable || isLastAttempt) {
+                                    // Non-retryable errors on earlier attempts were silenced above.
+                                    if (!isLastAttempt) toast.error(err?.response?.data?.message || 'Payment verification failed');
+                                    throw err;
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 3000));
+                            }
+                        }
                         // Auto-save GST details to profile (silent) — Admin-only route, so a
                         // non-Admin buyer's 403 here is expected and shouldn't toast (see the
                         // matching GET above).
