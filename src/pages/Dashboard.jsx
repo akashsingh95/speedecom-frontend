@@ -48,6 +48,26 @@ const Dashboard = () => {
     };
     const location = useLocation();
 
+    // Returns Analysis routes to the physical scan-returns workflow (barcode scanning
+    // against warehouse returns), which only makes sense for Meesho/Amazon-style
+    // fulfilment — Snapdeal has no such workflow (its RTO/Customer Return data is
+    // already fully covered in Calculations/Settlements) and returnsController.js
+    // silently defaults anything it doesn't recognize to Meesho behavior, which would
+    // mislead a Snapdeal-only tenant. Hide the tab entirely when every marketplace on
+    // the tenant is Snapdeal.
+    const [hasNonSnapdealMarketplace, setHasNonSnapdealMarketplace] = useState(true);
+    useEffect(() => {
+        let cancelled = false;
+        api.get('/marketplaces/filter-options?includeInactive=true')
+            .then(({ data }) => {
+                if (cancelled || !Array.isArray(data)) return;
+                const hasOther = data.some(group => group.key !== 'Snapdeal' && (group.accounts || []).length > 0);
+                setHasNonSnapdealMarketplace(hasOther);
+            })
+            .catch(() => { if (!cancelled) setHasNonSnapdealMarketplace(true); });
+        return () => { cancelled = true; };
+    }, []);
+
     const actionsFilter = useDateRangeFilter(undefined, {}, '90days', 'actions');
     const calculationsFilter = useDateRangeFilter(undefined, {}, 'lastMonth', 'calculations');
     const adsFilter = useDateRangeFilter(undefined, {}, 'lastMonth', 'ads');
@@ -59,9 +79,9 @@ const Dashboard = () => {
         if (user?.permissions?.orderAnalysis !== false) tabs.push('calculations');
         if (user?.permissions?.paymentAnalysis !== false) tabs.push('payments');
         if (user?.permissions?.adsAnalysis !== false) tabs.push('ads');
-        if (user?.permissions?.returnsAnalysis !== false) tabs.push('returns');
+        if (user?.permissions?.returnsAnalysis !== false && hasNonSnapdealMarketplace) tabs.push('returns');
         return tabs;
-    }, [user?.permissions]);
+    }, [user?.permissions, hasNonSnapdealMarketplace]);
 
     // Save viewMode to localStorage whenever it changes
     // (Deprecated: viewModes is now used instead)

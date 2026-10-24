@@ -165,6 +165,10 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
         ? (Array.isArray(marketplaceFilter) ? marketplaceFilter : [marketplaceFilter])
             .every(id => marketplaceIdToPlatform[id] === 'Myntra')
         : false;
+    const isSnapdeal = marketplaceFilter
+        ? (Array.isArray(marketplaceFilter) ? marketplaceFilter : [marketplaceFilter])
+            .every(id => marketplaceIdToPlatform[id] === 'Snapdeal')
+        : false;
 
     const isMeeshoSizeDisabled = isMeesho && marketplaceFilter
         ? (Array.isArray(marketplaceFilter) ? marketplaceFilter : [marketplaceFilter])
@@ -172,7 +176,7 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
         : false;
 
     // Evaluate the type of the currently selected marketplace filters to branch localstorage configuration
-    const platformType = isPlatformLoaded ? (isAmazon ? 'amazon' : isMeesho ? 'meesho' : isFlipkart ? 'flipkart' : isMyntra ? 'myntra' : 'all') : 'all';
+    const platformType = isPlatformLoaded ? (isAmazon ? 'amazon' : isMeesho ? 'meesho' : isFlipkart ? 'flipkart' : isMyntra ? 'myntra' : isSnapdeal ? 'snapdeal' : 'all') : 'all';
 
     // ── Pagination / sorting ─────────────────────────────────────────────────
     const [currentPage, setCurrentPage] = useState(1);
@@ -850,7 +854,7 @@ const useCalculationsFilters = ({ storageKey, locationState, onReset }) => {
 
         // Derived booleans
         isMobile,
-        isMeesho, isFlipkart, isAmazon, isMyntra, isPlatformLoaded, platformType,
+        isMeesho, isFlipkart, isAmazon, isMyntra, isSnapdeal, isPlatformLoaded, platformType,
         resolvedMarketplaceNames, marketplaceIdToName, marketplaceIdToPlatform,
         isMeeshoSizeDisabled,
         availableMarketplaces,

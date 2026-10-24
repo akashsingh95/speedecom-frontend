@@ -30,6 +30,7 @@ import {
   enrichRowWithContributions,
   getCellStyleClasses,
   isColVisible,
+  SNAPDEAL_ONLY_COLUMNS,
 } from "../components/calculations/calculationsUtils";
 
 const GST_DIVISOR = 1.18;
@@ -133,6 +134,7 @@ const MasterSkuCalculations = () => {
     isFlipkart,
     isAmazon,
     isMyntra,
+    isSnapdeal,
     isPlatformLoaded,
     platformType,
     resolvedMarketplaceNames,
@@ -162,8 +164,8 @@ const MasterSkuCalculations = () => {
   const [lastClickedColIdx, setLastClickedColIdx] = useState(null);
 
   const memoizedGrandProfits = useMemo(() => {
-    return computeGrandProfits(totalRow, { isAmazon, isMeesho });
-  }, [totalRow, isAmazon, isMeesho]);
+    return computeGrandProfits(totalRow, { isAmazon, isMeesho, isSnapdeal });
+  }, [totalRow, isAmazon, isMeesho, isSnapdeal]);
 
 
   const fetchCalculations = useCallback(async () => {
@@ -702,6 +704,8 @@ const MasterSkuCalculations = () => {
     'profit_loss_with_ads',
     'profit_with_ads_per_delivered',
     'sku_wise_ads',
+    'monet_ads',
+    'web_ads',
     'sku_wise_ads_per_delivered',
     'return_charges_per_delivered',
     'total_quantity',
@@ -732,7 +736,9 @@ const MasterSkuCalculations = () => {
     'avg_settlement_per_delivered',
     'avg_purchase_per_qty',
     'meesho_return_charges',
-]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isMeeshoSizeDisabled }));
+    // Snapdeal-only — isColVisible hides these for every other marketplace
+    ...SNAPDEAL_ONLY_COLUMNS,
+]).filter(col => isColVisible(col, { isAmazon, isMeesho, isMyntra, isSnapdeal, isMeeshoSizeDisabled }));
 
   // Sync columnOrder whenever allColumns changes (marketplace switch, initial load)
   // Merges the saved localStorage order with the current valid columns
@@ -847,6 +853,7 @@ const MasterSkuCalculations = () => {
           handleClearFilter={filters.handleClearFilter}
           dateError={filters.dateError}
           isAmazon={isAmazon}
+          isSnapdeal={isSnapdeal}
           nullDateFilter={nullDateFilter}
           handleNullDateSelect={filters.handleNullDateSelect}
           availableMonths={filters.availableMonths}
@@ -917,6 +924,7 @@ const MasterSkuCalculations = () => {
             isFlipkart={isFlipkart}
             isAmazon={isAmazon}
             isMyntra={isMyntra}
+            isSnapdeal={isSnapdeal}
             isMeeshoSizeDisabled={isMeeshoSizeDisabled}
             funnelData={funnelData}
             adsMode={adsMode}
@@ -1133,7 +1141,7 @@ const MasterSkuCalculations = () => {
               )}
             </div>
 
-            {/* P/L View toggle */}
+            {/* P/L View toggle — no GST-inclusive/exclusive mode exists for Myntra's fixed P&L formula */}
             {!isMyntra && (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -1162,8 +1170,8 @@ const MasterSkuCalculations = () => {
               </div>
             )}
 
-            {/* Ads Type toggle & Amazon & Flipkart only */}
-            {(!isMeesho && !isMyntra) && (
+            {/* Ads Type toggle — Amazon & Flipkart only (the only 2 platforms with a separate "payment ads" breakdown) */}
+            {(isAmazon || isFlipkart) && (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                   Ads:
@@ -1564,6 +1572,7 @@ const MasterSkuCalculations = () => {
                           gstMode,
                           isAmazon,
                           isMeesho,
+                          isSnapdeal,
                           grandProfits: memoizedGrandProfits,
                         });
                         return (
@@ -1623,6 +1632,7 @@ const MasterSkuCalculations = () => {
                             gstMode,
                             isAmazon,
                             isMeesho,
+                            isSnapdeal,
                             grandProfits: memoizedGrandProfits,
                           },
                         );
@@ -1716,6 +1726,7 @@ const MasterSkuCalculations = () => {
                                   gstMode,
                                   isAmazon,
                                   isMeesho,
+                                  isSnapdeal,
                                   grandProfits: memoizedGrandProfits,
                                 },
                               );
@@ -1852,6 +1863,7 @@ const MasterSkuCalculations = () => {
                                         gstMode,
                                         isAmazon,
                                         isMeesho,
+                                        isSnapdeal,
                                         grandProfits: memoizedGrandProfits,
                                       },
                                     );

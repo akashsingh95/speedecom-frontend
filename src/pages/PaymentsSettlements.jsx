@@ -186,6 +186,7 @@ const PaymentsSettlements = () => {
         platform === 'meesho'   ? { bg: 'bg-fuchsia-50', text: 'text-fuchsia-600', border: 'border-fuchsia-200', label: 'Meesho' } :
         platform === 'amazon'   ? { bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-200', label: 'Amazon' } :
         platform === 'myntra'   ? { bg: 'bg-indigo-50', text: 'text-indigo-600', border: 'border-indigo-200', label: 'Myntra' } :
+        platform === 'snapdeal' ? { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', label: 'Snapdeal' } :
                                   { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200', label: '' };
 
     // ── render ─────────────────────────────────────────────────────────────
@@ -354,7 +355,7 @@ const PaymentsSettlements = () => {
                                 </>
                             )}
                         </div>
-                        {['myntra', 'flipkart', 'meesho'].includes(platform) && startDate && (
+                        {['myntra', 'flipkart', 'meesho', 'snapdeal'].includes(platform) && startDate && (
                             <button
                                 onClick={() => navigate('/payments/details', { state: { platform, marketplaceIds: marketplaceFilter, startDate, endDate } })}
                                 className={`px-3 py-1.5 text-[12px] font-bold rounded-lg border shadow-sm transition-colors ${accent.bg} ${accent.text} hover:bg-slate-100 ${accent.border}`}

@@ -28,6 +28,7 @@ const CalculationsHeader = ({
     dateError,
     isAmazon,
     isMeesho,
+    isSnapdeal,
     nullDateFilter,
     handleNullDateSelect,
     availableMonths,
@@ -147,8 +148,8 @@ const CalculationsHeader = ({
                             onClear={handleClearFilter}
                             maxDays={92}
                             alwaysOpen={false}
-                            nullDateActive={isAmazon ? nullDateFilter : false}
-                            onNullDate={isAmazon ? handleNullDateSelect : null}
+                            nullDateActive={(isAmazon || isSnapdeal) ? nullDateFilter : false}
+                            onNullDate={(isAmazon || isSnapdeal) ? handleNullDateSelect : null}
                             availableMonths={availableMonths}
                             availableYears={availableYears}
                             defaultMonthOpen={true}

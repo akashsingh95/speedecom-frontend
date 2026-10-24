@@ -222,6 +222,8 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
                 options = uploadTypesConfig.amazon || [];
             } else if (key.includes('myntra')) {
                 options = uploadTypesConfig.myntra || [];
+            } else if (key.includes('snapdeal')) {
+                options = uploadTypesConfig.snapdeal || [];
             }
             options.forEach(opt => typesMap.set(opt.value, opt));
         });
@@ -248,7 +250,9 @@ const UploadHistoryTab = ({ activeMarketplaces, defaultMarketplaceKey, defaultAc
             myntra_payments: 'Myntra Payments',
             myntra_orders: 'Myntra Orders',
             myntra_returns_seller: 'Myntra Returns (Seller)',
-            myntra_returns_delivery: 'Myntra Returns (Delivery)'
+            myntra_returns_delivery: 'Myntra Returns (Delivery)',
+            snapdeal_orders: 'Snapdeal Orders',
+            snapdeal_payments: 'Snapdeal Payments'
         };
         return typeLabels[type] || type;
     };
